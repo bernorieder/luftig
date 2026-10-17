@@ -623,7 +623,8 @@ extension SelfTestScenarios {
         t.check(tv.textContainer!.size.width < 700 && tv.textContainerInset.width == 28, "narrow window: column fills the window with the minimum inset (\(Int(tv.textContainerInset.width)) pt)")
         host.luftigToggleReadableWidth(nil)
         w.setContentSize(NSSize(width: 1400, height: 800)); w.contentView?.layoutSubtreeIfNeeded()
-        t.check(tv.textContainerInset.width == 28 && tv.textContainer!.size.width > 1300, "Wrap to Readable Width OFF: the text fills the 1400 pt window (\(Int(tv.textContainer!.size.width)) pt)")
+        let area = host.scrollView.contentView.bounds.width                          // (the outline on the left takes its 220 pt from the window first)
+        t.check(tv.textContainerInset.width == 28 && abs(tv.textContainer!.size.width - (area - 56)) < 1.5 && area > 1100, "Wrap to Readable Width OFF: the text fills the text area of the 1400 pt window (\(Int(tv.textContainer!.size.width)) of \(Int(area)) pt)")
         host.luftigToggleReadableWidth(nil)
         t.check(EditorPreferences.readableWidth && abs(tv.textContainer!.size.width - 760) < 1.5, "ON again: column back to 760 pt")
         // configuration of the text view

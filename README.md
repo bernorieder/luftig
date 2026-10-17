@@ -15,6 +15,10 @@ looks emphasised, syntax characters are dimmed but stay visible and editable.
   within ~50 ms, keeping your selection and scroll position.
 * **Settings** (⌘,): fonts for text and code, size, line spacing, column width and 16 colour schemes (the default and 15 well-known editor
   themes), all applied live to every window; wrapped list items hang (their second and following lines start under the text of the item).
+* **Around the text, if you want them** (View menu, remembered): an outline of the headings on the left (click one to go there; the section you are
+  in is a little stronger), the word count at the top right (the selection's count while there is one), and a syntax bar at the bottom whose
+  elements (`#`, `**`, `_`, `` ` ``, link, image, `>`, `-`, `1.`, `[ ]`, `---`, ```` ``` ````, `|`) insert or toggle that Markdown around the selection
+  or on the current lines (undoable). Plain text in the scheme's dim colour on the page, nothing that looks like a button, no titles.
 * **Fast**: a 1 MB file is on screen, styled, in ~20 ms, a 10 MB file in ~25 ms, a 20 MB file in ~32 ms (warm; ~57 / 63 ms in a
   fresh process; ~3.5 ms of each is the current system look, see "Look on macOS 26 and later"). A key press costs 2-3 ms including restyling and redraw, in a 200 KB and in a 10 MB document alike. Idle CPU
   is 0.02-0.04 %. Changing a setting or the colour scheme restyles and repaints a 10 MB document in ~70 ms (1 MB: ~20 ms). Cold launch to the first window is ~180 ms (median since process start, p90 ~190-200 ms; measured with the classic look, the current one adds ~7 ms to the first window, the launch itself was not re-timed) on the machine it was
@@ -147,6 +151,7 @@ rebuilds the gallery.
 | ⌘+ / ⌘− / ⌘0 | View > Bigger / Smaller / Actual Size (applies to all windows, remembered; the Settings window follows). Bigger answers ⌘= as well as ⌘+ (= ⇧⌘= on a US keyboard) |
 | View > Wrap to Readable Width | Centred column of at most 760 pt by default (the width is a setting), default on, remembered. The same switch as "Limit line length" in Settings |
 | View > Toggle Spell Checking | Off by default (also Edit > Spelling and Grammar) |
+| View > Show / Hide Outline, Word Count, Syntax Bar | The three elements around the text (all on by default, remembered, every window follows). Outline: the headings (ATX and setext, not inside code fences or front matter), indented by level, click = that heading at the top of the window with the caret on it. Word count: words are runs of text with a letter or digit (so `---`, `|`, `**` alone do not count), CJK one per character; "12 of 1,234 words" while something is selected. Syntax bar: `#` adds a heading level (after six, none), `**` / `_` / `` ` `` wrap the selection or unwrap it, link / image put placeholders you can type over, `>` / `-` / `1.` / `[ ]` toggle the prefix on the selected lines, `---` / ```` ``` ```` / `|` insert a rule, a code block, a table skeleton on their own lines |
 | ⌃⌘F, ⌘M, ⌘H, ⌘Q | Full screen, Minimize, Hide, Quit |
 | ⌃Tab / ⌃⇧Tab, View > Show Tab Bar | Switch tabs (⌘N opens a tab if "Prefer tabs" is set in System Settings) |
 | ⌘P / ⇧⌘P | Print… / Page Setup… |

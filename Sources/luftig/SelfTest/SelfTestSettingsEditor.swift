@@ -111,7 +111,10 @@ extension SelfTestScenarios {
             P.columnWidth = 1100
             for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1100) < 1.5, "column width: widened to \(Int(host.textView.textContainer!.size.width)) pt in \(name)") }
             P.readableWidth = false
-            for (name, host) in hosts { t.check(host.textView.textContainerInset.width == 28 && host.textView.textContainer!.size.width > 1300, "column off: \(name) uses the whole window (\(Int(host.textView.textContainer!.size.width)) pt)") }
+            for (name, host) in hosts {           // (the outline on the left takes its 220 pt first: the text fills the text area, not the window)
+                let area = host.scrollView.contentView.bounds.width
+                t.check(host.textView.textContainerInset.width == 28 && abs(host.textView.textContainer!.size.width - (area - 56)) < 1.5 && area > 1100, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt)")
+            }
             P.readableWidth = true
             for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1100) < 1.5, "column on again: \(name) back to 1100 pt") }
 

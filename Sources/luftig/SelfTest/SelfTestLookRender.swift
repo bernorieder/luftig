@@ -260,8 +260,8 @@ extension SelfTestScenarios {
         lookDump(host.scrollView.contentView, as: "editor-clipview")
         if let s = host.scrollView.verticalScroller { lookDump(s, as: "editor-vertical-scroller") }
         lookDump(host.textView, as: "editor-textview")
-        if let b = (host.view.subviews.first as? BannerView)?.buttonStack.arrangedSubviews.first as? NSButton { lookDump(b, as: "banner-button") }
-        if let b = host.view.subviews.first as? BannerView { lookDump(b.messageField, as: "banner-message") }
+        if let b = host.banner.buttonStack.arrangedSubviews.first as? NSButton { lookDump(b, as: "banner-button") }
+        do { let b = host.banner; lookDump(b.messageField, as: "banner-message") }
         t.close(doc)
         // freshly made controls (what an unset property gets from the SDK the program was linked with)
         let fresh: [(String, NSObject)] = [

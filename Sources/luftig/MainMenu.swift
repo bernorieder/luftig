@@ -141,6 +141,11 @@ enum MainMenu {
         view.addItem(item("Wrap to Readable Width", #selector(LuftigEditorActions.luftigToggleReadableWidth(_:))))
         view.addItem(item("Toggle Spell Checking", #selector(LuftigEditorActions.luftigToggleSpellChecking(_:))))
         view.addItem(.separator())
+        // the three elements around the text; the titles flip to "Hide …" while an element is shown (EditorViewController.validateMenuItem)
+        view.addItem(item("Show Outline", #selector(LuftigEditorActions.luftigToggleOutline(_:))))
+        view.addItem(item("Show Word Count", #selector(LuftigEditorActions.luftigToggleWordCount(_:))))
+        view.addItem(item("Show Syntax Bar", #selector(LuftigEditorActions.luftigToggleSyntaxBar(_:))))
+        view.addItem(.separator())
         view.addItem(item("Show Tab Bar", #selector(NSWindow.toggleTabBar(_:))))
         view.addItem(item("Show All Tabs", #selector(NSWindow.toggleTabOverview(_:))))
         // AppKit rewrites this item: it becomes the visible "Enter Full Screen" with the system key (fn-F) and our ⌃⌘F is kept

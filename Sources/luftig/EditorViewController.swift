@@ -17,6 +17,9 @@ import MarkdownKit
     func luftigResetFontSize(_ sender: Any?)
     func luftigToggleReadableWidth(_ sender: Any?)
     func luftigToggleSpellChecking(_ sender: Any?)
+    func luftigToggleOutline(_ sender: Any?)
+    func luftigToggleWordCount(_ sender: Any?)
+    func luftigToggleSyntaxBar(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -33,8 +36,22 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     private let storage: NSTextStorage
     private let layoutManager: LuftigLayoutManager
     private let column: ReadableColumnController
-    private let banner = BannerView()
+    let banner = BannerView()
     private var preferenceObserver: NSObjectProtocol?
+    // the three elements around the text (EditorChromeViews.swift); their data is computed in bounded steps, see the `chrome` extension below
+    let outline = OutlineView()
+    let wordCount = WordCountView()
+    let syntaxBar = SyntaxBarView()
+    var chromeObservers: [NSObjectProtocol] = []
+    var chromeTimer: Timer?
+    var chromeScanner: OutlineScanner?
+    var chromeCounter: WordCounter?
+    var chromeStepScheduled = false
+    var chromeGeneration = 0
+    var chromeDataGeneration = -1
+    var chromeWordTotal = 0
+    /// How many times the outline / word count were recomputed (tests).
+    var chromeRefreshCount = 0
 
     private(set) var theme: Theme
     private(set) var fontSize: CGFloat
@@ -76,6 +93,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
 
     deinit {
         if let o = preferenceObserver { NotificationCenter.default.removeObserver(o) }
+        chromeObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        chromeTimer?.invalidate()
         // AppKit (macOS 27.0.1) keeps the NSTextStorage + NSLayoutManager (+ container) of a TextKit 1 stack alive after the view that
         // showed them is gone, in a fraction of the cases that varies with timing (8 % of the closed 1 MB documents, 47 % of 40 documents
         // closed together; reproduced in a bare AppKit program without any luftig code): the document's text, its attributes and the
@@ -85,21 +104,37 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     }
 
     override func loadView() {
+        // banner / word count / [outline | text] / syntax bar, top to bottom; a hidden element takes no space (NSStackView detaches hidden views)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        let stack = NSStackView(views: [banner, scrollView])
+        let middle = NSStackView(views: [outline, scrollView])
+        middle.orientation = .horizontal
+        middle.spacing = 0
+        middle.alignment = .top
+        middle.distribution = .fill
+        middle.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        scrollView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let stack = NSStackView(views: [banner, wordCount, middle, syntaxBar])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
         stack.distribution = .fill
+        stack.translatesAutoresizingMaskIntoConstraints = false
         banner.isHidden = true
+        let root = EditorRootView(frame: NSRect(origin: .zero, size: EditorViewController.initialSize))
+        root.addSubview(stack)
         NSLayoutConstraint.activate([
-            banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
-            banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor), stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: root.topAnchor), stack.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor), banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            wordCount.leadingAnchor.constraint(equalTo: stack.leadingAnchor), wordCount.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            middle.leadingAnchor.constraint(equalTo: stack.leadingAnchor), middle.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            syntaxBar.leadingAnchor.constraint(equalTo: stack.leadingAnchor), syntaxBar.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            outline.topAnchor.constraint(equalTo: middle.topAnchor), outline.bottomAnchor.constraint(equalTo: middle.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: middle.topAnchor), scrollView.bottomAnchor.constraint(equalTo: middle.bottomAnchor),
         ])
-        stack.frame = NSRect(origin: .zero, size: EditorViewController.initialSize)
-        view = stack
+        view = root
+        installChrome()
     }
 
     // MARK: EditorHost (loading, external changes, banner)
@@ -118,6 +153,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         scrollView.contentView.scroll(to: .zero)
         scrollView.reflectScrolledClipView(scrollView.contentView)
         styler.styleVisible()
+        // the outline and the count: right away for a small document (a 300 K-unit scan is well under a millisecond), after the first screen for a big one
+        if storage.length <= EditorViewController.chromeSynchronousLimit { refreshChromeNow() } else { scheduleChromeRefresh(after: 0.15) }
     }
 
     @discardableResult
@@ -131,6 +168,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         // styling changed the look of the visible text (a fence flipped everything to code: other font, other wrapping): put the
         // line that was at the top of the window back at the top
         if styler.appliedRunCount != before, let anchor { anchor.restoreSameCharacter(in: textView) }
+        scheduleChromeRefresh()
         return report
     }
 
@@ -168,6 +206,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         if settings != theme.settings || scheme != appliedSchemeID { rebuildTheme(settings: settings, schemeID: scheme) }
         column.maxColumnWidth = EditorPreferences.columnWidth
         column.isEnabled = EditorPreferences.readableWidth
+        applyChromeVisibility()
     }
 
     /// The user cannot see this window right now. `isVisible` is false for a minimized window, a background tab and a hidden app; `occlusionState` has no
@@ -208,6 +247,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         styler.styleVisible()
         if let anchor, anchor.restoreSameCharacter(in: textView) { styler.styleVisible() }
         textView.needsDisplay = true
+        applyChromeTheme()
     }
 
     /// The page, the caret and the window's appearance follow the colour scheme. A scheme that is always light or always dark (Solarized Light,
@@ -236,11 +276,17 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     /// View > Toggle Spell Checking (off by default). Same switch as Edit > Spelling and Grammar > Check Spelling While Typing; AppKit
     /// would rename a menu item wired straight to `toggleContinuousSpellChecking:`, so the View item has its own action.
     @objc func luftigToggleSpellChecking(_ sender: Any?) { textView.toggleContinuousSpellChecking(sender) }
+    @objc func luftigToggleOutline(_ sender: Any?) { EditorPreferences.showOutline.toggle() }
+    @objc func luftigToggleWordCount(_ sender: Any?) { EditorPreferences.showWordCount.toggle() }
+    @objc func luftigToggleSyntaxBar(_ sender: Any?) { EditorPreferences.showSyntaxBar.toggle() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(luftigToggleReadableWidth(_:)): item.state = column.isEnabled ? .on : .off
         case #selector(luftigToggleSpellChecking(_:)): item.state = textView.isContinuousSpellCheckingEnabled ? .on : .off
+        case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"
+        case #selector(luftigToggleWordCount(_:)): item.title = EditorPreferences.showWordCount ? "Hide Word Count" : "Show Word Count"
+        case #selector(luftigToggleSyntaxBar(_:)): item.title = EditorPreferences.showSyntaxBar ? "Hide Syntax Bar" : "Show Syntax Bar"
         case #selector(luftigIncreaseFontSize(_:)): return fontSize < EditorPreferences.fontSizeRange.upperBound
         case #selector(luftigDecreaseFontSize(_:)): return fontSize > EditorPreferences.fontSizeRange.lowerBound
         case #selector(luftigResetFontSize(_:)): return fontSize != EditorPreferences.defaultFontSize
@@ -251,4 +297,161 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
 
     /// Test / diagnostics access.
     var readableWidthEnabled: Bool { column.isEnabled }
+}
+
+// MARK: - the elements around the text (outline, word count, syntax bar)
+
+extension EditorViewController {
+
+    /// Wires the three elements (called once from `loadView`).
+    func installChrome() {
+        applyChromeTheme()
+        applyChromeVisibility()
+        outline.onSelect = { [weak self] e in self?.jump(toOutlineEntry: e) }
+        syntaxBar.onInsert = { [weak self] e in self?.insert(e) }
+        let nc = NotificationCenter.default
+        // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
+        chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
+        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection() })
+        chromeObservers.append(nc.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) { [weak self] _ in self?.updateCurrentOutlineEntry() })
+    }
+
+    func applyChromeTheme() {
+        outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
+    }
+
+    /// The View menu's three switches, shared by every window.
+    func applyChromeVisibility() {
+        let o = EditorPreferences.showOutline, w = EditorPreferences.showWordCount, s = EditorPreferences.showSyntaxBar
+        let wasStale = (outline.isHidden && o) || (wordCount.isHidden && w)
+        if outline.isHidden == o { outline.isHidden = !o }
+        if wordCount.isHidden == w { wordCount.isHidden = !w }
+        if syntaxBar.isHidden == s { syntaxBar.isHidden = !s }
+        if wasStale && chromeDataGeneration != chromeGeneration { scheduleChromeRefresh(after: 0) }
+    }
+
+    /// The coalescing delay after an edit: a little longer for very large documents (their scan takes longer and the user is typing).
+    var chromeRefreshDelay: Double { storage.length > 4_000_000 ? 1.0 : 0.3 }
+    /// Up to this many UTF-16 units the first scan runs synchronously at open (measured: 300 K units in ~0.5 ms for both scans together).
+    static let chromeSynchronousLimit = 300_000
+
+    /// Recompute now, in one go (open of a small document, tests).
+    func refreshChromeNow() {
+        chromeGeneration += 1
+        chromeTimer?.invalidate(); chromeTimer = nil
+        guard !outline.isHidden || !wordCount.isHidden else { chromeScanner = nil; chromeCounter = nil; return }
+        chromeScanner = outline.isHidden ? nil : OutlineScanner()
+        chromeCounter = wordCount.isHidden ? nil : WordCounter()
+        chromeStep(generation: chromeGeneration, budget: storage.length + 1)      // one step that covers the whole text
+    }
+
+    /// Recompute the outline and the word count `after` seconds (default: the coalescing delay). A new request restarts the clock; a scan in progress
+    /// is abandoned (the text changed under it).
+    func scheduleChromeRefresh(after: Double? = nil) {
+        chromeGeneration += 1
+        chromeScanner = nil; chromeCounter = nil
+        guard !outline.isHidden || !wordCount.isHidden else { return }
+        chromeTimer?.invalidate()
+        let t = Timer(timeInterval: after ?? chromeRefreshDelay, repeats: false) { [weak self] _ in self?.startChromeScan() }
+        RunLoop.main.add(t, forMode: .common)
+        chromeTimer = t
+    }
+
+    private func startChromeScan() {
+        chromeTimer = nil
+        chromeScanner = outline.isHidden ? nil : OutlineScanner()
+        chromeCounter = wordCount.isHidden ? nil : WordCounter()
+        chromeStep(generation: chromeGeneration)
+    }
+
+    /// One bounded step of the scans (about a millisecond for a megabyte), then the next one on the next run-loop turn until both are finished.
+    private func chromeStep(generation: Int, budget: Int = 1_000_000) {
+        guard generation == chromeGeneration, chromeScanner != nil || chromeCounter != nil else { return }
+        let text = storage.string as NSString
+        if chromeScanner != nil, chromeScanner!.scan(text, budget: budget) == false { scheduleChromeStep(generation: generation); return }
+        if chromeCounter != nil, chromeCounter!.scan(text, budget: budget) == false { scheduleChromeStep(generation: generation); return }
+        // done
+        chromeDataGeneration = generation
+        chromeRefreshCount += 1
+        if let s = chromeScanner { outline.entries = s.entries; updateCurrentOutlineEntry() }
+        if let c = chromeCounter { chromeWordTotal = c.count; updateChromeSelection() }
+        chromeScanner = nil; chromeCounter = nil
+    }
+
+    private func scheduleChromeStep(generation: Int) {
+        guard !chromeStepScheduled else { return }
+        chromeStepScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.chromeStepScheduled = false
+            self.chromeStep(generation: generation)
+        }
+    }
+
+    /// True while the outline / word count are being recomputed (tests wait for it).
+    var chromeRefreshPending: Bool { chromeTimer != nil || chromeScanner != nil || chromeCounter != nil }
+
+    /// The word count label: the document's words, and the selection's when there is one (counted right away for a selection up to 200 000 units).
+    func updateChromeSelection() {
+        guard !wordCount.isHidden else { return }
+        let sel = textView.selectedRange()
+        var selected: Int?
+        if sel.length > 0, sel.length <= 200_000 { selected = WordCounter.words(in: storage.string as NSString, range: sel) }
+        wordCount.text = WordCountView.label(total: chromeWordTotal, selected: selected)
+    }
+
+    /// The outline entry of the section at the top of the window.
+    func updateCurrentOutlineEntry() {
+        guard !outline.isHidden, !outline.entries.isEmpty, let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0 else { return }
+        // the character just under the top edge plus the text inset: a heading that sits at the top of the window (where a click puts it) is current
+        let origin = textView.textContainerOrigin
+        let probe = NSPoint(x: 0, y: textView.visibleRect.minY - origin.y + column.verticalInset + 2)
+        let top = lm.characterIndexForGlyph(at: lm.glyphIndex(for: probe, in: tc, fractionOfDistanceThroughGlyph: nil))
+        // the last heading at or before `top` (binary search: entries are in document order)
+        var lo = 0, hi = outline.entries.count
+        while lo < hi { let mid = (lo + hi) / 2; if outline.entries[mid].location <= top { lo = mid + 1 } else { hi = mid } }
+        outline.currentIndex = lo > 0 ? lo - 1 : nil
+    }
+
+    /// A click on an outline entry: the heading line at the top of the window, the caret on it.
+    func jump(toOutlineEntry e: OutlineEntry) {
+        let length = storage.length
+        guard e.location <= length else { return }
+        let loc = min(e.location, max(0, length - 1))
+        styler.prestyle(aroundCharacter: loc)
+        if let lm = textView.layoutManager, let tc = textView.textContainer, length > 0 {
+            lm.ensureLayout(forCharacterRange: NSRange(location: loc, length: min(2000, length - loc)))
+            let glyph = lm.glyphIndexForCharacter(at: loc)
+            let line = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let y = max(0, line.minY + textView.textContainerOrigin.y - column.verticalInset)
+            let clip = scrollView.contentView
+            let maxY = max(0, textView.frame.height - clip.bounds.height)
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(y, maxY)))
+            scrollView.reflectScrolledClipView(clip)
+            _ = tc
+        }
+        textView.setSelectedRange(NSRange(location: e.location, length: 0))
+        styler.styleVisible()
+        view.window?.makeFirstResponder(textView)
+    }
+
+    /// A click on the syntax bar: the edit goes through the text view's own change protocol (undoable, marks the document dirty, restyled by the styler).
+    func insert(_ element: SyntaxElement) {
+        let tv = textView
+        guard tv.isEditable else { return }
+        let change = SyntaxInsertion.change(for: element, in: storage.string as NSString, selection: tv.selectedRange())
+        // outside an event (a test, a script) no undo group is open: NSTextView's change protocol registers undo and insists on one
+        let um = tv.undoManager
+        let opensGroup = (um?.groupingLevel ?? 1) == 0
+        if opensGroup { um?.beginUndoGrouping() }
+        defer { if opensGroup { um?.endUndoGrouping() } }
+        guard tv.shouldChangeText(in: change.range, replacementString: change.replacement) else { return }
+        um?.setActionName(element.name.components(separatedBy: " (").first ?? element.name)
+        storage.replaceCharacters(in: change.range, with: change.replacement)
+        tv.didChangeText()
+        let sel = NSIntersectionRange(change.selection, NSRange(location: 0, length: storage.length))
+        tv.setSelectedRange(sel.length == 0 && change.selection.location <= storage.length ? NSRange(location: change.selection.location, length: 0) : sel)
+        tv.scrollRangeToVisible(tv.selectedRange())
+        view.window?.makeFirstResponder(tv)
+    }
 }

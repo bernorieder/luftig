@@ -103,8 +103,9 @@ extension SelfTestScenarios {
     /// Starts from the defaults.
     @MainActor static func preservingSettings(_ body: @MainActor () async throws -> Void) async rethrows {
         let ud = UserDefaults.standard
-        let saved = EditorPreferences.allKeys.map { ($0, ud.object(forKey: $0)) }
-        for k in EditorPreferences.allKeys { ud.removeObject(forKey: k) }
+        let keys = EditorPreferences.allKeys + EditorPreferences.chromeKeys
+        let saved = keys.map { ($0, ud.object(forKey: $0)) }
+        for k in keys { ud.removeObject(forKey: k) }
         Palette.apply(schemeID: ColorSchemes.defaultID)
         defer {
             for (k, v) in saved { if let v { ud.set(v, forKey: k) } else { ud.removeObject(forKey: k) } }

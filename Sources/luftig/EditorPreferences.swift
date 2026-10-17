@@ -18,6 +18,11 @@ enum EditorPreferences {
     static let columnWidthKey = "LuftigColumnWidth"
     /// Every key the Settings window controls (Restore Defaults removes them all).
     static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey]
+    /// The three elements around the text (View menu), not part of the Settings window.
+    static let showOutlineKey = "LuftigShowOutline"
+    static let showWordCountKey = "LuftigShowWordCount"
+    static let showSyntaxBarKey = "LuftigShowSyntaxBar"
+    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey]
 
     // MARK: one-time migration from the app's previous name
 
@@ -171,6 +176,34 @@ enum EditorPreferences {
             defaults.set(Double(v), forKey: columnWidthKey)
             post()
         }
+    }
+
+    // MARK: the elements around the text (all on by default; anything stored that is not a Bool reads as the default)
+
+    /// View > Show Outline: the headings of the document on the left.
+    static var showOutline: Bool {
+        get { flag(forKey: showOutlineKey, default: true) }
+        set { setFlag(newValue, forKey: showOutlineKey, current: showOutline) }
+    }
+    /// View > Show Word Count: the number of words at the top right.
+    static var showWordCount: Bool {
+        get { flag(forKey: showWordCountKey, default: true) }
+        set { setFlag(newValue, forKey: showWordCountKey, current: showWordCount) }
+    }
+    /// View > Show Syntax Bar: the Markdown elements at the bottom, inserted with a click.
+    static var showSyntaxBar: Bool {
+        get { flag(forKey: showSyntaxBarKey, default: true) }
+        set { setFlag(newValue, forKey: showSyntaxBarKey, current: showSyntaxBar) }
+    }
+
+    private static func flag(forKey key: String, default d: Bool) -> Bool {
+        guard let v = defaults.object(forKey: key), CFGetTypeID(v as CFTypeRef) == CFBooleanGetTypeID() else { return d }
+        return (v as? Bool) ?? d
+    }
+    private static func setFlag(_ new: Bool, forKey key: String, current: Bool) {
+        guard new != current else { return }
+        defaults.set(new, forKey: key)
+        post()
     }
 
     // MARK: fonts and line spacing

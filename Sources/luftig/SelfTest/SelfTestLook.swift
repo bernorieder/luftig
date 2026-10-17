@@ -140,6 +140,10 @@ extension SelfTestScenarios {
         guard let w = doc.windowControllers.first?.window, let content = w.contentView else { t.check(false, "no window"); return }
         let tv = host.textView, sv = host.scrollView, clip = sv.contentView
         defer { t.close(doc) }
+        // this scenario is about the system's chrome around the TEXT VIEW: the three elements around the text (outline, word count, syntax bar) are hidden for it
+        let chromeSaved = (EditorPreferences.showOutline, EditorPreferences.showWordCount, EditorPreferences.showSyntaxBar)
+        EditorPreferences.showOutline = false; EditorPreferences.showWordCount = false; EditorPreferences.showSyntaxBar = false
+        defer { EditorPreferences.showOutline = chromeSaved.0; EditorPreferences.showWordCount = chromeSaved.1; EditorPreferences.showSyntaxBar = chromeSaved.2 }
         for (appearance, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
             w.appearance = NSAppearance(named: appearance)
             w.setContentSize(NSSize(width: 860, height: 700))
@@ -263,7 +267,8 @@ extension SelfTestScenarios {
                     host.showBanner(EditorBanner(message: width > 400 ? short : long, style: style, buttons: [("Reload from Disk", {}), ("Keep My Version", {})]))
                     content.layoutSubtreeIfNeeded()
                     await t.sleep(5)
-                    guard let banner = host.view.subviews.first as? BannerView else { t.check(false, "no banner"); continue }
+                    let banner = host.banner
+                    guard !banner.isHidden, banner.window === w else { t.check(false, "no banner"); continue }
                     let bounds = banner.bounds
                     let buttons = banner.buttonStack.arrangedSubviews.compactMap { $0 as? NSButton }
                     let stack = banner.buttonStack.frame, message = banner.messageField.frame
@@ -279,8 +284,11 @@ extension SelfTestScenarios {
                     t.check((buttons.first.map { $0.alignmentRect(forFrame: $0.frame).height } ?? 99) + 8 <= bounds.height, "\(label): the banner (\(Int(bounds.height)) pt) is at least 8 pt taller than its buttons")
                     t.check(message.maxX <= stack.minX - 8 && message.minX >= 0 && stack.maxX <= bounds.width + 0.5, "\(label): the message (to x \(Int(message.maxX))) and the buttons (from x \(Int(stack.minX))) do not overlap, the buttons end inside the banner (x \(Int(stack.maxX)) of \(Int(bounds.width)))")
                     // the editor starts exactly where the banner ends: no text is covered
+                    // (in the content view's coordinates: the scroll view sits in a nested stack; the word count row, when shown, lies between the banner and the text)
                     let sv = host.scrollView
-                    t.check(abs(sv.frame.maxY - banner.frame.minY) < 0.5 && sv.frame.minY >= -0.5, "\(label): the scroll view starts below the banner (scroll view top y \(sv.frame.maxY), banner bottom y \(banner.frame.minY))")
+                    let svFrame = content.convert(sv.bounds, from: sv), bannerFrame = content.convert(banner.bounds, from: banner)
+                    let between = host.wordCount.isHidden ? 0 : WordCountView.height
+                    t.check(abs(svFrame.maxY + between - bannerFrame.minY) < 0.5 && svFrame.minY >= -0.5, "\(label): the scroll view starts below the banner (scroll view top y \(svFrame.maxY), banner bottom y \(bannerFrame.minY), \(Int(between)) pt word count row between)")
                     // legibility on pixels: every button title on its own fill, and the message on the banner's tint
                     if let shot = LookShot(content) {
                         for b in buttons {

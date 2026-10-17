@@ -44,6 +44,11 @@ Sources/luftig/
   Decorations.swift                     .luftigBlock / .luftigInline keys, BlockMark encoding, metrics, band path helpers
   ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset, follows the clip view width
   BannerView.swift                      the non-modal strip for external-change messages
+  EditorChrome.swift                    the three elements around the text, without views: OutlineScanner (ATX / setext headings outside fences and front matter,
+                                        chunked), WordCounter (chunked), SyntaxInsertion (text + selection -> TextChange: wrap / unwrap, link, line prefixes, blocks)
+  EditorChromeViews.swift               OutlineView (NSTableView, no selection, hover), WordCountView, SyntaxBarView (SoftLabel: text that acts, never a bezel),
+                                        EditorRootView (the page colour behind everything); all in Palette.marker, the body / code family at 12 pt; wired in
+                                        EditorViewController's `chrome` extension: coalesced recomputation in 1 M-unit steps after edits, View menu switches
   SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window, NSGridView, every control applies live and is saved; observes EditorPreferences.didChange
                                         FIXED layout (plain constraints, fixed column widths and label widths: nothing moves or resizes whatever a value says, invariant 24); the size field shows the
                                         size in use even while it is being edited (pitfall 24); sliders and the stepper report their drags (`tracking`)
@@ -83,6 +88,9 @@ Sources/luftig/
     SelfTestFixSettings.swift           fix-settings-*: the Settings window's layout (nothing moves, 252 states), the size field with a field editor, dragging a slider over a 10 MB document
     SelfTestFixScroll.swift             fix-scroll (regression guard), fix-scroll-path (the editor opts out of responsive scrolling, NSScrollView agrees), fix-scroll-bench (measurement:
                                         trackpad-style scrolling in a full-screen-sized window, cold and warm, `--spell`), fix-probe-overdraw (what the responsive-scrolling overdraw costs)
+    SelfTestChrome.swift                chrome-outline / chrome-words / chrome-syntax (the pure logic: tables of cases, chunked == whole, caps, speed), chrome-editor
+                                        (the real editor: preferences + View menu, data after open, outline click, syntax bar click undoable + dirty + fresh lex,
+                                        coalesced recomputation after typing, 6 MB in run-loop steps, fonts / colours follow the Settings and the scheme)
     SelfTestMergeLook.swift             look-settings-fixed: the fixed Settings layout under the new look (four appearances x every control's range, frames identical everywhere), the focused
                                         size field, clicks on the hosted sliders / stepper still reach their `mouseDown` (what the drag coalescing relies on)
     SelfTestPerf*.swift                 perf-guard (REGRESSION GUARD with generous budgets, skipped on a loaded machine) and the measurement scenarios perf-*
@@ -160,6 +168,22 @@ a control of the Settings window | View > Bigger / Smaller / Actual Size | View 
 ```
 `NSTextView.font =` is never used on a non-empty text view (it re-fonts the whole document). Measured: 10 MB document, the change + restyle + layout + repaint of the visible part
 66-74 ms for a font, size, spacing or colour scheme (1 MB: 18-23 ms), column width 9 ms.
+
+### Around the text: outline, word count, syntax bar (View menu; EditorChrome.swift, EditorChromeViews.swift)
+
+```
+open / external reload / NSText.didChange  -> scheduleChromeRefresh: a timer (0.3 s; 1 s above 4 M units; 0.15 s after open) restarts on every edit
+ -> startChromeScan: OutlineScanner + WordCounter over the storage's NSString (no copy), 1 M units per run-loop turn (~1 ms per step on fresh text,
+    6 MB in ~60 steps, the longest wait of the run loop 8 ms), abandoned and restarted when the text changes under them
+ -> outline.entries (NSTableView reload), wordCount.text; the current section (the heading at or above the character under the top edge + inset)
+    follows the clip view's bounds notification; the selection's own count is counted right away for selections up to 200 000 units
+outline click  -> prestyle, layout around the heading, the heading line at the top (minus the text inset), caret on it, first responder
+syntax bar click -> SyntaxInsertion.change(for:in:selection:) (pure) -> shouldChangeText / replaceCharacters / didChangeText on the text view
+    (undoable with a named action, marks the document dirty, restyled by the styler from didProcessEditing), then the selection the change asks for
+View > Show / Hide ... -> EditorPreferences.showOutline / showWordCount / showSyntaxBar -> didChange -> every editor: applyChromeVisibility
+    (NSStackView detaches a hidden element: the text takes its place; an element shown with stale data recomputes at once)
+```
+Nothing here is ever computed per keystroke; a hidden element costs nothing (no scan while both outline and count are hidden).
 
 ## 3. Invariants (a change that breaks one of these breaks the editor)
 
@@ -277,6 +301,10 @@ a control of the Settings window | View > Bigger / Smaller / Actual Size | View 
     frame in a full-screen-sized window). The scroll thread itself cannot run headless (pitfall 26): the diagnosis rests on the user's observation (trackpad choppy, knob smooth), on NSTextView's
     method list and on the measured costs, and the fix on a hand test with a real trackpad. Do not add a `scrollWheel:` override anywhere in the editor's hierarchy to get the same effect: it would
     opt out silently and nobody would know why.
+32. **`NSTextView.shouldChangeText(in:replacementString:)` outside an event needs an open undo group.** NSTextView's change protocol (the way to make a programmatic
+    edit undoable, dirty and restyled: `shouldChangeText` / `replaceCharacters` / `didChangeText`) registers the undo right there, and NSUndoManager raises
+    "must begin a group before registering undo" when no group is open - which is the case for anything not called from inside an event (a self-test, a timer,
+    a script); a real click has AppKit's per-event group. `EditorViewController.insert` opens one itself when `groupingLevel == 0` (the syntax bar).
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 
