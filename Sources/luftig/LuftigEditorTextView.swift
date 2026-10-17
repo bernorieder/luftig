@@ -43,6 +43,19 @@ final class LuftigEditorTextView: NSTextView {
     /// first and lays out once, and is what `fix-scroll` measures: p99 under a 120 Hz frame in a full-screen-sized window.
     override class var isCompatibleWithResponsiveScrolling: Bool { false }
 
+    /// THE override that keeps full-screen scrolling smooth. It does nothing but call `super`: its EXISTENCE makes NSTextView draw the insertion point
+    /// itself (the classic path) instead of through its `NSTextInsertionIndicator` subview (macOS 14+), which it uses only for subclasses that do not
+    /// override this method. Measured on screen (`fix-scroll-screen`, a 1512 x 949 pt full-screen window on a 120 Hz display, one scroll step per frame,
+    /// 480 frames): with the indicator view, an editable first-responder text view scrolling over text that was shown before stalled the main thread for
+    /// 37 ms about ten times a second (55 - 60 stalls in 480 frames, in `CABackingStoreSynchronize` / `wait_for_synchronize`: Core Animation waiting for
+    /// the render server on a commit); with this override, 0 dropped frames in every pass, run after run. Not editable, not first responder, or styling
+    /// edits in flight (they pause the blink): no stalls either way - which is why the first pass over fresh text was always smooth and only the second
+    /// one stuttered ("after a while it works fine"). Nothing else helped (full redraws, size changes, fresh layers, copy-on-scroll, asynchronous drawing,
+    /// the redraw policy, the window's opacity, the input context, accessibility, hiding / removing the indicator: all measured). Pitfall 33.
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        super.drawInsertionPoint(in: rect, color: color, turnedOn: flag)
+    }
+
     override func drawBackground(in rect: NSRect) {
         #if LUFTIG_SELFTEST
         LuftigEditorTextView.drawLog?(rect)

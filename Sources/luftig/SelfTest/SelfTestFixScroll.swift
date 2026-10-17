@@ -28,6 +28,8 @@ extension SelfTestScenarios {
               run: { t in try await fixScroll(t) }),
         .init(name: "fix-scroll-path", summary: "REGRESSION GUARD: the editor opts out of responsive scrolling (NSScrollView agrees), so a trackpad scroll takes the synchronous path that fix-scroll measures; a stock NSTextView opts in",
               run: { t in try await fixScrollPath(t) }),
+        .init(name: "fix-scroll-screen", summary: "(ON SCREEN, measurement) a real full-screen window on this display, scrolled one step per display frame like the trackpad path: dropped frames on a first visit vs a second: --input f.md [--step pt] [--frames N] [--fonts ...] [--reverse | --jump-ahead] [--restyle] [--not-editable | --no-caret] [--windowed] [--timer] [--sample]",
+              run: { t in try await fixScrollScreen(t) }, inAll: false),
         .init(name: "fix-probe-overdraw", summary: "(probe) what AppKit's responsive-scrolling overdraw costs over fresh text in a full-screen-sized window: prepareContent(in:) of 1-2 screens ahead, the restyle on arrival, and the same with the text styled first: [--input f.md] [--fonts default|fira|serif]",
               run: { t in try await fixProbeOverdraw(t) }, inAll: false),
     ]
@@ -136,7 +138,7 @@ extension SelfTestScenarios {
     // MARK: scroll events
 
     /// A trackpad scroll event: pixel deltas, with the scroll phase (and the momentum phase after the fingers lifted). dy < 0 scrolls DOWN through the document.
-    @MainActor static func fixScrollEvent(dy: Double, phase: Int, momentum: Int) -> NSEvent? {
+    nonisolated static func fixScrollEvent(dy: Double, phase: Int, momentum: Int) -> NSEvent? {
         guard let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: Int32(dy.rounded()), wheel2: 0, wheel3: 0) else { return nil }
         cg.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
         cg.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: dy)
@@ -389,6 +391,167 @@ extension SelfTestScenarios {
         if let v = SelfTest.argument("passes").flatMap({ Int($0) }) { c.passes = v }
         let passes = try await fixScrollRun(t, c)
         t.check(!passes.isEmpty && passes.allSatisfy { !$0.steps.isEmpty }, "scrolled \(passes.count) passes of \(c.events) events")
+    }
+
+    // MARK: on screen
+
+    /// Scrolls a clip view by `step` points on every frame of the display, through a display link (what `NSScrollingBehaviorSingleThreadedVBL` does for a
+    /// trackpad once the editor opted out of concurrent scrolling), and records when each frame callback came. A callback that comes more than 1.5 frames after
+    /// the previous one is a dropped frame: the main thread (this scroll, the layout and drawing it caused, the Core Animation commit) was not done in time.
+    final class FrameDriver: NSObject {
+        var clip: NSClipView?
+        weak var scrollView: NSScrollView?
+        var step: CGFloat = 20
+        var frames = 480
+        var times: [Double] = []
+        var work: [Double] = []
+        /// How long the main thread was busy between two waits of its run loop (seconds): a stall of the thread shows here, a stall of the display does not.
+        var busy: [Double] = []
+        var done: (() -> Void)?
+        /// --timer: no display link, a plain timer at the display's rate drives the scroll (the stalls are the same: they are not the display link's).
+        var useTimer = false
+        private var link: CADisplayLink?
+        private var timer: Timer?
+        private var observer: CFRunLoopObserver?
+        private var wokeAt = 0.0
+        func start(in view: NSView) {
+            times.removeAll(); work.removeAll(); busy.removeAll()
+            let obs = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue, true, 0) { [weak self] _, activity in
+                guard let self else { return }
+                if activity == .afterWaiting { self.wokeAt = CACurrentMediaTime() }
+                else if self.wokeAt > 0 { self.busy.append(CACurrentMediaTime() - self.wokeAt) }
+            }
+            observer = obs
+            CFRunLoopAddObserver(CFRunLoopGetMain(), obs, CFRunLoopMode.commonModes)
+            if useTimer {
+                let hz = Double(view.window?.screen?.maximumFramesPerSecond ?? 60)
+                let t = Timer(timeInterval: 1 / hz, repeats: true) { [weak self] _ in self?.advance() }
+                RunLoop.main.add(t, forMode: .common)
+                timer = t
+            } else {
+                link = view.displayLink(target: self, selector: #selector(tick(_:)))
+                link?.add(to: .main, forMode: .common)
+            }
+        }
+        func stop() {
+            if let o = observer { CFRunLoopRemoveObserver(CFRunLoopGetMain(), o, CFRunLoopMode.commonModes); observer = nil }
+            timer?.invalidate(); timer = nil
+            link?.invalidate(); link = nil
+        }
+        private func advance() {
+            let now = CACurrentMediaTime()
+            times.append(now)
+            if let clip, let sv = scrollView {
+                let maxY = max(0, (clip.documentView?.frame.height ?? 0) - clip.bounds.height)
+                clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(maxY, clip.bounds.origin.y + step)))
+                sv.reflectScrolledClipView(clip)
+            }
+            work.append(CACurrentMediaTime() - now)
+            if times.count >= frames { stop(); done?() }
+        }
+        @objc func tick(_ link: CADisplayLink) {
+            let now = CACurrentMediaTime()
+            times.append(now)
+            if let clip, let sv = scrollView {
+                let maxY = max(0, (clip.documentView?.frame.height ?? 0) - clip.bounds.height)
+                clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(maxY, clip.bounds.origin.y + step)))
+                sv.reflectScrolledClipView(clip)
+            }
+            work.append(CACurrentMediaTime() - now)
+            if times.count >= frames { link.invalidate(); self.link = nil; stop(); done?() }
+        }
+    }
+
+    static func frameStats(_ times: [Double], nominal: Double) -> String {
+        guard times.count > 2 else { return "no frames" }
+        let gaps = zip(times, times.dropFirst()).map { $1 - $0 }
+        let sorted = gaps.sorted()
+        let dropped = gaps.filter { $0 > nominal * 1.5 }.count
+        let dropped2 = gaps.filter { $0 > nominal * 2.5 }.count
+        let p99 = sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.99))]
+        let total = times.last! - times.first!
+        return String(format: "%d frames in %.2f s (%.0f/s): %d dropped (gap > 1.5 frames), %d of them long (> 2.5 frames); gap p50 %.2f p99 %.2f max %.2f ms", times.count, total, Double(times.count - 1) / total, dropped, dropped2, sorted[sorted.count / 2] * 1000, p99 * 1000, sorted.last! * 1000)
+    }
+
+    @MainActor static func fixScrollScreen(_ t: SelfTest.T) async throws {
+        guard let input = SelfTest.argument("input") else { t.check(false, "usage: --selftest fix-scroll-screen --input f.md [--step pt] [--frames N] [--fonts default|fira|serif] [--reverse | --jump-ahead] [--restyle] [--not-editable | --no-caret] [--windowed] [--timer] [--sample]"); return }
+        let step = CGFloat(SelfTest.argument("step").flatMap { Double($0) } ?? 20)
+        let frames = SelfTest.argument("frames").flatMap { Int($0) } ?? 480
+        try await preservingSettings {
+            fixScrollApplyFonts(SelfTest.argument("fonts") ?? "default")
+            let clone = try PerfLab.clone(t, input, as: "screen.md")
+            let doc = try await t.open(clone, size: NSSize(width: 1200, height: 800))
+            guard let host = doc.host as? EditorViewController, let window = host.view.window else { t.check(false, "no window"); return }
+            defer { t.close(doc) }
+            if SelfTest.flag("chrome-off") { EditorPreferences.showOutline = false; EditorPreferences.showWordCount = false; EditorPreferences.showSyntaxBar = false }
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            if !SelfTest.flag("no-caret") { window.makeFirstResponder(host.textView) }
+            await t.sleep(300)
+            // --no-caret: nothing is first responder (no insertion point at all); --not-editable: first responder, but no insertion point
+            if SelfTest.flag("no-caret") { window.makeFirstResponder(nil); await t.sleep(100) }
+            if SelfTest.flag("not-editable") { host.textView.isEditable = false }
+            out("SCREEN first responder: \(window.firstResponder.map { String(describing: type(of: $0)) } ?? "none"), editable \(host.textView.isEditable), selection \(NSStringFromRange(host.textView.selectedRange()))")
+            if !SelfTest.flag("windowed") {
+                window.toggleFullScreen(nil)
+                var waited = 0.0
+                while !window.styleMask.contains(.fullScreen) && waited < 4000 { await t.sleep(50); waited += 50 }
+                await t.sleep(1200)                                                   // the transition animation
+            }
+            let screen = window.screen ?? NSScreen.main
+            let hz = Double(screen?.maximumFramesPerSecond ?? 60)
+            let nominal = 1.0 / hz
+            out(String(format: "SCREEN window %@ %.0f x %.0f pt at %.0fx on a %.0f Hz display; text %d chars; fonts %@ %.0f pt; step %.0f pt per frame; text view layer: %@", window.styleMask.contains(.fullScreen) ? "FULL SCREEN" : "windowed", window.frame.width, window.frame.height, window.backingScaleFactor, hz, host.textView.textStorage?.length ?? 0, host.theme.bodyFamily ?? "system", host.theme.baseSize, step, host.textView.layer.map { String(describing: type(of: $0)) } ?? "none"))
+            let sv = host.scrollView, clip = sv.contentView
+            // what AppKit asks the text view to draw on screen: every rect, with the time the drawing took (the decorations + AppKit's own text drawing around them)
+            var draws: [(h: CGFloat, w: CGFloat)] = []
+            LuftigEditorTextView.drawLog = { r in draws.append((r.height, r.width)) }
+            defer { LuftigEditorTextView.drawLog = nil }
+            func pass(_ label: String, direction: CGFloat = 1) async {
+                draws.removeAll()
+                let driver = FrameDriver()
+                driver.clip = clip; driver.scrollView = sv; driver.step = step * direction; driver.frames = frames
+                driver.useTimer = SelfTest.flag("timer")
+                var finished = false
+                driver.done = { finished = true }
+                driver.start(in: host.view)
+                var waited = 0.0
+                var restarts = 0
+                while !finished && waited < Double(frames) * nominal * 1000 + 5000 {
+                    await t.sleep(20); waited += 20
+                    // (a display link made right after a full-screen transition sometimes never fires: make a fresh one)
+                    if driver.times.isEmpty && waited >= 600 && restarts < 3 { restarts += 1; driver.stop(); driver.start(in: host.view); waited = 0 }
+                }
+                if restarts > 0 { out("SCREEN   (the display link had to be restarted \(restarts)x before it fired)") }
+                let w = driver.work.sorted()
+                let heights = draws.map { $0.h }.sorted()
+                let big = draws.filter { $0.h > 100 }
+                let busy = driver.busy.sorted()
+                out("SCREEN \(label): " + frameStats(driver.times, nominal: nominal) + String(format: "; frame callback p50 %.2f p99 %.2f max %.2f ms; main thread busy between waits p50 %.2f p99 %.2f max %.2f ms (%d stretches over 8 ms); AppKit drew %d rects: height p50 %.0f max %.0f pt, %d taller than 100 pt", w.isEmpty ? 0 : w[w.count / 2] * 1000, w.isEmpty ? 0 : w[min(w.count - 1, Int(Double(w.count) * 0.99))] * 1000, (w.last ?? 0) * 1000, busy.isEmpty ? 0 : busy[busy.count / 2] * 1000, busy.isEmpty ? 0 : busy[min(busy.count - 1, Int(Double(busy.count) * 0.99))] * 1000, (busy.last ?? 0) * 1000, busy.filter { $0 > 0.008 }.count, draws.count, heights.isEmpty ? 0 : heights[heights.count / 2], heights.last ?? 0, big.count))
+            }
+            await pass("COLD (first pass down from the top)")
+            // --jump-ahead: instead of back to the top, jump far ahead into text never shown (is it the jump, or the second visit, that stalls?);
+            // --reverse: no jump, the second pass scrolls back UP over what the first showed (a user reading back)
+            if SelfTest.flag("jump-ahead") { clip.scroll(to: NSPoint(x: 0, y: clip.bounds.origin.y * 4)) } else if !SelfTest.flag("reverse") { clip.scroll(to: .zero) }
+            sv.reflectScrolledClipView(clip)
+            await t.sleep(SelfTest.argument("settle").flatMap { Double($0) } ?? 400)      // --settle ms: how long to wait after the jump
+            if SelfTest.flag("sample") {                                           // `sample` this process during the warm pass (written next to the work dir)
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/sample")
+                let samplePath = SelfTest.argument("sample-out") ?? (NSTemporaryDirectory() + "luftig-warm-sample.txt")
+                p.arguments = ["\(getpid())", "3", "1", "-file", samplePath]
+                try? p.run()
+                out("SCREEN sampling pid \(getpid()) for 3 s into \(samplePath)")
+                await t.sleep(300)
+            }
+            if SelfTest.flag("restyle") { host.styler.reset(); host.styler.styleVisible() }        // the styler forgets: the second pass re-styles the text as it scrolls in, like the first
+            await pass(SelfTest.flag("reverse") ? "WARM (back up over the same text)" : "WARM (the same pass again)", direction: SelfTest.flag("reverse") ? -1 : 1)
+            // a third pass further down, over text the first two never reached (cold again, unless the warmer got there)
+            await pass("COLD-2 (continuing below)")
+            if window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil); await t.sleep(1500) }
+            t.check(true, "measured")
+        }
     }
 
     // MARK: the regression guard

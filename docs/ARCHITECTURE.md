@@ -87,7 +87,8 @@ Sources/luftig/
     SelfTestMatrix.swift                matrix-*: the three features together - decorations, hanging indent, the Settings preview and Print... under 5 combinations of scheme x font x size x spacing x column
     SelfTestFixSettings.swift           fix-settings-*: the Settings window's layout (nothing moves, 252 states), the size field with a field editor, dragging a slider over a 10 MB document
     SelfTestFixScroll.swift             fix-scroll (regression guard), fix-scroll-path (the editor opts out of responsive scrolling, NSScrollView agrees), fix-scroll-bench (measurement:
-                                        trackpad-style scrolling in a full-screen-sized window, cold and warm, `--spell`), fix-probe-overdraw (what the responsive-scrolling overdraw costs)
+                                        trackpad-style scrolling in a full-screen-sized window, cold and warm, `--spell`), fix-probe-overdraw (what the responsive-scrolling overdraw costs),
+                                        fix-scroll-screen (ON SCREEN: a real full-screen window on this display, one clip-view scroll per display frame, dropped frames per pass: pitfall 33)
     SelfTestChrome.swift                chrome-outline / chrome-words / chrome-syntax (the pure logic: tables of cases, chunked == whole, caps, speed), chrome-editor
                                         (the real editor: preferences + View menu, data after open, outline click, syntax bar click undoable + dirty + fresh lex,
                                         coalesced recomputation after typing, 6 MB in run-loop steps, fonts / colours follow the Settings and the scheme)
@@ -305,6 +306,22 @@ Nothing here is ever computed per keystroke; a hidden element costs nothing (no 
     edit undoable, dirty and restyled: `shouldChangeText` / `replaceCharacters` / `didChangeText`) registers the undo right there, and NSUndoManager raises
     "must begin a group before registering undo" when no group is open - which is the case for anything not called from inside an event (a self-test, a timer,
     a script); a real click has AppKit's per-event group. `EditorViewController.insert` opens one itself when `groupingLevel == 0` (the syntax bar).
+33. **Full-screen scrolling stuttered because of the insertion point's view, and the cure is an override of `drawInsertionPoint(in:color:turnedOn:)` that
+    only calls `super`.** Measured with `fix-scroll-screen` (ON SCREEN: a real full-screen window of 1512 x 949 pt on this 120 Hz display, the clip view
+    scrolled one step per display frame through a CADisplayLink - what the trackpad path does once the editor opted out of concurrent scrolling - 480
+    frames per pass, the gaps between frame callbacks, the main thread's busy stretches between run-loop waits, the rects AppKit asked the text view to
+    draw, and `sample` of the process during a pass). The first pass over any text: 0 - 6 dropped frames in 480. A second pass over text shown before,
+    in either direction, after a jump or not: 55 - 60 stalls of ~37 ms (five frames each, about ten a second), the main thread waiting in
+    `CABackingStoreSynchronize` / `CA::Render::Context::wait_for_synchronize` for the render server at the Core Animation commit. Windowed: never.
+    Not editable, or not first responder, or with the styler's edits in flight (they pause the caret's blink): never, which is why fresh text was
+    always smooth and only revisited text stuttered - the user's "after a while it suddenly works fine". No difference from: redrawing the whole
+    visible rect every frame, changing the view's height every frame, a fresh layer (`wantsLayer` off / on), the clip view drawing the text into its own
+    layer, `copiesOnScroll`, `drawsAsynchronously`, the redraw policy, a non-opaque window, the scroller, the panes, the input context, accessibility,
+    the caret's position, the indicator's display mode, hiding or removing the `NSTextInsertionIndicator` view, a timer instead of the display link,
+    a wait after the jump, a look-ahead layout in idle time (that one made it worse: 205 dropped frames). With the override NSTextView draws the caret
+    on the classic path (it uses its `NSTextInsertionIndicator` subview, macOS 14+, only for subclasses that do not override the method): 0 - 1 dropped
+    frames in every pass, three runs and the reverse pass. The caret then is the classic bar in `insertionPointColor` (`Palette.caret`), blinking as
+    before. The headless benchmarks (`fix-scroll-bench`, `fix-scroll`) could never see any of this: no window server, no render server.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 
@@ -384,7 +401,9 @@ Added by the merge of the fixes round and the look round:
 Added by the fixes round (the Settings layout, the size field, dragging, scrolling):
 * **The reported scroll choppiness ("in full screen mode, scrolling is sometimes very choppy and then suddenly smooth again") was NOT reproduced headless, and nothing was changed for it in this round**
   (the second report, after the rename - two-finger scrolling choppy, the knob of the scroller smooth, anywhere in the document - named the path: responsive scrolling, pitfall 31; the editor
-  now opts out of it, `fix-scroll-path`, and what remains unverified is a real trackpad in a real full-screen window, which only a hand test covers).
+  now opts out of it, `fix-scroll-path`. The third report - "after a while of scrolling around it suddenly works fine" - was then reproduced ON SCREEN with `fix-scroll-screen` and traced
+  to the insertion point's view, pitfall 33: one override in `LuftigEditorTextView`, 0 dropped frames in a full-screen window on this display. What a hand test still has to confirm:
+  a real trackpad gesture, which the measurement replaces with one clip-view scroll per display frame.)
   `fix-scroll-bench` drives the real stack in a window of the full-screen size (1512 x 982 pt at 2x, also 2056 x 1329) with trackpad-style pixel-delta scroll events at 120 Hz and times
   every step including AppKit's own display of the text view, over 100 KB - 5 MB of real Markdown, with the system fonts, a serif font and the user's setup (Fira Code, a variable font
   with ligatures, 14 pt, spacing 1.1, GitHub Dark). What it found is the SHAPE of "choppy, then smooth" at a harmless size: the first pass over text costs 2 - 3 times the second (pitfall 27:

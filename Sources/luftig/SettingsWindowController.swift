@@ -110,6 +110,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let widthSlider = SettingsSlider(value: 760, minValue: Double(EditorPreferences.columnWidthRange.lowerBound), maxValue: Double(EditorPreferences.columnWidthRange.upperBound), target: nil, action: nil)
     let widthValueLabel = NSTextField(labelWithString: "")
     let widthNoteLabel = NSTextField(labelWithString: "")
+    // the panes (outline, word count, syntax bar): font, size, opacity
+    let paneFontPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    let paneSizePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    let paneOpacitySlider = SettingsSlider(value: 1, minValue: Double(EditorPreferences.paneOpacityRange.lowerBound), maxValue: Double(EditorPreferences.paneOpacityRange.upperBound), target: nil, action: nil)
+    let paneOpacityValueLabel = NSTextField(labelWithString: "")
+    static let paneSizes: [CGFloat] = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20]
+    static let paneFontDefaultTitle = "Same as text font"
     let restoreButton = NSButton(title: "Restore Defaults", target: nil, action: nil)
 
     /// The families the two font popups offer (the code font: monospaced ones only).
@@ -223,6 +230,29 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         secondary(widthNoteLabel)
         fixedLabel(widthNoteLabel, width: W.controlColumnWidth, font: widthNoteLabel.font)
 
+        // -- the panes
+        paneFontPopup.target = self; paneFontPopup.action = #selector(paneFontChanged(_:))
+        paneFontPopup.setAccessibilityLabel("Panes font")
+        paneFontPopup.widthAnchor.constraint(equalToConstant: W.popupWidth).isActive = true
+        paneFontPopup.lineBreakMode = .byTruncatingMiddle
+        paneFontPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        populateFontPopup(paneFontPopup, defaultTitle: W.paneFontDefaultTitle, families: textFamilies)
+        paneFontPopup.menu?.delegate = self
+        paneSizePopup.target = self; paneSizePopup.action = #selector(paneSizeChanged(_:))
+        paneSizePopup.setAccessibilityLabel("Panes size")
+        for s in W.paneSizes {
+            let item = NSMenuItem(title: "\(Int(s)) pt", action: nil, keyEquivalent: "")
+            item.representedObject = Double(s)
+            paneSizePopup.menu?.addItem(item)
+        }
+        paneSizePopup.widthAnchor.constraint(equalToConstant: 90).isActive = true
+        paneOpacitySlider.target = self; paneOpacitySlider.action = #selector(paneOpacityChanged(_:))
+        paneOpacitySlider.isContinuous = true
+        paneOpacitySlider.setAccessibilityLabel("Panes opacity")
+        paneOpacitySlider.widthAnchor.constraint(equalToConstant: W.sliderWidth).isActive = true
+        paneOpacitySlider.onTracking = { [weak self, weak paneOpacitySlider] began in if let paneOpacitySlider { self?.tracking(paneOpacitySlider, began: began) } }
+        fixedLabel(paneOpacityValueLabel, width: W.valueLabelWidth, font: W.valueFont)
+
         restoreButton.target = self; restoreButton.action = #selector(restoreDefaults(_:))
         restoreButton.bezelStyle = .rounded
         restoreButton.translatesAutoresizingMaskIntoConstraints = false
@@ -241,7 +271,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let widthColumn = NSStackView(views: [limitCheckbox, widthRow, widthNoteLabel])
         widthColumn.orientation = .vertical; widthColumn.alignment = .leading; widthColumn.spacing = 6
 
-        let labels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
+        let opacityRow = NSStackView(views: [paneOpacitySlider, paneOpacityValueLabel])
+        opacityRow.orientation = .horizontal; opacityRow.spacing = W.sliderGap
+
+        let labels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:", "Panes font:", "Panes size:", "Panes opacity:"].map { label($0) }
         let grid = NSGridView(views: [
             [labels[0], schemePopup],
             [labels[1], bodyFontPopup],
@@ -249,6 +282,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [labels[3], sizeRow],
             [labels[4], spacingRow],
             [labels[5], widthColumn],
+            [labels[6], paneFontPopup],
+            [labels[7], paneSizePopup],
+            [labels[8], opacityRow],
         ])
         grid.translatesAutoresizingMaskIntoConstraints = false
         grid.rowSpacing = 12
@@ -434,6 +470,20 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         widthValueLabel.stringValue = limited ? "\(Int(width)) pt" : "window width"
         widthValueLabel.textColor = limited ? .labelColor : .disabledControlTextColor
         widthNoteLabel.stringValue = limited ? "about \(SettingsPreview.charactersPerLine(width: width, font: theme.bodyFont)) characters per line" : "The text uses the full width of the window."
+
+        // the panes
+        select(EditorPreferences.paneFontFamily, in: paneFontPopup)
+        let paneSize = EditorPreferences.paneFontSize
+        if let item = paneSizePopup.menu?.items.first(where: { ($0.representedObject as? Double).map { abs($0 - Double(paneSize)) < 0.01 } ?? false }) { paneSizePopup.select(item) }
+        else {
+            for item in paneSizePopup.menu?.items ?? [] where item.tag == SettingsWindowController.unavailableItemTag { paneSizePopup.menu?.removeItem(item) }
+            let item = NSMenuItem(title: String(format: "%g pt", Double(paneSize)), action: nil, keyEquivalent: "")
+            item.representedObject = Double(paneSize); item.tag = SettingsWindowController.unavailableItemTag
+            paneSizePopup.menu?.insertItem(item, at: 0); paneSizePopup.select(item)
+        }
+        let opacity = EditorPreferences.paneOpacity
+        if trackedControl !== paneOpacitySlider { paneOpacitySlider.doubleValue = Double(opacity) }
+        paneOpacityValueLabel.stringValue = "\(Int((opacity * 100).rounded())) %"
     }
 
     /// The size field and its stepper show `size`, whatever has the keyboard focus.
@@ -530,6 +580,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func widthSliderChanged(_ sender: NSSlider) {
         EditorPreferences.columnWidth = CGFloat(sender.doubleValue)
+        syncFromPreferences()
+    }
+    @objc func paneFontChanged(_ sender: NSPopUpButton) {
+        EditorPreferences.paneFontFamily = sender.selectedItem?.representedObject as? String
+        syncFromPreferences()
+    }
+    @objc func paneSizeChanged(_ sender: NSPopUpButton) {
+        if let s = sender.selectedItem?.representedObject as? Double { EditorPreferences.paneFontSize = CGFloat(s) }
+        syncFromPreferences()
+    }
+    @objc func paneOpacityChanged(_ sender: NSSlider) {
+        EditorPreferences.paneOpacity = CGFloat(sender.doubleValue)
         syncFromPreferences()
     }
     @objc func restoreDefaults(_ sender: Any?) {

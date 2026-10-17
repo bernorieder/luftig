@@ -8,6 +8,14 @@ import AppKit
 import MarkdownKit
 
 enum AuditEd {
+    /// A window with a window number but nothing on any screen: ordered front far outside every screen, so that AppKit code that needs a backing store
+    /// (`lockFocus`: NSTextView's classic drag caret caches the pixels under it, pitfall 33) works in a test that never shows a window. `orderOut` afterwards.
+    @MainActor static func orderFrontOffscreen(_ window: NSWindow) {
+        let far = NSPoint(x: -40_000, y: -40_000)
+        window.setFrameOrigin(far)
+        window.orderFront(nil)
+    }
+
 
     // MARK: keys
 

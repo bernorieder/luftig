@@ -161,11 +161,15 @@ extension SelfTestScenarios {
             _ = tv.writeSelection(to: dragPB, types: tv.writablePasteboardTypes)
             let dest = (text0 as NSString).range(of: "epsilon").location
             let info = AuditDraggingInfo(window: window, pasteboard: dragPB, location: tv.convert(dropPoint(forCharacter: dest), to: nil), source: tv, mask: mask)
+            // (the drag feedback caches the pixels under the drag caret with `lockFocus` - NSTextView's classic caret path, pitfall 33 - which needs a window
+            // with a window number: ordered front, far outside every screen, for the drop)
+            AuditEd.orderFrontOffscreen(window)
             let op = tv.draggingEntered(info)
             t.check(op != [], "\(label): draggingEntered accepts the text drag (\(op.rawValue))")
             tv.undoManager?.beginUndoGrouping()
             let ok = tv.prepareForDragOperation(info) && tv.performDragOperation(info)
             tv.concludeDragOperation(info)
+            window.orderOut(nil)
             tv.breakUndoCoalescing(); tv.undoManager?.endUndoGrouping()
             t.check(ok, "\(label): performDragOperation succeeded")
             let after = tv.string

@@ -41,7 +41,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     // the three elements around the text (EditorChromeViews.swift); their data is computed in bounded steps, see the `chrome` extension below
     let outline = OutlineView()
     let wordCount = WordCountView()
-    let syntaxBar = SyntaxBarView()
+    let syntaxBar: SyntaxBarView
     var chromeObservers: [NSObjectProtocol] = []
     var chromeTimer: Timer?
     var chromeScanner: OutlineScanner?
@@ -65,6 +65,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         fontSize = settings.baseSize
         appliedSchemeID = EditorPreferences.colorSchemeID
         theme = Theme(settings: settings)
+        syntaxBar = SyntaxBarView(theme: theme)
         #if LUFTIG_SELFTEST
         LaunchProbe.mark("EditorViewController: theme created")
         #endif
@@ -207,6 +208,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         column.maxColumnWidth = EditorPreferences.columnWidth
         column.isEnabled = EditorPreferences.readableWidth
         applyChromeVisibility()
+        applyChromeTheme()                   // (the panes' font, size and opacity are preferences of their own: cheap to re-apply on every change)
     }
 
     /// The user cannot see this window right now. `isVisible` is false for a minimized window, a background tab and a hidden app; `occlusionState` has no

@@ -16,8 +16,12 @@ enum EditorPreferences {
     static let codeFontFamilyKey = "LuftigCodeFontFamily"
     static let lineHeightFactorKey = "LuftigLineHeightFactor"
     static let columnWidthKey = "LuftigColumnWidth"
+    /// The three elements around the text (outline, word count, syntax bar): their font family (nil = the text font), size and opacity (Settings window).
+    static let paneFontFamilyKey = "LuftigPaneFontFamily"
+    static let paneFontSizeKey = "LuftigPaneFontSize"
+    static let paneOpacityKey = "LuftigPaneOpacity"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -194,6 +198,46 @@ enum EditorPreferences {
     static var showSyntaxBar: Bool {
         get { flag(forKey: showSyntaxBarKey, default: true) }
         set { setFlag(newValue, forKey: showSyntaxBarKey, current: showSyntaxBar) }
+    }
+
+    // MARK: the panes' look (Settings window)
+
+    static let defaultPaneFontSize: CGFloat = 12
+    static let paneFontSizeRange: ClosedRange<CGFloat> = 9...20
+    static let paneOpacityRange: ClosedRange<CGFloat> = 0.25...1.0
+
+    /// Family of the panes' font; nil = the text font of the editor.
+    static var paneFontFamily: String? {
+        get { familyName(forKey: paneFontFamilyKey) }
+        set { setFamily(newValue, forKey: paneFontFamilyKey, current: paneFontFamily) }
+    }
+    /// Size of the panes' text, `paneFontSizeRange`, default 12.
+    static var paneFontSize: CGFloat {
+        get {
+            guard let n = number(forKey: paneFontSizeKey), n.isFinite else { return defaultPaneFontSize }
+            return min(paneFontSizeRange.upperBound, max(paneFontSizeRange.lowerBound, CGFloat(n)))
+        }
+        set {
+            guard newValue.isFinite else { return }
+            let v = min(paneFontSizeRange.upperBound, max(paneFontSizeRange.lowerBound, (newValue * 2).rounded() / 2))
+            guard v != paneFontSize else { return }
+            defaults.set(Double(v), forKey: paneFontSizeKey)
+            post()
+        }
+    }
+    /// Opacity of the panes' text, `paneOpacityRange`, default 1 (the scheme's dim colour as it is; less = fainter).
+    static var paneOpacity: CGFloat {
+        get {
+            guard let n = number(forKey: paneOpacityKey), n.isFinite else { return 1 }
+            return min(paneOpacityRange.upperBound, max(paneOpacityRange.lowerBound, CGFloat(n)))
+        }
+        set {
+            guard newValue.isFinite else { return }
+            let v = min(paneOpacityRange.upperBound, max(paneOpacityRange.lowerBound, (newValue * 100).rounded() / 100))
+            guard v != paneOpacity else { return }
+            defaults.set(Double(v), forKey: paneOpacityKey)
+            post()
+        }
     }
 
     private static func flag(forKey key: String, default d: Bool) -> Bool {

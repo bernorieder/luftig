@@ -14,7 +14,7 @@ extension SelfTestScenarios {
                                      "ScribeLineHeightFactor": 1.1, "ScribeColumnWidth": 900.0, "ScribeReadableWidth": false]
 
         t.equal(P.legacyDomain, "local.scribe.Scribe", "the legacy domain is the old app's bundle id")
-        t.equal(Set(P.legacyKeys.map { $0.new }), Set(P.allKeys), "every Settings key has a legacy counterpart")
+        t.check(Set(P.legacyKeys.map { $0.new }).isSubset(of: Set(P.allKeys)), "every legacy key maps to a Settings key (the panes' keys are newer than the rename: nothing to copy for them)")
 
         guard let r = P.migrated(current: [:], legacy: legacy) else { t.check(false, "first migration ran"); return }
         let new = r.domain

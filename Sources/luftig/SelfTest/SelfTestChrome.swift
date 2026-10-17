@@ -148,12 +148,14 @@ extension SelfTestScenarios {
         // line prefixes
         do {
             let (txt, sel) = caret("line one|\nline two\n")
-            let r = run(.heading, txt, sel); t.equal(r.0, "# line one\nline two\n", "heading on the caret's line"); t.equal(r.2, NSRange(location: 10, length: 0), "the caret moved with the text")
-            let r2 = run(.heading, r.0, r.2); t.equal(r2.0, "## line one\nline two\n", "again: the next level")
-            var cur = r2
-            for _ in 0..<4 { cur = run(.heading, cur.0, cur.2) }
-            t.equal(cur.0, "###### line one\nline two\n", "up to six")
-            let r3 = run(.heading, cur.0, cur.2); t.equal(r3.0, "line one\nline two\n", "after six: the heading is removed")
+            let r = run(.heading1, txt, sel); t.equal(r.0, "# line one\nline two\n", "H1 on the caret's line"); t.equal(r.2, NSRange(location: 10, length: 0), "the caret moved with the text")
+            let r2 = run(.heading2, r.0, r.2); t.equal(r2.0, "## line one\nline two\n", "H2 replaces the level")
+            let r3 = run(.heading3, r2.0, r2.2); t.equal(r3.0, "### line one\nline two\n", "H3")
+            let r3b = run(.heading3, r3.0, r3.2); t.equal(r3b.0, "line one\nline two\n", "the same level again: plain")
+            let (tp, sp) = selection("⟦## head\n> - [x] quoted task\n1. numbered⟧\n")
+            let rp = run(.paragraph, tp, sp); t.equal(rp.0, "head\nquoted task\nnumbered\n", "¶ strips heading, quote and list markers from the selected lines")
+            let (ts, ss) = selection("a ⟦gone⟧ b")
+            let rs = run(.strike, ts, ss); t.equal(rs.0, "a ~~gone~~ b", "strikethrough wraps"); t.equal(run(.strike, rs.0, rs.2).0, "a gone b", "and unwraps")
             let (t4, s4) = selection("⟦a\nb⟧\nc\n")
             let r4 = run(.quote, t4, s4); t.equal(r4.0, "> a\n> b\nc\n", "quote every selected line"); t.equal(r4.1, "> a\n> b", "the lines stay selected")
             let r5 = run(.quote, r4.0, r4.2); t.equal(r5.0, "a\nb\nc\n", "quote again removes it")
@@ -232,12 +234,13 @@ extension SelfTestScenarios {
             t.equal(host.outline.table.numberOfRows, 3, "the table shows three rows")
             // colours and fonts
             let cell = host.outline.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? NSTextField
-            t.check(cell?.textColor == ChromeStyle.dim, "an outline entry is drawn in the dim marker colour")
+            let app = host.view.effectiveAppearance
+            t.check(cell?.textColor == ChromeStyle.dim(for: app), "an outline entry is drawn in the dim marker colour")
             let current = host.outline.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTextField
-            t.check(current?.textColor == ChromeStyle.strong, "the current section in the text colour")
-            t.check(host.wordCount.field.textColor == ChromeStyle.dim, "the word count in the dim colour")
-            t.check(host.syntaxBar.labels[.bold]?.field.textColor == ChromeStyle.dim, "the syntax bar in the dim colour")
-            t.check(host.syntaxBar.labels.count == SyntaxElement.allCases.count && host.syntaxBar.stack.arrangedSubviews.count == SyntaxElement.allCases.count, "every element has a label")
+            t.check(current?.textColor == ChromeStyle.strong(for: app), "the current section in the text colour")
+            t.check(host.wordCount.field.textColor == ChromeStyle.dim(for: app), "the word count in the dim colour")
+            t.check(host.syntaxBar.labels[.bold]?.field.textColor == ChromeStyle.dim(for: app) && host.syntaxBar.labels[.link]?.imageView.contentTintColor == ChromeStyle.dim(for: app), "the syntax bar in the dim colour (text faces and symbols)")
+            t.check(host.syntaxBar.labels.count == SyntaxElement.allCases.count && host.syntaxBar.stack.arrangedSubviews.count == SyntaxElement.groups.count, "every element has a label, in \(SyntaxElement.groups.count) groups")
             t.check(host.syntaxBar.labels.values.allSatisfy { !($0.field.toolTip ?? $0.toolTip ?? "").isEmpty || !($0.toolTip ?? "").isEmpty }, "every label has a tooltip")
             t.equal(cell?.font?.pointSize, ChromeStyle.fontSize, "12 pt")
             EditorPreferences.bodyFontFamily = anyFamily()
@@ -247,7 +250,7 @@ extension SelfTestScenarios {
             // a dark scheme: the colours follow
             EditorPreferences.colorSchemeID = "dracula"
             await t.spin(10)
-            t.check(host.wordCount.field.textColor == Palette.marker, "after a scheme change the word count uses the scheme's marker colour")
+            t.check(host.wordCount.field.textColor == ChromeStyle.dim(for: host.view.effectiveAppearance), "after a scheme change the word count uses the scheme's marker colour")
             EditorPreferences.colorSchemeID = ColorSchemes.defaultID
             await t.spin(10)
 
@@ -275,10 +278,26 @@ extension SelfTestScenarios {
             await t.spin(5)
             assertMatchesFreshLex(t, host, "after the syntax bar edit the styling is a fresh lex")
             tv.setSelectedRange(NSRange(location: 0, length: 0))
-            host.syntaxBar.click(.heading)
-            t.check(tv.string.hasPrefix("## Alpha"), "heading on the first line: level 2 now")
+            host.syntaxBar.click(.heading2)
+            t.check(tv.string.hasPrefix("## Alpha"), "H2 on the first line: level 2 now")
             tv.undoManager?.undo(); tv.undoManager?.undo()
             t.check(tv.string == text, "two undos: back to the start")
+            // the panes' own settings: font family, size, opacity reach the three elements
+            EditorPreferences.paneFontSize = 16
+            await t.spin(10)
+            t.equal((host.outline.table.view(atColumn: 0, row: 1, makeIfNecessary: true) as? NSTextField)?.font?.pointSize, 16, "panes size 16: the outline follows")
+            t.equal(host.wordCount.field.font?.pointSize, 16, "... the word count too")
+            t.equal(host.syntaxBar.labels[.bold]?.field.font?.pointSize, 16, "... and the syntax bar's text faces")
+            t.check(host.syntaxBar.labels[.link]?.imageView.image != nil && host.syntaxBar.labels[.bold]?.field.attributedStringValue.string == "B", "the bar shows results: a link symbol, a bold B")
+            EditorPreferences.paneFontFamily = anyFamily()
+            await t.spin(10)
+            t.equal(host.wordCount.field.font?.familyName, FontFactory.resolve(EditorPreferences.paneFontFamily) ?? NSFont.systemFont(ofSize: 12).familyName, "panes font: the word count uses the chosen family")
+            EditorPreferences.paneOpacity = 0.5
+            await t.spin(10)
+            t.check(abs((host.wordCount.field.textColor?.alphaComponent ?? 1) - 0.5) < 0.01, "panes opacity 50 %: the colour's alpha follows (\(host.wordCount.field.textColor?.alphaComponent ?? -1))")
+            EditorPreferences.paneOpacity = 1; EditorPreferences.paneFontFamily = nil; EditorPreferences.paneFontSize = 12
+            await t.spin(10)
+            t.check(abs((host.wordCount.field.textColor?.alphaComponent ?? 0) - 1) < 0.01 && host.wordCount.field.font?.pointSize == 12, "back to the defaults")
 
             // typing: recomputed once, after the pause
             let before = host.chromeRefreshCount

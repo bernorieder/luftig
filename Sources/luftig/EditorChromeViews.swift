@@ -5,13 +5,23 @@
 
 import AppKit
 
-/// Colours and fonts shared by the three elements.
+/// Colours and fonts shared by the three elements: the Settings window's pane font (nil = the editor's text font), size and opacity.
 enum ChromeStyle {
-    static let fontSize: CGFloat = 12
-    static var dim: NSColor { Palette.marker }
-    static var strong: NSColor { Palette.text }
-    static func bodyFont(_ theme: Theme) -> NSFont { FontFactory.face(family: theme.bodyFamily, mono: false, size: fontSize, weight: .regular, italic: false).font }
-    static func codeFont(_ theme: Theme) -> NSFont { FontFactory.face(family: theme.codeFamily, mono: true, size: fontSize, weight: .regular, italic: false).font }
+    static var fontSize: CGFloat { EditorPreferences.paneFontSize }
+    static var opacity: CGFloat { EditorPreferences.paneOpacity }
+    /// The dim colour (the scheme's marker colour) and the stronger one (the text colour), at the panes' opacity, resolved for `appearance` (the default
+    /// scheme's colours are dynamic: they must be resolved for the window's appearance, and again when it changes).
+    static func dim(for appearance: NSAppearance) -> NSColor { resolve(Palette.marker, appearance) }
+    static func strong(for appearance: NSAppearance) -> NSColor { resolve(Palette.text, appearance) }
+    private static func resolve(_ c: NSColor, _ appearance: NSAppearance) -> NSColor {
+        var out = c
+        appearance.performAsCurrentDrawingAppearance { out = (c.usingColorSpace(.sRGB) ?? c).withAlphaComponent(opacity) }
+        return out
+    }
+    static func family(_ theme: Theme) -> String? { EditorPreferences.paneFontFamily ?? theme.bodyFamily }
+    static func font(_ theme: Theme, weight: NSFont.Weight = .regular, italic: Bool = false) -> NSFont {
+        FontFactory.face(family: family(theme), mono: false, size: fontSize, weight: weight, italic: italic).font
+    }
 }
 
 /// The root view of the editor: paints the page colour behind everything (the elements are transparent, the scroll view paints its own).
@@ -31,31 +41,70 @@ final class EditorRootView: NSView {
 
 // MARK: - a label that reacts to the pointer
 
-/// A piece of text that does something when clicked: dim, a little stronger under the pointer, never a bezel.
+/// A piece of text, or a symbol, that does something when clicked: dim, a little stronger under the pointer, never a bezel.
 final class SoftLabel: NSView {
     let field = NSTextField(labelWithString: "")
+    let imageView = NSImageView()
+    let face: SyntaxElement.Face
     var action: (() -> Void)?
     private(set) var hovered = false
     private var tracking: NSTrackingArea?
 
-    init(_ text: String, font: NSFont) {
+    init(face: SyntaxElement.Face, theme: Theme) {
+        self.face = face
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.stringValue = text
-        field.font = font
-        field.lineBreakMode = .byTruncatingTail
-        field.isSelectable = false
-        addSubview(field)
+        let inner: NSView
+        switch face {
+        case .text:
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.lineBreakMode = .byClipping
+            field.isSelectable = false
+            inner = field
+        case .symbol:
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.imageScaling = .scaleNone
+            inner = imageView
+        }
+        addSubview(inner)
         NSLayoutConstraint.activate([
-            field.leadingAnchor.constraint(equalTo: leadingAnchor), field.trailingAnchor.constraint(equalTo: trailingAnchor),
-            field.topAnchor.constraint(equalTo: topAnchor), field.bottomAnchor.constraint(equalTo: bottomAnchor),
+            inner.leadingAnchor.constraint(equalTo: leadingAnchor), inner.trailingAnchor.constraint(equalTo: trailingAnchor),
+            inner.topAnchor.constraint(equalTo: topAnchor), inner.bottomAnchor.constraint(equalTo: bottomAnchor),
+            widthAnchor.constraint(greaterThanOrEqualToConstant: 14),
         ])
-        refreshColors()
+        apply(theme: theme)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func refreshColors() { field.textColor = hovered ? ChromeStyle.strong : ChromeStyle.dim }
+    /// The face at the panes' current font and size.
+    func apply(theme: Theme) {
+        switch face {
+        case let .text(s, bold, italic, strike, _):
+            let font = ChromeStyle.font(theme, weight: bold ? .bold : .regular, italic: italic)
+            var attrs: [NSAttributedString.Key: Any] = [.font: font]
+            if strike { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+            field.font = font
+            field.attributedStringValue = NSAttributedString(string: s, attributes: attrs)
+        case let .symbol(name):
+            let config = NSImage.SymbolConfiguration(pointSize: ChromeStyle.fontSize + 1, weight: .regular)
+            imageView.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+        }
+        refreshColors()
+    }
+
+    func refreshColors() {
+        let color = hovered ? ChromeStyle.strong(for: effectiveAppearance) : ChromeStyle.dim(for: effectiveAppearance)
+        switch face {
+        case .text:
+            field.textColor = color
+            if let a = field.attributedStringValue.mutableCopy() as? NSMutableAttributedString {
+                a.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: a.length))
+                field.attributedStringValue = a
+            }
+        case .symbol: imageView.contentTintColor = color
+        }
+    }
+    override func viewDidChangeEffectiveAppearance() { refreshColors() }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -110,8 +159,9 @@ final class WordCountView: NSView {
         get { field.stringValue }
         set { if field.stringValue != newValue { field.stringValue = newValue } }
     }
-    func apply(theme: Theme) { field.font = ChromeStyle.bodyFont(theme) }
-    func refreshColors() { field.textColor = ChromeStyle.dim }
+    func apply(theme: Theme) { field.font = ChromeStyle.font(theme); refreshColors() }
+    func refreshColors() { field.textColor = ChromeStyle.dim(for: effectiveAppearance) }
+    override func viewDidChangeEffectiveAppearance() { refreshColors() }
 
     /// "1,234 words"; with a selection "12 of 1,234 words".
     static func label(total: Int, selected: Int?) -> String {
@@ -190,14 +240,19 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     required init?(coder: NSCoder) { fatalError("not used") }
     deinit { if let o = schemeObserver { NotificationCenter.default.removeObserver(o) } }
 
-    func apply(theme: Theme) { font = ChromeStyle.bodyFont(theme); table.reloadData() }
+    func apply(theme: Theme) {
+        font = ChromeStyle.font(theme)
+        table.rowHeight = max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + 6)
+        table.reloadData()
+    }
     func refreshColors() { table.reloadData() }
+    override func viewDidChangeEffectiveAppearance() { refreshColors() }
 
     private func refreshRow(_ r: Int) {
         guard r >= 0, r < table.numberOfRows, let cell = table.view(atColumn: 0, row: r, makeIfNecessary: false) as? NSTextField else { return }
         cell.textColor = color(forRow: r)
     }
-    private func color(forRow r: Int) -> NSColor { (r == currentIndex || r == hoveredRow) ? ChromeStyle.strong : ChromeStyle.dim }
+    private func color(forRow r: Int) -> NSColor { (r == currentIndex || r == hoveredRow) ? ChromeStyle.strong(for: effectiveAppearance) : ChromeStyle.dim(for: effectiveAppearance) }
 
     // the row under the pointer
     override func updateTrackingAreas() {
@@ -267,26 +322,35 @@ final class OutlineRowView: NSTableRowView {
 // MARK: - the syntax bar
 
 final class SyntaxBarView: NSView {
-    static let height: CGFloat = 26
+    static let height: CGFloat = 40
+    static let gapInGroup: CGFloat = 16
+    static let gapBetweenGroups: CGFloat = 30
     let stack = NSStackView()
     private(set) var labels: [SyntaxElement: SoftLabel] = [:]
     var onInsert: ((SyntaxElement) -> Void)?
     private var schemeObserver: NSObjectProtocol?
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
+    /// `theme`: the editor's (the panes' font follows its text font unless the Settings choose another family).
+    init(theme: Theme) {
+        super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         stack.orientation = .horizontal
-        stack.spacing = 18
+        stack.spacing = SyntaxBarView.gapBetweenGroups
         stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
-        let font = NSFont.monospacedSystemFont(ofSize: ChromeStyle.fontSize, weight: .regular)
-        for e in SyntaxElement.allCases {
-            let l = SoftLabel(e.glyph, font: font)
-            l.toolTip = e.name
-            l.action = { [weak self] in self?.onInsert?(e) }
-            labels[e] = l
-            stack.addArrangedSubview(l)
+        for group in SyntaxElement.groups {
+            let g = NSStackView()
+            g.orientation = .horizontal
+            g.spacing = SyntaxBarView.gapInGroup
+            g.alignment = .centerY
+            for e in group {
+                let l = SoftLabel(face: e.face, theme: theme)
+                l.toolTip = e.name
+                l.action = { [weak self] in self?.onInsert?(e) }
+                labels[e] = l
+                g.addArrangedSubview(l)
+            }
+            stack.addArrangedSubview(g)
         }
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -301,7 +365,7 @@ final class SyntaxBarView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
     deinit { if let o = schemeObserver { NotificationCenter.default.removeObserver(o) } }
 
-    func apply(theme: Theme) { let f = ChromeStyle.codeFont(theme); for l in labels.values { l.field.font = f } }
+    func apply(theme: Theme) { for l in labels.values { l.apply(theme: theme) } }
     func refreshColors() { for l in labels.values { l.refreshColors() } }
     /// Test access: the click on an element.
     func click(_ e: SyntaxElement) { onInsert?(e) }

@@ -267,10 +267,14 @@ extension SelfTestScenarios {
             let r = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
             let point = tv.convert(NSPoint(x: tv.textContainerOrigin.x + r.minX + lm.location(forGlyphAt: g).x + 1, y: tv.textContainerOrigin.y + r.midY), to: nil)
             let info = AuditDraggingInfo(window: window, pasteboard: pb, location: point, source: nil, mask: [.copy, .generic])
+            // (the drag feedback caches the pixels under the drag caret with `lockFocus` - NSTextView's classic caret path, pitfall 33 - which needs a window
+            // with a window number: ordered front, far outside every screen, for the drop)
+            AuditEd.orderFrontOffscreen(window)
             let op = tv.draggingEntered(info)
             var ok = false
             tv.undoManager?.beginUndoGrouping()
             if op != [] { ok = tv.prepareForDragOperation(info) && tv.performDragOperation(info); tv.concludeDragOperation(info) }
+            window.orderOut(nil)
             tv.breakUndoCoalescing(); tv.undoManager?.endUndoGrouping()
             let after = tv.string
             var attachments = 0

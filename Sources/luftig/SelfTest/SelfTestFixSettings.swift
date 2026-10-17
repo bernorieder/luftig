@@ -52,6 +52,7 @@ extension SelfTestScenarios {
             ("sizeField", c.sizeField), ("sizeStepper", c.sizeStepper), ("spacingSlider", c.spacingSlider), ("spacingValueLabel", c.spacingValueLabel),
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
+            ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
         ]
         func walk(_ v: NSView) {
             if let g = v as? NSGridView {

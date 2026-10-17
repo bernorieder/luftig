@@ -224,32 +224,44 @@ struct WordCounter {
 // MARK: - The syntax bar
 
 enum SyntaxElement: CaseIterable {
-    case heading, bold, italic, code, link, image, quote, bulletList, numberedList, task, rule, fence, table
+    case heading1, heading2, heading3, paragraph, bold, italic, strike, code, link, image, quote, bulletList, numberedList, task, rule, fence, table
 
-    /// What the bar shows: the Markdown syntax itself, in the code font.
-    var glyph: String {
+    /// The bar's groups, left to right (a wider gap between groups, no lines).
+    static let groups: [[SyntaxElement]] = [[.heading1, .heading2, .heading3, .paragraph], [.bold, .italic, .strike, .code], [.link, .image], [.quote, .bulletList, .numberedList, .task], [.rule, .fence, .table]]
+
+    /// What the bar shows: the RESULT of the element, not its syntax - text drawn the way the element looks, or a system symbol.
+    enum Face { case text(String, bold: Bool, italic: Bool, strike: Bool, mono: Bool), symbol(String) }
+    var face: Face {
         switch self {
-        case .heading: return "#"
-        case .bold: return "**"
-        case .italic: return "_"
-        case .code: return "`"
-        case .link: return "[ ]( )"
-        case .image: return "![ ]( )"
-        case .quote: return ">"
-        case .bulletList: return "-"
-        case .numberedList: return "1."
-        case .task: return "[ ]"
-        case .rule: return "---"
-        case .fence: return "```"
-        case .table: return "|"
+        case .heading1: return .text("H1", bold: false, italic: false, strike: false, mono: false)
+        case .heading2: return .text("H2", bold: false, italic: false, strike: false, mono: false)
+        case .heading3: return .text("H3", bold: false, italic: false, strike: false, mono: false)
+        case .paragraph: return .text("¶", bold: false, italic: false, strike: false, mono: false)
+        case .bold: return .text("B", bold: true, italic: false, strike: false, mono: false)
+        case .italic: return .text("I", bold: false, italic: true, strike: false, mono: false)
+        case .strike: return .text("S", bold: false, italic: false, strike: true, mono: false)
+        case .code: return .symbol("curlybraces")
+        case .link: return .symbol("link")
+        case .image: return .symbol("photo")
+        case .quote: return .symbol("text.quote")
+        case .bulletList: return .symbol("list.bullet")
+        case .numberedList: return .symbol("list.number")
+        case .task: return .symbol("checklist")
+        case .rule: return .symbol("minus")
+        case .fence: return .symbol("chevron.left.forwardslash.chevron.right")
+        case .table: return .symbol("tablecells")
         }
     }
     var name: String {
         switch self {
-        case .heading: return "Heading (click again for the next level)"
+        case .heading1: return "Heading 1"
+        case .heading2: return "Heading 2"
+        case .heading3: return "Heading 3"
+        case .paragraph: return "Plain paragraph (removes heading, list and quote markers)"
         case .bold: return "Bold"
         case .italic: return "Italic"
-        case .code: return "Code"
+        case .strike: return "Strikethrough"
+        case .code: return "Inline code"
         case .link: return "Link"
         case .image: return "Image"
         case .quote: return "Quote"
@@ -261,6 +273,8 @@ enum SyntaxElement: CaseIterable {
         case .table: return "Table"
         }
     }
+    /// The heading level this element sets (nil for the others).
+    var headingLevel: Int? { self == .heading1 ? 1 : self == .heading2 ? 2 : self == .heading3 ? 3 : nil }
 }
 
 /// One edit: replace `range` of the text with `replacement`, then select `selection` (in the coordinates of the text after the edit).
@@ -279,10 +293,11 @@ enum SyntaxInsertion {
         switch element {
         case .bold: return wrap(text, sel2, "**", placeholder: "bold")
         case .italic: return wrap(text, sel2, "_", placeholder: "italic")
+        case .strike: return wrap(text, sel2, "~~", placeholder: "struck")
         case .code: return wrap(text, sel2, "`", placeholder: "code")
         case .link: return link(text, sel2, image: false)
         case .image: return link(text, sel2, image: true)
-        case .heading, .quote, .bulletList, .numberedList, .task: return prefixLines(element, text, sel2)
+        case .heading1, .heading2, .heading3, .paragraph, .quote, .bulletList, .numberedList, .task: return prefixLines(element, text, sel2)
         case .rule: return block(text, sel2, body: "---", caretAfter: true)
         case .fence: return fence(text, sel2)
         case .table: return block(text, sel2, body: "| Column | Column |\n| --- | --- |\n|  |  |", caretAfter: false, select: NSRange(location: 2, length: 6))
@@ -342,13 +357,25 @@ enum SyntaxInsertion {
         var out: [String] = []
         var firstDelta = 0
         switch element {
-        case .heading:
+        case .heading1, .heading2, .heading3:
+            // that level exactly; the same level again makes the line plain
+            let level = element.headingLevel ?? 1
             for (i, line) in parts.enumerated() {
                 let (hashes, rest) = headingPrefix(line)
-                let new: String
-                if hashes == 0 { new = "# " + rest } else if hashes >= 6 { new = rest } else { new = String(repeating: "#", count: hashes + 1) + " " + rest }
+                let new = hashes == level ? rest : String(repeating: "#", count: level) + " " + rest
                 if i == 0 { firstDelta = new.utf16.count - line.utf16.count }
                 out.append(new)
+            }
+        case .paragraph:
+            // plain lines: heading markers, quote markers (any depth) and list markers gone, the text kept
+            for (i, line) in parts.enumerated() {
+                var s = line
+                while s.hasPrefix("> ") || s == ">" { s = s == ">" ? "" : String(s.dropFirst(2)) }
+                s = headingPrefix(s).1
+                let mark = listPrefix(s)
+                if mark.length > 0 { s = String(s.dropFirst(mark.length)) }
+                if i == 0 { firstDelta = s.utf16.count - line.utf16.count }
+                out.append(s)
             }
         case .quote:
             let all = parts.allSatisfy { $0.hasPrefix("> ") || $0 == ">" }
