@@ -26,7 +26,112 @@ extension SelfTestScenarios {
               run: { t in try await fixScrollBench(t) }, inAll: false),
         .init(name: "fix-scroll", summary: "REGRESSION GUARD: scrolling a real-size document in a full-screen-sized window (default fonts, Fira Code, a serif font): per-step budgets, no stall while scrolling over fresh text; skipped on a loaded machine",
               run: { t in try await fixScroll(t) }),
+        .init(name: "fix-scroll-path", summary: "REGRESSION GUARD: the editor opts out of responsive scrolling (NSScrollView agrees), so a trackpad scroll takes the synchronous path that fix-scroll measures; a stock NSTextView opts in",
+              run: { t in try await fixScrollPath(t) }),
+        .init(name: "fix-probe-overdraw", summary: "(probe) what AppKit's responsive-scrolling overdraw costs over fresh text in a full-screen-sized window: prepareContent(in:) of 1-2 screens ahead, the restyle on arrival, and the same with the text styled first: [--input f.md] [--fonts default|fira|serif]",
+              run: { t in try await fixProbeOverdraw(t) }, inAll: false),
     ]
+
+    // MARK: responsive scrolling
+
+    /// NSScrollView's own verdict (a private method, read here in the self-test only): does this scroll view qualify for concurrent (responsive) scrolling?
+    /// nil when this macOS has no such method.
+    @MainActor static func concurrentScrollingCompatible(_ sv: NSScrollView) -> Bool? {
+        let sel = NSSelectorFromString("_isConcurrentScrollingCompatible")
+        guard sv.responds(to: sel) else { return nil }
+        typealias F = @convention(c) (AnyObject, Selector) -> Bool
+        return unsafeBitCast(sv.method(for: sel), to: F.self)(sv, sel)
+    }
+
+    @MainActor static func fixScrollPath(_ t: SelfTest.T) async throws {
+        t.check(!LuftigEditorTextView.isCompatibleWithResponsiveScrolling, "LuftigEditorTextView opts out of responsive scrolling")
+        t.check(NSTextView.isCompatibleWithResponsiveScrolling, "a stock NSTextView opts in (the override is what makes the difference)")
+        let (doc, host, _) = try await openEditor(t, text: String(repeating: "# Heading\n\nSome text.\n\n", count: 300), name: "scroll-path.md")
+        defer { t.close(doc) }
+        // the control: the same stack with a stock NSTextView qualifies, so NSScrollView's verdict is meaningful
+        let control = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        control.documentView = NSTextView(frame: control.bounds)
+        guard let stock = concurrentScrollingCompatible(control), let ours = concurrentScrollingCompatible(host.scrollView) else {
+            t.note("NSScrollView has no _isConcurrentScrollingCompatible on this macOS: only the class property is checked"); return
+        }
+        t.check(stock, "control: NSScrollView finds a stock NSTextView compatible with concurrent scrolling")
+        t.check(!ours, "the editor's scroll view: NSScrollView finds it NOT compatible with concurrent scrolling (trackpad scrolls take the synchronous path)")
+        // the public side of it: nothing beyond the visible rect is ever prepared
+        host.textView.layoutSubtreeIfNeeded()
+        host.scrollView.contentView.scroll(to: NSPoint(x: 0, y: 500)); host.scrollView.reflectScrolledClipView(host.scrollView.contentView)
+        await t.spin(30)
+        let prepared = host.textView.preparedContentRect, visible = host.textView.visibleRect
+        t.check(prepared.isEmpty || prepared.height <= visible.height + 0.5, "preparedContentRect \(NSStringFromRect(prepared)) is no larger than the visible rect \(NSStringFromRect(visible))")
+    }
+
+    /// Simulates what the responsive-scrolling path does to the editor, headless (AppKit's scroll thread cannot run here, but `prepareContent(in:)` is
+    /// NSTextView's own and can be called with the overdraw rect AppKit would hand it): at three fresh places of a document, the cost of
+    /// (1) the synchronous path: style the screen that arrived, lay it out once; (2) the overdraw path: lay out 1 / 2 screens ahead unstyled, then on
+    /// arrival restyle and lay out again; (3) the overdraw path with the text styled first. Prints ms, characters laid out unstyled, height revisions.
+    @MainActor static func fixProbeOverdraw(_ t: SelfTest.T) async throws {
+        let input = SelfTest.argument("input").map { URL(fileURLWithPath: $0) } ?? t.corpusFile(bytes: 1_000_000, seed: 5)
+        let fonts = SelfTest.argument("fonts") ?? "default"
+        try await preservingSettings {
+            fixScrollApplyFonts(fonts)
+            let clone = try PerfLab.clone(t, input.path, as: "overdraw.md")
+            let r = try await perfOpenOnce(clone, width: 1512, height: 982)
+            guard let host = r.doc.host as? EditorViewController, let window = host.view.window else { throw NSError(domain: "overdraw", code: 1) }
+            defer { t.close(r.doc) }
+            window.setContentSize(NSSize(width: 1512, height: 982)); window.contentView?.layoutSubtreeIfNeeded()
+            let sv = host.scrollView, tv = host.textView, clip = sv.contentView
+            guard let lm = tv.layoutManager, let tc = tv.textContainer, let ts = tv.textStorage else { return }
+            out("OVERDRAW \(fonts): LuftigEditorTextView.isCompatibleWithResponsiveScrolling = \(LuftigEditorTextView.isCompatibleWithResponsiveScrolling); NSScrollView: concurrent scrolling compatible = \(concurrentScrollingCompatible(sv).map { "\($0)" } ?? "unknown"); text \(ts.length) chars, window \(Int(host.view.bounds.width)) x \(Int(host.view.bounds.height)) pt")
+            let defaultMargin = host.styler.marginLines
+            @MainActor func goto(_ frac: Double) { clip.scroll(to: NSPoint(x: 0, y: (tv.frame.height * frac).rounded())); sv.reflectScrolledClipView(clip) }
+            @MainActor func heightRevisions(_ body: () -> Void) -> (ms: Double, revised: Double) {
+                let h0 = tv.frame.height
+                let ms = perfMs(body)
+                return (ms, Double(tv.frame.height - h0))
+            }
+            // nine fresh places, three per variant, interleaved so that no variant gets the easier text
+            let places: [Double] = [0.12, 0.15, 0.18, 0.42, 0.45, 0.48, 0.72, 0.75, 0.78]
+            for (i, frac) in places.enumerated() {
+                let variant = i % 3
+                goto(frac)
+                let vis = tv.visibleRect
+                let origin = tv.textContainerOrigin
+                switch variant {
+                case 0:
+                    // (1) the synchronous path: a screen arrives (the clip view's bounds notification styles it + the margin), it is laid out once
+                    let a = heightRevisions { goto(frac + 0.001); perfLayoutVisible(host) }
+                    out(String(format: "OVERDRAW   at %.0f%%: synchronous path, one screen: scroll (styles) + layout %.2f ms, height revised by %.0f pt", frac * 100, a.ms, a.revised))
+                default:
+                    for factor in [1.0, 2.0] {
+                        goto(frac + Double(factor) * 0.001)
+                        let v = tv.visibleRect
+                        perfLayoutVisible(host)                                                               // the screen itself is styled and laid out: only the overdraw is fresh
+                        let over = NSRect(x: v.minX, y: v.minY, width: v.width, height: v.height * (1 + factor))
+                        var styledFirst = (ms: 0.0, revised: 0.0)
+                        if variant == 2 {
+                            // (3) style the overdraw first (what a look-ahead would do): the margin is widened to cover `factor` screens below
+                            host.styler.marginLines = defaultMargin + Int((v.height * factor) / 18)       // (18 pt per line: a rough line count for `factor` screens)
+                            styledFirst = heightRevisions { host.styler.prestyle(aroundCharacter: NSMaxRange(host.styler.visibleCharacterRange(tv)) - 1) }
+                            host.styler.marginLines = defaultMargin
+                        }
+                        let prep = heightRevisions { tv.prepareContent(in: over) }
+                        // what the overdraw laid out below the visible rect, and how much of it had no styling
+                        let strip = NSRect(x: 0, y: v.maxY - origin.y, width: tc.size.width, height: v.height * factor)
+                        let g = lm.glyphRange(forBoundingRect: strip, in: tc)
+                        let cr = lm.characterRange(forGlyphRange: g, actualGlyphRange: nil)
+                        var unstyled = IndexSet(integersIn: cr.location..<NSMaxRange(cr)); unstyled.subtract(host.styler.styled)
+                        // the user scrolls one screen into the prepared area: the bounds notification styles it, the layout is redone where attributes changed
+                        let arrive = heightRevisions { clip.scroll(to: NSPoint(x: 0, y: v.minY + v.height)); sv.reflectScrolledClipView(clip); perfLayoutVisible(host) }
+                        let laidOutAgain = (vis.height > 0) ? lm.glyphRange(forBoundingRect: tv.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y), in: tc).length : 0
+                        out(String(format: "OVERDRAW   at %.0f%%: overdraw of %.0f screen(s) ahead%@: prepareContent %.2f ms (height revised by %.0f pt; %d chars laid out below the screen, %d of them unstyled)%@; then arriving one screen down: restyle + layout %.2f ms (height revised by %.0f pt; %d glyphs on screen)",
+                                   frac * 100, factor, variant == 2 ? ", text styled first" : "", prep.ms, prep.revised, cr.length, unstyled.count,
+                                   variant == 2 ? String(format: " [styling %d screen(s) ahead first: %.2f ms, height revised by %.0f pt]", Int(factor), styledFirst.ms, styledFirst.revised) : "",
+                                   arrive.ms, arrive.revised, laidOutAgain))
+                    }
+                }
+            }
+            t.check(true, "probe ran")
+        }
+    }
 
     // MARK: scroll events
 

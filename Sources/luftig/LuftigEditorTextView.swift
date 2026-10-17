@@ -29,6 +29,20 @@ final class LuftigEditorTextView: NSTextView {
     nonisolated(unsafe) static var drawLog: ((NSRect) -> Void)?
     #endif
 
+    /// No responsive (concurrent) scrolling for this view: trackpad scrolling takes the same synchronous path as the scroller knob and every other scroll.
+    ///
+    /// With responsive scrolling (the default for an NSTextView; it only ever applies to trackpad / mouse-wheel gestures, never to the scroller) AppKit
+    /// asks the document view to `prepareContent(in:)` an OVERDRAW rect beyond the visible one, so that a scroll thread can move pre-rendered content
+    /// while the main thread is busy. NSTextView's implementation lays out that rect in full (`_ensureLayoutCompleteForRect:withExtensionFactor:...`),
+    /// which here means one to several screens of text that the lazy styler has not styled yet (it styles the visible rect plus a margin, when the
+    /// clip view's bounds change). That text is laid out and drawn with the base attributes, and when it scrolls into view the styler gives it its real
+    /// attributes: the layout is invalidated and redone, the text view's height is revised (non-contiguous layout, pitfall 27) and the whole layer
+    /// - visible rect AND overdraw - is redrawn. In a full-screen window that is several screens of glyphs and decorations per revision, the next
+    /// overdraw round starts the same again, and scrolling with two fingers was choppy while the knob of the scroller, which never prepares overdraw,
+    /// was smooth (reported in daily use; `fix-probe-overdraw` measures the cost, `fix-scroll-path` guards this switch). The synchronous path styles
+    /// first and lays out once, and is what `fix-scroll` measures: p99 under a 120 Hz frame in a full-screen-sized window.
+    override class var isCompatibleWithResponsiveScrolling: Bool { false }
+
     override func drawBackground(in rect: NSRect) {
         #if LUFTIG_SELFTEST
         LuftigEditorTextView.drawLog?(rect)

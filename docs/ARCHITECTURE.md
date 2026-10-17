@@ -81,7 +81,8 @@ Sources/luftig/
                                         the Settings window under the new control metrics; internal: look-render (PNGs: banner, find bar, legacy scroller, alerts, icon), look-defaults (property dump to diff two builds), look-cost (first-use cost)
     SelfTestMatrix.swift                matrix-*: the three features together - decorations, hanging indent, the Settings preview and Print... under 5 combinations of scheme x font x size x spacing x column
     SelfTestFixSettings.swift           fix-settings-*: the Settings window's layout (nothing moves, 252 states), the size field with a field editor, dragging a slider over a 10 MB document
-    SelfTestFixScroll.swift             fix-scroll (regression guard), fix-scroll-bench (measurement: trackpad-style scrolling in a full-screen-sized window, cold and warm, `--spell`)
+    SelfTestFixScroll.swift             fix-scroll (regression guard), fix-scroll-path (the editor opts out of responsive scrolling, NSScrollView agrees), fix-scroll-bench (measurement:
+                                        trackpad-style scrolling in a full-screen-sized window, cold and warm, `--spell`), fix-probe-overdraw (what the responsive-scrolling overdraw costs)
     SelfTestMergeLook.swift             look-settings-fixed: the fixed Settings layout under the new look (four appearances x every control's range, frames identical everywhere), the focused
                                         size field, clicks on the hosted sliders / stepper still reach their `mouseDown` (what the drag coalescing relies on)
     SelfTestPerf*.swift                 perf-guard (REGRESSION GUARD with generous budgets, skipped on a loaded machine) and the measurement scenarios perf-*
@@ -262,6 +263,20 @@ a control of the Settings window | View > Bigger / Smaller / Actual Size | View 
     stepper; `accessibilityPerformIncrement()` answers false. Drive controls with `sendAction` / `performClick`; call `mouseDown` directly only to check what an override wraps around
     the tracking (invariant 25), and check with a real mouse whether the tracking BLOCKS. Related: after `NSApp.appearance` changes (`Palette.apply`), a window's `effectiveAppearance`
     follows one run-loop turn later (measured: right after switching from GitHub Dark to Solarized Light it still said Dark Aqua); let a turn pass before reading it.
+31. **Responsive scrolling (the trackpad path) lays out screens of overdraw ahead of the viewport and redraws the whole layer whenever the height is revised.** AppKit opts an
+    `NSScrollView` into concurrent ("responsive") scrolling when it, its clip view and its document view override none of a list of methods (`scrollWheel:` ...) and the document view's class
+    answers `isCompatibleWithResponsiveScrolling` (NSTextView: yes). It only ever applies to trackpad and mouse-wheel gestures; the scroller's knob, `scrollRangeToVisible`, Page Down take the
+    synchronous path. On the responsive path AppKit calls `prepareContent(in:)` with an OVERDRAW rect beyond the visible one (it starts at the visible rect and grows while idle) and NSTextView
+    lays that rect out in full (`_ensureLayoutCompleteForRect:withExtensionFactor:minimumExtensionDistance:repetitions:preparedContentRect:`, in its method list), so that a scroll thread can move
+    pre-rendered content while the main thread is busy. Over fresh text that is 2 - 11 ms per call in a 1512 x 982 pt window (1 MB, Fira Code 14 pt), and nearly every call revises the text view's
+    height by 400 - 3900 pt (`fix-probe-overdraw`; pitfall 27: non-contiguous layout re-estimates), which under `.duringViewResize` redraws the layer - visible rect AND overdraw - and resyncs the
+    scroll thread; text beyond the styler's 60-line margin is laid out with the base attributes first and again, styled, when it scrolls in. In daily use that was "choppy, then smooth for a second,
+    then choppy again" with two fingers in a full-screen window while dragging the knob was smooth: the knob's path lays out and draws the exposed rows only (2 - 3 ms with a height revision,
+    pitfall 27). `LuftigEditorTextView` therefore answers `isCompatibleWithResponsiveScrolling` with false; NSScrollView's own verdict (`_isConcurrentScrollingCompatible`, a private method read
+    in the self-test only) then says NO for the editor and YES for a stock NSTextView (`fix-scroll-path`), and every scroll takes the synchronous path that `fix-scroll` measures (p99 under a 120 Hz
+    frame in a full-screen-sized window). The scroll thread itself cannot run headless (pitfall 26): the diagnosis rests on the user's observation (trackpad choppy, knob smooth), on NSTextView's
+    method list and on the measured costs, and the fix on a hand test with a real trackpad. Do not add a `scrollWheel:` override anywhere in the editor's hierarchy to get the same effect: it would
+    opt out silently and nobody would know why.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 
@@ -339,7 +354,9 @@ Added by the merge of the fixes round and the look round:
   control (`look-settings-fixed`). If it does not block, dragging is simply not coalesced.
 
 Added by the fixes round (the Settings layout, the size field, dragging, scrolling):
-* **The reported scroll choppiness ("in full screen mode, scrolling is sometimes very choppy and then suddenly smooth again") was NOT reproduced, and nothing was changed for it.**
+* **The reported scroll choppiness ("in full screen mode, scrolling is sometimes very choppy and then suddenly smooth again") was NOT reproduced headless, and nothing was changed for it in this round**
+  (the second report, after the rename - two-finger scrolling choppy, the knob of the scroller smooth, anywhere in the document - named the path: responsive scrolling, pitfall 31; the editor
+  now opts out of it, `fix-scroll-path`, and what remains unverified is a real trackpad in a real full-screen window, which only a hand test covers).
   `fix-scroll-bench` drives the real stack in a window of the full-screen size (1512 x 982 pt at 2x, also 2056 x 1329) with trackpad-style pixel-delta scroll events at 120 Hz and times
   every step including AppKit's own display of the text view, over 100 KB - 5 MB of real Markdown, with the system fonts, a serif font and the user's setup (Fira Code, a variable font
   with ligatures, 14 pt, spacing 1.1, GitHub Dark). What it found is the SHAPE of "choppy, then smooth" at a harmless size: the first pass over text costs 2 - 3 times the second (pitfall 27:
