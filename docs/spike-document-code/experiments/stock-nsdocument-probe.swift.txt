@@ -1,0 +1,444 @@
+// stock-nsdocument-probe.swift.txt  (kept as .txt so it is NOT compiled into the app)
+//
+// Throwaway probe that records what a PLAIN NSDocument subclass does when the file changes on disk (no Scribe code involved).
+// It produced the tables in docs/spike-document.md sections 2.1 and 3.1. To re-run:
+//   1. SwiftPM package with ONE executable target "probe" = this file as main.swift + SelfTestUITrap.swift (from the parent dir, for UITrap)
+//   2. bundle it: Probe.app/Contents/{MacOS/probe, Info.plist} using probe-Info.plist.txt (NSDocumentClass = probe.ProbeDocument), ad-hoc codesign
+//   3. run the binary inside the bundle:  Probe.app/Contents/MacOS/probe clean --autosave=on|off [--symlink] [a c f ...]
+//                                         ... probe coordinated | dirty [explicit-save timer autosave-now] --alert="Revert" --delay=600 | deleted | autosavetiming | window
+//      (headless: activation policy .prohibited, windows never ordered front, NSAlert/NSSavePanel trapped by UITrap)
+//   4. unregister the bundle from Launch Services afterwards (lsregister -u) - running it registers it.
+// NOTE: argument "clean"/"dirty"/... would be treated by AppKit as a file to open; this probe registers NSTreatUnknownArgumentsAsOpen=NO.
+//
+// Throwaway probe: observes what a plain NSDocument subclass does by itself (no supplement) when the
+// file changes on disk. Runs headless (activation policy .prohibited). Spike only.
+import AppKit
+import Foundation
+
+// MARK: logging
+
+let t0 = DispatchTime.now().uptimeNanoseconds
+func nowMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds &- t0) / 1e6 }
+
+struct Ev { let t: Double; let kind: String; let detail: String; let main: Bool }
+var events: [Ev] = []
+var verbose = false
+func rec(_ kind: String, _ detail: String = "") {
+    let e = Ev(t: nowMs(), kind: kind, detail: detail, main: Thread.isMainThread)
+    events.append(e)
+    if verbose { print(String(format: "    [%8.1f] %@ %@ (main=%@)", e.t, kind, detail, e.main ? "y" : "n")) }
+}
+func out(_ s: String) { print(s); fflush(stdout) }
+
+// MARK: document
+
+var autosaveInPlace = true
+var visibleGhostWindow = false
+var throwInAutosaveCheck = false
+
+final class ProbeDocument: NSDocument {
+    var text = ""
+    var readCount = 0
+    override class var autosavesInPlace: Bool { autosaveInPlace }
+    override class func canConcurrentlyReadDocuments(ofType typeName: String) -> Bool { false }
+
+    override func makeWindowControllers() {
+        let w = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 300, height: 200),
+                         styleMask: visibleGhostWindow ? [.borderless] : [.titled, .closable, .resizable], backing: .buffered, defer: true)
+        w.isReleasedWhenClosed = false
+        if visibleGhostWindow { w.alphaValue = 0; w.ignoresMouseEvents = true; w.setFrame(NSRect(x: -6000, y: -6000, width: 300, height: 200), display: false) }
+        let wc = NSWindowController(window: w)
+        addWindowController(wc)
+    }
+    override func read(from data: Data, ofType typeName: String) throws {
+        readCount += 1
+        rec("read(from:data)", "bytes=\(data.count) fileURL=\(fileURL?.lastPathComponent ?? "nil") modDate=\(fileModificationDate.map { String($0.timeIntervalSince1970) } ?? "nil")")
+        text = String(decoding: data, as: UTF8.self)
+    }
+    override func read(from url: URL, ofType typeName: String) throws {
+        rec("read(from:url)", url.lastPathComponent)
+        try super.read(from: url, ofType: typeName)
+    }
+    override func data(ofType typeName: String) throws -> Data {
+        rec("data(ofType:)", "")
+        return Data(text.utf8)
+    }
+    override func revert(toContentsOf url: URL, ofType typeName: String) throws {
+        rec("revert(toContentsOf:)", url.lastPathComponent)
+        try super.revert(toContentsOf: url, ofType: typeName)
+    }
+    override func revertToSaved(_ sender: Any?) { rec("revertToSaved", ""); super.revertToSaved(sender) }
+    override func presentedItemDidChange() { rec("presentedItemDidChange", ""); super.presentedItemDidChange() }
+    override func presentedItemDidMove(to newURL: URL) { rec("presentedItemDidMove", newURL.path); super.presentedItemDidMove(to: newURL) }
+    override func accommodatePresentedItemDeletion(completionHandler: @escaping (Error?) -> Void) {
+        rec("accommodatePresentedItemDeletion", "")
+        super.accommodatePresentedItemDeletion(completionHandler: completionHandler)
+    }
+    override func presentedItemDidGain(_ version: NSFileVersion) { rec("presentedItemDidGain(version)", ""); super.presentedItemDidGain(version) }
+    override func presentedItemDidLose(_ version: NSFileVersion) { rec("presentedItemDidLose(version)", ""); super.presentedItemDidLose(version) }
+    override func presentedItemDidResolveConflict(_ version: NSFileVersion) { rec("presentedItemDidResolveConflict", ""); super.presentedItemDidResolveConflict(version) }
+    override func relinquishPresentedItem(toReader reader: @escaping ((() -> Void)?) -> Void) { rec("relinquishToReader", ""); super.relinquishPresentedItem(toReader: reader) }
+    override func relinquishPresentedItem(toWriter writer: @escaping ((() -> Void)?) -> Void) { rec("relinquishToWriter", ""); super.relinquishPresentedItem(toWriter: writer) }
+    override func savePresentedItemChanges(completionHandler: @escaping (Error?) -> Void) { rec("savePresentedItemChanges", ""); super.savePresentedItemChanges(completionHandler: completionHandler) }
+    override var fileModificationDate: Date? {
+        didSet { rec("fileModificationDate=", fileModificationDate.map { String($0.timeIntervalSince1970) } ?? "nil") }
+    }
+    override var fileURL: URL? {
+        didSet { rec("fileURL=", fileURL?.path ?? "nil") }
+    }
+    override func updateChangeCount(_ change: NSDocument.ChangeType) {
+        rec("updateChangeCount", "\(change.rawValue)"); super.updateChangeCount(change)
+    }
+    override func checkAutosavingSafety() throws {
+        rec("checkAutosavingSafety", "")
+        if throwInAutosaveCheck { rec("checkAutosavingSafety->THROWS(policy)", ""); throw NSError(domain: "probe", code: 42, userInfo: [NSLocalizedDescriptionKey: "policy: unresolved external change"]) }
+        do { try super.checkAutosavingSafety(); rec("checkAutosavingSafety->ok", "") }
+        catch { rec("checkAutosavingSafety->THROWS", "\(error)"); throw error }
+    }
+    override func save(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType, completionHandler: @escaping (Error?) -> Void) {
+        rec("save(to:)", "op=\(saveOperation.rawValue) \(url.lastPathComponent)")
+        super.save(to: url, ofType: typeName, for: saveOperation) { err in rec("save(to:)->done", err.map { "\($0)" } ?? "ok"); completionHandler(err) }
+    }
+    override func write(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType, originalContentsURL absoluteOriginalContentsURL: URL?) throws {
+        rec("write(to:)", "op=\(saveOperation.rawValue) \(url.lastPathComponent)")
+        try super.write(to: url, ofType: typeName, for: saveOperation, originalContentsURL: absoluteOriginalContentsURL)
+    }
+    override func willPresentError(_ error: Error) -> Error { rec("willPresentError", "\(error)"); return super.willPresentError(error) }
+    override func canClose(withDelegate delegate: Any, shouldClose shouldCloseSelector: Selector?, contextInfo: UnsafeMutableRawPointer?) {
+        rec("canClose", ""); super.canClose(withDelegate: delegate, shouldClose: shouldCloseSelector, contextInfo: contextInfo)
+    }
+}
+
+// MARK: harness
+
+var alertPreference: [String] = []
+func installTrap() {
+    UITrap.install()
+    UITrap.alertChooser = { a in
+        rec("alert", a.description)
+        for pref in alertPreference { if let i = a.buttons.firstIndex(where: { $0.localizedCaseInsensitiveContains(pref) }) { return i } }
+        return 0
+    }
+}
+
+@MainActor func sleepMs(_ ms: Double) async {
+    let end = nowMs() + ms
+    while nowMs() < end {
+        try? await Task.sleep(nanoseconds: 2_000_000)
+    }
+}
+@MainActor func waitFor(timeoutMs: Double, _ cond: () -> Bool) async -> Bool {
+    let end = nowMs() + timeoutMs
+    while nowMs() < end {
+        if cond() { return true }
+        try? await Task.sleep(nanoseconds: 1_000_000)
+    }
+    return cond()
+}
+@MainActor @discardableResult
+func sh(_ cmd: String) async -> Double {
+    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", cmd]
+        p.terminationHandler = { _ in c.resume() }
+        do { try p.run() } catch { out("sh failed: \(error)"); c.resume() }
+    }
+    return nowMs()
+}
+
+let workRoot = URL(fileURLWithPath: CommandLine.arguments.first(where: { $0.hasPrefix("--dir=") })?.dropFirst(6).description
+                   ?? "/private/tmp/claude-501/-Users-rieder--claude-projects--Users-rieder-Library-CloudStorage-OneDrive-Personal-Work-Software-YTDT/e5cc9c16-a95a-4e54-a6e3-9d0bb1b674ce/scratchpad/spike-doc/work")
+
+@MainActor func openDoc(_ url: URL, display: Bool = true) async -> ProbeDocument? {
+    await withCheckedContinuation { c in
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { doc, _, err in
+            if let err { out("open failed: \(err)") }
+            // create (but never order front) the window controllers: nothing may appear on the user's screen
+            if display { doc?.makeWindowControllers(); if visibleGhostWindow { doc?.windowControllers.first?.window?.orderFrontRegardless() } }
+            c.resume(returning: doc as? ProbeDocument)
+        }
+    }
+}
+
+func fresh(_ name: String, content: String, subdir: String = "") -> URL {
+    let dir = workRoot.appendingPathComponent(subdir.isEmpty ? "d" : subdir)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let u = dir.appendingPathComponent(name)
+    try? FileManager.default.removeItem(at: u)
+    try! content.write(to: u, atomically: false, encoding: .utf8)
+    return u
+}
+
+struct Outcome {
+    var firstLatency: Double? = nil   // ms from writer exit to first read
+    var presLatency: Double? = nil    // ms from writer exit to first presentedItemDidChange
+    var reads = 0
+    var viaRevert = false
+    var mainThread = true
+    var modDateUpdated = false
+    var alerts = 0
+    var textMatches = false
+    var sequence = ""
+}
+
+/// Run one external modification, wait for a (possible) automatic reload.
+var activation = false
+@MainActor func trial(doc: ProbeDocument, url: URL, command: String, expected: () -> String, waitMs: Double = 4000, settleMs: Double = 1500) async -> Outcome {
+    let mark = events.count
+    let readsBefore = doc.readCount
+    let dateBefore = doc.fileModificationDate
+    let tStart = nowMs()
+    let tDone = await sh(command)
+    rec("WRITER-DONE", "")
+    var got = await waitFor(timeoutMs: waitMs) { doc.readCount > readsBefore }
+    if !got, activation {
+        rec("POST didBecomeActive+didBecomeKey", "")
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+        if let w = doc.windowControllers.first?.window { NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: w) }
+        got = await waitFor(timeoutMs: 2000) { doc.readCount > readsBefore }
+    }
+    let tRead = got ? nowMs() : 0
+    await sleepMs(settleMs)
+    var o = Outcome()
+    let evs = Array(events[mark...])
+    let firstRead = evs.first(where: { $0.kind == "read(from:data)" })
+    o.firstLatency = firstRead.map { $0.t - tDone }
+    o.presLatency = evs.first(where: { $0.kind == "presentedItemDidChange" }).map { $0.t - tDone }
+    _ = tStart; _ = tRead
+    o.reads = doc.readCount - readsBefore
+    o.viaRevert = evs.contains(where: { $0.kind == "revert(toContentsOf:)" })
+    o.mainThread = evs.filter { $0.kind == "read(from:data)" }.allSatisfy { $0.main }
+    o.modDateUpdated = doc.fileModificationDate != dateBefore
+    o.alerts = evs.filter { $0.kind == "alert" }.count
+    o.textMatches = doc.text == expected()
+    o.sequence = evs.filter { !["fileModificationDate=", "read(from:url)"].contains($0.kind) }.map { $0.kind + ($0.kind == "read(from:data)" ? "" : "") }.joined(separator: " > ")
+    return o
+}
+
+func fmt(_ o: Outcome) -> String {
+    let lat = o.firstLatency.map { String(format: "%7.1f ms", $0) } ?? "   NEVER  "
+    let pl = o.presLatency.map { String(format: "%.0f ms", $0) } ?? "never"
+    return "presentedItemDidChange@\(pl) reload=\(o.reads > 0 ? "YES" : "NO ") latency=\(lat) reads=\(o.reads) main=\(o.mainThread) modDate=\(o.modDateUpdated) alerts=\(o.alerts) textOK=\(o.textMatches)\n        seq: \(o.sequence)"
+}
+
+func contentOf(_ u: URL) -> String { (try? String(contentsOf: u, encoding: .utf8)) ?? "<unreadable>" }
+
+// MARK: scenarios
+
+struct Scenario { let name: String; let cmd: (URL) -> String; let big: Bool }
+
+func esc(_ u: URL) -> String { "'" + u.path.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+
+let scenarios: [Scenario] = [
+    Scenario(name: "a-append-in-place", cmd: { u in "echo \"appended line $RANDOM\" >> \(esc(u))" }, big: false),
+    Scenario(name: "b-truncate-rewrite", cmd: { u in "printf 'rewritten %s\\n' $RANDOM > \(esc(u))" }, big: false),
+    Scenario(name: "c-atomic-replace", cmd: { u in "printf 'atomic %s\\n' $RANDOM > \(esc(u)).tmp && mv \(esc(u)).tmp \(esc(u))" }, big: false),
+    Scenario(name: "d1-delete-then-recreate(50ms gap)", cmd: { u in "rm \(esc(u)); sleep 0.05; printf 'recreated %s\\n' $RANDOM > \(esc(u))" }, big: false),
+    Scenario(name: "d2-delete-then-recreate(immediate)", cmd: { u in "rm \(esc(u)); printf 'recreated %s\\n' $RANDOM > \(esc(u))" }, big: false),
+    Scenario(name: "e-rename-away-and-back(changed)", cmd: { u in "mv \(esc(u)) \(esc(u)).away; sleep 0.2; printf 'renamed-back %s\\n' $RANDOM > \(esc(u)).away; mv \(esc(u)).away \(esc(u))" }, big: false),
+    Scenario(name: "f-same-size-same-mtime", cmd: { u in "cp -p \(esc(u)) \(esc(u)).ref; n=$(wc -c < \(esc(u))); printf '%0*d' $((n-1)) $((RANDOM%9+1)) > \(esc(u)); echo >> \(esc(u)); touch -r \(esc(u)).ref \(esc(u)); rm \(esc(u)).ref" }, big: false),
+    Scenario(name: "g-burst-20-writes-in-1s", cmd: { u in "for i in $(seq 1 20); do printf 'burst %s\\n' $i >> \(esc(u)); sleep 0.05; done" }, big: false),
+    Scenario(name: "h-10MB-atomic-replace", cmd: { u in "head -c 10485760 /dev/urandom | base64 | head -c 10485760 > \(esc(u)).tmp && mv \(esc(u)).tmp \(esc(u))" }, big: true),
+]
+
+@MainActor func runClean(subdir: String = "d", linkDir: Bool = false, only: [String]) async {
+    out("=== CLEAN DOCUMENT, autosavesInPlace=\(autosaveInPlace)\(linkDir ? ", opened through SYMLINKED folder" : "") ===")
+    for sc in scenarios where only.isEmpty || only.contains(where: { sc.name.hasPrefix($0) }) {
+        var url = fresh("doc-\(sc.name.prefix(2)).md", content: "# Title\n\nline one\nline two\nline three\n", subdir: subdir)
+        let realURL = url
+        if linkDir {
+            let link = workRoot.appendingPathComponent("link-\(subdir)")
+            try? FileManager.default.removeItem(at: link)
+            try? FileManager.default.createSymbolicLink(at: link, withDestinationURL: workRoot.appendingPathComponent(subdir))
+            url = link.appendingPathComponent(realURL.lastPathComponent)
+        }
+        guard let doc = await openDoc(url) else { out("  \(sc.name): could not open"); continue }
+        await sleepMs(300)
+        out("  \(sc.name)")
+        for round in 1...2 {
+            let cmd = sc.cmd(round == 2 && linkDir ? realURL : url)  // write via real path in round 2 when symlinked
+            let o = await trial(doc: doc, url: url, command: cmd, expected: { contentOf(realURL) }, waitMs: sc.big ? 6000 : 4000, settleMs: sc.name.hasPrefix("g") ? 2500 : 1200)
+            out("    round \(round): " + fmt(o))
+            events.removeAll(keepingCapacity: true)
+        }
+        doc.close()
+        await sleepMs(100)
+    }
+}
+
+// MARK: app
+
+final class AppDel: NSObject, NSApplicationDelegate {
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+    func applicationDidFinishLaunching(_ n: Notification) {
+        let args = Array(CommandLine.arguments.dropFirst())
+        verbose = args.contains("-v")
+        visibleGhostWindow = args.contains("--ghost")
+        throwInAutosaveCheck = args.contains("--throw-check")
+        activation = args.contains("--activation")
+        installTrap()
+        if let a = args.first(where: { $0.hasPrefix("--autosave=") }) { autosaveInPlace = a.hasSuffix("on") }
+        let which = args.filter { !$0.hasPrefix("-") }
+        Task { @MainActor in
+            try? FileManager.default.createDirectory(at: workRoot, withIntermediateDirectories: true)
+            out("probe: macOS \(ProcessInfo.processInfo.operatingSystemVersionString) pid=\(getpid()) work=\(workRoot.path)")
+            await Probes.run(which, args)
+            out("probe: done")
+            NSApp.terminate(nil)
+        }
+    }
+}
+
+enum Probes {
+    @MainActor static func run(_ which: [String], _ args: [String]) async {
+        let sym = args.contains("--symlink")
+        let name = which.first ?? "clean"
+        let only = Array(which.dropFirst())
+        switch name {
+        case "clean": await runClean(subdir: sym ? "sym" : "d", linkDir: sym, only: only)
+        case "window": await windowProbe()
+        case "coordinated": await coordinatedProbe()
+        case "dirty":
+            let d = args.first(where: { $0.hasPrefix("--delay=") }).flatMap { Double($0.dropFirst(8)) } ?? 1
+            NSDocumentController.shared.autosavingDelay = d
+            await dirtyProbe(args)
+        case "deleted": await deletedProbe()
+        case "autosavetiming":
+            out("NSDocumentController.autosavingDelay default = \(NSDocumentController.shared.autosavingDelay)")
+            let url = fresh("timing.md", content: "# t\n")
+            if let doc = await openDoc(url) {
+                await sleepMs(300); events.removeAll()
+                doc.text = "# typed\n"; doc.updateChangeCount(.changeDone)
+                let t = nowMs()
+                let ok = await waitFor(timeoutMs: 60000) { events.contains { $0.kind == "save(to:)" } }
+                out("first autosave \(ok ? String(format: "%.1f s", (nowMs() - t) / 1000) : "NEVER within 60 s") after first edit (autosavesInPlace=\(autosaveInPlace))")
+                out("          " + evSummary(since: 0))
+                doc.close()
+            }
+        default: out("unknown probe \(name)")
+        }
+    }
+}
+
+@MainActor func evSummary(since mark: Int) -> String {
+    events[mark...].filter { !["fileModificationDate=", "read(from:url)"].contains($0.kind) }.map { e in
+        let d = e.detail.count > (e.kind == "alert" ? 700 : 90) ? String(e.detail.prefix(e.kind == "alert" ? 700 : 90)) + "..." : e.detail
+        return String(format: "%7.0f %@%@", e.t, e.kind, d.isEmpty ? "" : " " + d)
+    }.joined(separator: "\n          ")
+}
+
+@MainActor func coordinatedProbe() async {
+    out("=== COORDINATED external write (NSFileCoordinator in same process, other coordinator), autosave=\(autosaveInPlace) ===")
+    let url = fresh("coord.md", content: "# Title\n\nline one\n")
+    guard let doc = await openDoc(url) else { return }
+    await sleepMs(300)
+    let mark = events.count
+    let readsBefore = doc.readCount
+    let t = nowMs()
+    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+        DispatchQueue.global().async {
+            let co = NSFileCoordinator(filePresenter: nil)
+            var err: NSError?
+            co.coordinate(writingItemAt: url, options: .forReplacing, error: &err) { u in
+                try? Data("coordinated write \(Int.random(in: 0...99999))\n".utf8).write(to: u)
+            }
+            c.resume()
+        }
+    }
+    rec("COORD-WRITE-DONE", String(format: "%.0f ms after start", nowMs() - t))
+    _ = await waitFor(timeoutMs: 4000) { doc.readCount > readsBefore }
+    await sleepMs(1200)
+    out("  reloads=\(doc.readCount - readsBefore)  textMatchesDisk=\(doc.text == contentOf(url))\n          " + evSummary(since: mark))
+    doc.close()
+}
+
+@MainActor func dirtyProbe(_ args: [String]) async {
+    out("=== DIRTY document + external change, autosavesInPlace=\(autosaveInPlace) throwInAutosaveCheck=\(throwInAutosaveCheck) ===")
+    let want = args.filter { !$0.hasPrefix("-") && $0 != "dirty" }
+    for variant in ["autosave-timer-only"] + ["explicit-save/choose-first", "explicit-save/choose-SaveAnyway", "explicit-save/choose-Revert", "autosave-now"] where want.isEmpty || want.contains(where: { variant.contains($0) }) {
+        let url = fresh("dirty-\(variant.prefix(8)).md", content: "# Title\n\nline one\nline two\n")
+        guard let doc = await openDoc(url) else { continue }
+        await sleepMs(300)
+        events.removeAll()
+        out("  -- variant \(variant)")
+        doc.text = "# Title\n\nMY TYPED EDIT\nline two\n"
+        if let pref = args.first(where: { $0.hasPrefix("--alert=") }) { alertPreference = pref.dropFirst(8).split(separator: ",").map(String.init) }
+        if variant == "autosave-timer-only" || variant == "autosave-now" { } 
+        doc.updateChangeCount(.changeDone)
+        let tEdit = nowMs()
+        await sh("printf 'EXTERNAL LINE\\n' >> '\(url.path)'")
+        rec("EXTERNAL-WRITE-DONE")
+        await sleepMs(2500)
+        out("     after 2.5 s: isDocumentEdited=\(doc.isDocumentEdited) reads=\(doc.readCount) disk=\(contentOf(url).debugDescription)")
+        if variant.hasPrefix("explicit") {
+            rec("CALL save(nil)")
+            doc.save(nil)
+            await sleepMs(2500)
+        } else if variant == "autosave-now" {
+            rec("CALL autosave(withImplicitCancellability:false)")
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                doc.autosave(withImplicitCancellability: false) { err in rec("autosave completion", err.map { "\($0)" } ?? "ok"); c.resume() }
+            }
+            await sleepMs(1500)
+        } else {
+            // let NSDocument's own autosave timer fire (autosavingDelay=1 s)
+            await sleepMs(8000)
+        }
+        out("     final: isDocumentEdited=\(doc.isDocumentEdited) reads=\(doc.readCount) docText=\(doc.text.debugDescription)")
+        out("            disk=\(contentOf(url).debugDescription)  (editedAt=\(String(format: "%.0f", tEdit)))")
+        out("          " + evSummary(since: 0))
+        alertPreference = []
+        doc.updateChangeCount(.changeCleared)
+        doc.close()
+        await sleepMs(100)
+    }
+}
+
+@MainActor func deletedProbe() async {
+    out("=== FILE DELETED / MOVED while open and clean, autosave=\(autosaveInPlace) ===")
+    let elsewhere = workRoot.appendingPathComponent("elsewhere")
+    try? FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+    for variant in ["rm", "mv-to-other-folder", "mv-rename-in-place", "rm-dirty"] {
+        let url = fresh("del-\(variant.prefix(6)).md", content: "# Title\n\nline one\n")
+        try? FileManager.default.removeItem(at: elsewhere.appendingPathComponent(url.lastPathComponent))
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent().appendingPathComponent("renamed-\(url.lastPathComponent)"))
+        guard let doc = await openDoc(url) else { continue }
+        await sleepMs(300)
+        events.removeAll()
+        out("  -- variant \(variant)")
+        if variant == "rm-dirty" { doc.text = "typed"; doc.updateChangeCount(.changeDone) }
+        switch variant {
+        case "mv-to-other-folder": await sh("mv '\(url.path)' '\(elsewhere.path)/'")
+        case "mv-rename-in-place": await sh("mv '\(url.path)' '\(url.deletingLastPathComponent().path)/renamed-\(url.lastPathComponent)'")
+        default: await sh("rm '\(url.path)'")
+        }
+        rec("EXTERNAL-OP-DONE")
+        await sleepMs(3500)
+        let stillOpen = NSDocumentController.shared.documents.contains(doc)
+        out("     docStillOpen=\(stillOpen) fileURL=\(doc.fileURL?.path.replacingOccurrences(of: workRoot.path, with: "<work>") ?? "nil") edited=\(doc.isDocumentEdited) displayName=\(doc.displayName ?? "nil")")
+        out("          " + evSummary(since: 0))
+        if stillOpen { doc.updateChangeCount(.changeCleared); doc.close() }
+        await sleepMs(100)
+    }
+}
+
+@MainActor func windowProbe() async {
+    let url = fresh("w.md", content: "hello\n")
+    guard let doc = await openDoc(url) else { return }
+    await sleepMs(200)
+    let w = doc.windowControllers.first?.window
+    out("window visible=\(w?.isVisible ?? false) occlusion=\(String(describing: w?.occlusionState)) frame=\(String(describing: w?.frame))")
+    let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+    let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == getpid() }
+    out("CGWindowList entries for our pid: \(mine.count) onscreen: \(mine.filter { ($0[kCGWindowIsOnscreen as String] as? Bool) == true }.count)")
+    out("NSApp.isActive=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)")
+    doc.close()
+}
+
+UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": "NO"])
+let app = NSApplication.shared
+app.setActivationPolicy(.prohibited)
+let del = AppDel()
+app.delegate = del
+app.run()
