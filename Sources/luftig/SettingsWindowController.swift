@@ -18,13 +18,15 @@
 //                   ----o------   760 pt
 //                   about 85 characters per line
 //   Panes:
+//   Show            [x] Outline  [x] Word count  [x] Syntax bar       (the View menu's switches, the other way to reach them)
+//   Padding         ----o------   1.00 ×                                (ONE factor for all the air: text insets, pane margins and heights - luftig)
 //   Font            [Same as text font  v]
 //   Size            [12 pt v]
 //   Opacity         ----o------   100 %
 //   Outline         [x] Wrap long headings
 //                                                               [Restore Defaults]
 //
-// The window's height is that of the taller screen (Text), computed once; switching screens hides one container and shows the other, nothing moves.
+// The window's height is that of the taller screen, computed once; switching screens hides one container and shows the other, nothing moves.
 // The preview stays on both screens: a pane setting has no preview of its own, and the text one keeps the window familiar.
 //
 // LAYOUT IS FIXED. The controls grid has fixed column widths (labels: the widest label; controls: slider + value label) and is centred in the window
@@ -129,7 +131,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     static let paneFontDefaultTitle = "Same as text font"
     let outlineWrapCheckbox = NSButton(checkboxWithTitle: "Wrap long headings", target: nil, action: nil)
     let restoreButton = NSButton(title: "Restore Defaults", target: nil, action: nil)
-    /// The screens: Text (preview + the text settings) and Panes; the segmented control switches, the choice is remembered.
+    // the three panes (the View menu's switches too) and the padding factor
+    let showOutlineCheckbox = NSButton(checkboxWithTitle: "Outline", target: nil, action: nil)
+    let showWordCountCheckbox = NSButton(checkboxWithTitle: "Word count", target: nil, action: nil)
+    let showSyntaxBarCheckbox = NSButton(checkboxWithTitle: "Syntax bar", target: nil, action: nil)
+    let paddingSlider = SettingsSlider(value: 1, minValue: Double(EditorPreferences.paddingRange.lowerBound), maxValue: Double(EditorPreferences.paddingRange.upperBound), target: nil, action: nil)
+    let paddingValueLabel = NSTextField(labelWithString: "")
+    let paddingNoteLabel = NSTextField(labelWithString: "")
+    /// The screens: Text and Panes; the segmented control under the preview switches, the choice is remembered.
     enum Screen: Int, CaseIterable { case text = 0, panes = 1
         var title: String { self == .text ? "Text" : "Panes" }
     }
@@ -275,6 +284,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         outlineWrapCheckbox.target = self; outlineWrapCheckbox.action = #selector(outlineWrapChanged(_:))
         outlineWrapCheckbox.setAccessibilityLabel("Wrap long headings in the outline")
 
+        for (box, action, name) in [(showOutlineCheckbox, #selector(showOutlineChanged(_:)), "Show the outline"), (showWordCountCheckbox, #selector(showWordCountChanged(_:)), "Show the word count"), (showSyntaxBarCheckbox, #selector(showSyntaxBarChanged(_:)), "Show the syntax bar")] {
+            box.target = self; box.action = action; box.setAccessibilityLabel(name)
+        }
+        paddingSlider.target = self; paddingSlider.action = #selector(paddingSliderChanged(_:))
+        paddingSlider.isContinuous = true
+        paddingSlider.setAccessibilityLabel("Padding")
+        paddingSlider.widthAnchor.constraint(equalToConstant: W.sliderWidth).isActive = true
+        paddingSlider.onTracking = { [weak self, weak paddingSlider] began in if let paddingSlider { self?.tracking(paddingSlider, began: began) } }
+        fixedLabel(paddingValueLabel, width: W.valueLabelWidth, font: W.valueFont)
+        secondary(paddingNoteLabel)
+        fixedLabel(paddingNoteLabel, width: W.controlColumnWidth, font: paddingNoteLabel.font)
+        paddingNoteLabel.stringValue = "The air around the text and in the panes, all in proportion."
+
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
         screenControl.setAccessibilityLabel("Settings screen")
@@ -301,10 +323,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         let opacityRow = NSStackView(views: [paneOpacitySlider, paneOpacityValueLabel])
         opacityRow.orientation = .horizontal; opacityRow.spacing = W.sliderGap
+        let showRow = NSStackView(views: [showOutlineCheckbox, showWordCountCheckbox, showSyntaxBarCheckbox])
+        showRow.orientation = .horizontal; showRow.spacing = 14
+        let paddingSliderRow = NSStackView(views: [paddingSlider, paddingValueLabel])
+        paddingSliderRow.orientation = .horizontal; paddingSliderRow.spacing = W.sliderGap
+        let paddingColumn = NSStackView(views: [paddingSliderRow, paddingNoteLabel])
+        paddingColumn.orientation = .vertical; paddingColumn.alignment = .leading; paddingColumn.spacing = 6
 
-        // the two grids share the label column width, so the controls of both screens start at the same x
+        // the grids share the label column width, so the controls of both screens start at the same x
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
-        let panesLabels = ["Font:", "Size:", "Opacity:", "Outline:"].map { label($0) }
+        let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:"].map { label($0) }
         let labelWidth = ceil((textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
@@ -327,10 +355,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [textLabels[5], widthColumn],
         ])
         let panesGrid = makeGrid([
-            [panesLabels[0], paneFontPopup],
-            [panesLabels[1], paneSizePopup],
-            [panesLabels[2], opacityRow],
-            [panesLabels[3], outlineWrapCheckbox],
+            [panesLabels[0], showRow],
+            [panesLabels[1], paddingColumn],
+            [panesLabels[2], paneFontPopup],
+            [panesLabels[3], paneSizePopup],
+            [panesLabels[4], opacityRow],
+            [panesLabels[5], outlineWrapCheckbox],
         ])
 
         let previewView = preview.scrollView
@@ -369,8 +399,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             panesGrid.leadingAnchor.constraint(greaterThanOrEqualTo: panesScreen.leadingAnchor, constant: m),
             panesGrid.trailingAnchor.constraint(lessThanOrEqualTo: panesScreen.trailingAnchor, constant: -m),
             panesGrid.bottomAnchor.constraint(equalTo: panesScreen.bottomAnchor),
-            // the button under the taller screen (Text), on both screens
-            restoreButton.topAnchor.constraint(equalTo: textScreen.bottomAnchor, constant: 18),
+            // the button under the taller screen, on both screens
+            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: textScreen.bottomAnchor, constant: 18),
+            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: panesScreen.bottomAnchor, constant: 18),
             restoreButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m),
             restoreButton.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
         ])
@@ -383,7 +414,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         // (the button's FRAME is taller than the rectangle the constraints place - its alignment rect - by the room of its shadow and focus ring)
         let restoreHeight = restoreButton.alignmentRect(forFrame: NSRect(origin: .zero, size: restoreButton.fittingSize)).height
         let switchHeight = ceil(screenControl.fittingSize.height)
-        let height = ceil(m + W.previewHeight + 14 + switchHeight + 14 + grid.fittingSize.height + 18 + restoreHeight + 18)
+        let tallest = max(grid.fittingSize.height, panesGrid.fittingSize.height)
+        let height = ceil(m + W.previewHeight + 14 + switchHeight + 14 + tallest + 18 + restoreHeight + 18)
         window.setContentSize(NSSize(width: W.defaultContentWidth, height: height))
         window.contentMinSize = NSSize(width: W.minContentWidth, height: height)
         window.contentMaxSize = NSSize(width: 2000, height: height)
@@ -555,6 +587,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         if trackedControl !== paneOpacitySlider { paneOpacitySlider.doubleValue = Double(opacity) }
         paneOpacityValueLabel.stringValue = "\(Int((opacity * 100).rounded())) %"
         outlineWrapCheckbox.state = EditorPreferences.outlineWraps ? .on : .off
+
+        showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
+        showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
+        showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
+        let padding = EditorPreferences.padding
+        if trackedControl !== paddingSlider { paddingSlider.doubleValue = Double(padding) }
+        paddingValueLabel.stringValue = String(format: "%.2f ×", Double(padding))
     }
 
     /// The size field and its stepper show `size`, whatever has the keyboard focus.
@@ -663,6 +702,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func paneOpacityChanged(_ sender: NSSlider) {
         EditorPreferences.paneOpacity = CGFloat(sender.doubleValue)
+        syncFromPreferences()
+    }
+    @objc func showOutlineChanged(_ sender: NSButton) { EditorPreferences.showOutline = sender.state == .on; syncFromPreferences() }
+    @objc func showWordCountChanged(_ sender: NSButton) { EditorPreferences.showWordCount = sender.state == .on; syncFromPreferences() }
+    @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }
+    @objc func paddingSliderChanged(_ sender: NSSlider) {
+        EditorPreferences.padding = CGFloat(sender.doubleValue)
         syncFromPreferences()
     }
     @objc func outlineWrapChanged(_ sender: NSButton) {

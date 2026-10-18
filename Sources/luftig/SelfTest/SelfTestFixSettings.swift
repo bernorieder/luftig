@@ -54,6 +54,8 @@ extension SelfTestScenarios {
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
             ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl),
+            ("showOutlineCheckbox", c.showOutlineCheckbox), ("showWordCountCheckbox", c.showWordCountCheckbox), ("showSyntaxBarCheckbox", c.showSyntaxBarCheckbox),
+            ("paddingSlider", c.paddingSlider), ("paddingValueLabel", c.paddingValueLabel), ("paddingNoteLabel", c.paddingNoteLabel),
         ]
         func walk(_ v: NSView) {
             if let g = v as? NSGridView {
@@ -141,6 +143,12 @@ extension SelfTestScenarios {
             probe("outline wrap off") { c.outlineWrapCheckbox.state = .off; send(c.outlineWrapCheckbox) }
             for (i, size) in SettingsWindowController.paneSizes.enumerated() { probe("panes size \(Int(size))") { c.paneSizePopup.selectItem(at: i); send(c.paneSizePopup) } }
             for o in stride(from: 25, through: 100, by: 5) { probe("panes opacity \(o)") { c.paneOpacitySlider.doubleValue = Double(o) / 100; send(c.paneOpacitySlider) } }
+            for (box, name) in [(c.showOutlineCheckbox, "outline"), (c.showWordCountCheckbox, "word count"), (c.showSyntaxBarCheckbox, "syntax bar")] {
+                probe("\(name) off") { box.state = .off; send(box) }
+                probe("\(name) on") { box.state = .on; send(box) }
+            }
+            for p in stride(from: 50, through: 200, by: 5) { probe("padding \(p)") { c.paddingSlider.doubleValue = Double(p) / 100; send(c.paddingSlider) } }
+            probe("padding back to 1") { c.paddingSlider.doubleValue = 1; send(c.paddingSlider) }
             probe("screen: Text") { c.showScreen(.text) }
 
             // ---- size: every size from 9 to 40 (the note and the value label follow the floor of the fonts)

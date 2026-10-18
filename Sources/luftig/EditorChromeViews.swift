@@ -135,6 +135,13 @@ final class WordCountView: NSView {
     let field = NSTextField(labelWithString: "")
     private var schemeObserver: NSObjectProtocol?
 
+    private var heightConstraint: NSLayoutConstraint!
+    private var trailingConstraint: NSLayoutConstraint!
+    /// Settings > General > Padding: the row's height and the margin on the right.
+    var padding = Padding.standard {
+        didSet { heightConstraint.constant = padding.wordCountHeight; trailingConstraint.constant = -padding.wordCountTrailing }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
@@ -143,9 +150,10 @@ final class WordCountView: NSView {
         field.lineBreakMode = .byClipping
         field.isSelectable = false
         addSubview(field)
+        heightConstraint = heightAnchor.constraint(equalToConstant: WordCountView.height)
+        trailingConstraint = field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: WordCountView.height),
-            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            heightConstraint, trailingConstraint,
             field.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
             field.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
         ])
@@ -194,6 +202,15 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     var wrapsHeadings = false {
         didSet { if wrapsHeadings != oldValue { table.reloadData() } }
     }
+    /// Settings > General > Padding: the left margin, the air above the first and below the last entry, the air around every entry's text.
+    var padding = Padding.standard {
+        didSet {
+            guard padding != oldValue else { return }
+            scroll.contentInsets = NSEdgeInsets(top: padding.outlineTop, left: 0, bottom: padding.outlineTop, right: 0)
+            table.rowHeight = singleRowHeight
+            table.reloadData()
+        }
+    }
     /// The entry whose section the window shows (drawn in the text colour).
     var currentIndex: Int? {
         didSet {
@@ -232,6 +249,7 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.automaticallyAdjustsContentInsets = false            // (else AppKit owns `contentInsets` and resets them)
         scroll.contentInsets = NSEdgeInsets(top: 20, left: 0, bottom: 20, right: 0)
         addSubview(scroll)
         NSLayoutConstraint.activate([
@@ -249,8 +267,8 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         table.rowHeight = singleRowHeight
         table.reloadData()
     }
-    private var singleRowHeight: CGFloat { max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + 6) }
-    private func indent(forLevel level: Int) -> CGFloat { 16 + CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
+    private var singleRowHeight: CGFloat { max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + padding.outlineRowExtra) }
+    private func indent(forLevel level: Int) -> CGFloat { padding.outlineLeading + CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
     /// The width a title has in its row: the column minus the indent and the right margin.
     private func titleWidth(forLevel level: Int) -> CGFloat { max(20, OutlineView.width - indent(forLevel: level) - 12) }
     func refreshColors() { table.reloadData() }
@@ -309,7 +327,7 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         let e = entries[row]
         let text = (e.title.isEmpty ? "(untitled)" : e.title) as NSString
         let bounds = text.boundingRect(with: NSSize(width: titleWidth(forLevel: e.level), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font])
-        return max(singleRowHeight, ceil(bounds.height) + 6)
+        return max(singleRowHeight, ceil(bounds.height) + padding.outlineRowExtra)
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = OutlineRowView()
@@ -345,9 +363,19 @@ final class SyntaxBarView: NSView {
     static let gapInGroup: CGFloat = 16
     static let gapBetweenGroups: CGFloat = 30
     let stack = NSStackView()
+    private var groups: [NSStackView] = []
+    private var heightConstraint: NSLayoutConstraint!
     private(set) var labels: [SyntaxElement: SoftLabel] = [:]
     var onInsert: ((SyntaxElement) -> Void)?
     private var schemeObserver: NSObjectProtocol?
+    /// Settings > General > Padding: the bar's height and the gaps between its elements and groups.
+    var padding = Padding.standard {
+        didSet {
+            heightConstraint.constant = padding.barHeight
+            stack.spacing = padding.barGapBetweenGroups
+            for g in groups { g.spacing = padding.barGapInGroup }
+        }
+    }
 
     /// `theme`: the editor's (the panes' font follows its text font unless the Settings choose another family).
     init(theme: Theme) {
@@ -369,11 +397,13 @@ final class SyntaxBarView: NSView {
                 labels[e] = l
                 g.addArrangedSubview(l)
             }
+            groups.append(g)
             stack.addArrangedSubview(g)
         }
         addSubview(stack)
+        heightConstraint = heightAnchor.constraint(equalToConstant: SyntaxBarView.height)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: SyntaxBarView.height),
+            heightConstraint,
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),

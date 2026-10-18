@@ -21,8 +21,10 @@ enum EditorPreferences {
     static let paneFontSizeKey = "LuftigPaneFontSize"
     static let paneOpacityKey = "LuftigPaneOpacity"
     static let outlineWrapsKey = "LuftigOutlineWraps"
+    /// Settings > General > Padding: ONE factor for every bit of air in the editor (the text's insets, the panes' margins and heights): what makes it luftig.
+    static let paddingKey = "LuftigPadding"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -237,6 +239,22 @@ enum EditorPreferences {
             let v = min(paneOpacityRange.upperBound, max(paneOpacityRange.lowerBound, (newValue * 100).rounded() / 100))
             guard v != paneOpacity else { return }
             defaults.set(Double(v), forKey: paneOpacityKey)
+            post()
+        }
+    }
+
+    static let paddingRange: ClosedRange<CGFloat> = 0.5...2.0
+    /// The padding factor, `paddingRange`, default 1 (the look luftig always had); every padding in `Padding` is a base value times this.
+    static var padding: CGFloat {
+        get {
+            guard let n = number(forKey: paddingKey), n.isFinite else { return 1 }
+            return min(paddingRange.upperBound, max(paddingRange.lowerBound, CGFloat(n)))
+        }
+        set {
+            guard newValue.isFinite else { return }
+            let v = min(paddingRange.upperBound, max(paddingRange.lowerBound, (newValue * 20).rounded() / 20))     // steps of 0.05
+            guard v != padding else { return }
+            defaults.set(Double(v), forKey: paddingKey)
             post()
         }
     }

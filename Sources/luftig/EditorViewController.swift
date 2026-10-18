@@ -320,8 +320,13 @@ extension EditorViewController {
 
     func applyChromeTheme() {
         outline.wrapsHeadings = EditorPreferences.outlineWraps
+        let p = Padding(factor: EditorPreferences.padding)
+        outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
+        column.minInset = p.textInsetHorizontal; column.verticalInset = p.textInsetVertical; column.update()
         outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
     }
+    /// The padding in effect (tests).
+    var padding: Padding { Padding(factor: EditorPreferences.padding) }
 
     /// The View menu's three switches, shared by every window.
     func applyChromeVisibility() {

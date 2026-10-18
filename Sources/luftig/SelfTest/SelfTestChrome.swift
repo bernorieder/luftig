@@ -317,6 +317,31 @@ extension SelfTestScenarios {
             EditorPreferences.outlineWraps = false
             await t.spin(10)
             t.check(host.outline.table.rect(ofRow: lastRow).height == single, "off again: single-line rows")
+            // Settings > General > Padding: one factor for the text's insets and the panes' margins and heights
+            t.equal(Padding(factor: 1).textInsetHorizontal, 28, "padding 1: the text's horizontal inset is the 28 pt it always was")
+            t.equal(Padding(factor: 1).textInsetVertical, 20, "padding 1: vertical inset 20 pt")
+            t.equal(Padding(factor: 1).barHeight, 40, "padding 1: the bar is 40 pt")
+            t.check(Padding(factor: 0.5).textInsetHorizontal >= DecorationMetrics.bandOutset + 4, "padding 0.5: the horizontal inset keeps room for the bands")
+            EditorPreferences.padding = 2
+            await t.spin(10)
+            host.view.layoutSubtreeIfNeeded()
+            t.equal(tv.textContainerInset.height, 40, "padding 2: the text's vertical inset doubles")
+            t.equal(inRoot(host.syntaxBar).height, 80, "padding 2: the syntax bar is 80 pt tall")
+            t.equal(inRoot(host.wordCount).height, 44, "padding 2: the word count row is 44 pt")
+            t.equal(host.outline.scroll.contentInsets.top, 40, "padding 2: the outline's top inset is 40 pt")
+            EditorPreferences.padding = 0.5
+            await t.spin(10)
+            host.view.layoutSubtreeIfNeeded()
+            t.equal(tv.textContainerInset.height, 10, "padding 0.5: vertical inset 10 pt")
+            t.equal(inRoot(host.syntaxBar).height, 24, "padding 0.5: the bar keeps its minimum of 24 pt")
+            EditorPreferences.padding = 1
+            await t.spin(10)
+            host.view.layoutSubtreeIfNeeded()
+            t.equal(tv.textContainerInset.height, 20, "padding 1 again: 20 pt")
+            t.equal(EditorPreferences.padding, 1, "the factor reads back as 1")
+            EditorPreferences.padding = 1.337
+            t.equal(EditorPreferences.padding, 1.35, "the factor is stored in steps of 0.05")
+            EditorPreferences.padding = 1
 
             // typing: recomputed once, after the pause
             let before = host.chromeRefreshCount

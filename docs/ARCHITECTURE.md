@@ -49,8 +49,12 @@ Sources/luftig/
   EditorChromeViews.swift               OutlineView (NSTableView, no selection, hover), WordCountView, SyntaxBarView (SoftLabel: text that acts, never a bezel),
                                         EditorRootView (the page colour behind everything); all in Palette.marker, the body / code family at 12 pt; wired in
                                         EditorViewController's `chrome` extension: coalesced recomputation in 1 M-unit steps after edits, View menu switches
-  SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window; the preview on top, under it a switch between two screens (Text, Panes: pane font / size /
-                                        opacity, outline wrapping), each an NSGridView in a container of its own; every control applies live and is saved; observes EditorPreferences.didChange
+  SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window; the preview on top, under it a switch between two screens (Text; Panes: the three
+                                        pane switches, the padding factor, pane font / size / opacity, outline wrapping), each an NSGridView in a container of its own; every control
+                                        applies live and is saved; observes EditorPreferences.didChange
+  Padding.swift                         ONE factor (Settings > Panes > Padding, 0.5 ... 2, default 1) -> every inset and margin, rounded to whole points with floors: the text's
+                                        insets (ReadableColumnController.minInset / verticalInset), the outline's margin / top inset / row air, the word count's height / margin,
+                                        the syntax bar's height / gaps; structural sizes (outline width, indent per level, fonts) are not padding
                                         FIXED layout (plain constraints, fixed column widths and label widths: nothing moves or resizes whatever a value says, invariant 24); the size field shows the
                                         size in use even while it is being edited (pitfall 24); sliders and the stepper report their drags (`tracking`)
   SettingsPreview.swift                 the live preview in that window: the SAME factory, Theme and lexer as an editor (pixel-identical to an editor of the same width: matrix-preview)
