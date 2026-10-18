@@ -69,10 +69,11 @@ Sources/luftig/
                                         container of its own; every control applies live and is saved; observes EditorPreferences.didChange
   SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
                                         files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
-  Padding.swift                         ONE number of points (Settings > Layout > Padding, 0 ... 50, default 20) that is every gap: the window frame on all four sides
-                                        (EditorViewController.windowPaddingConstraints + bottomPaddingConstraint), the margin above and below the text viewport and the outline
-                                        alike (`textInsetVertical`, verticalInsetConstraints: outside the scrolling, so scrolled text starts exactly where the outline's first
-                                        entry starts; the text container has no vertical inset), the text's side inset (ReadableColumnController.minInset); the word count row
+  Padding.swift                         ONE number of points (Settings > Layout > Padding, 0 ... 50, default 20) that is every gap: the window frame on the left and the right
+                                        (EditorViewController.windowPaddingConstraints; the top and the bottom are HALF of it, `windowVertical`: topPaddingConstraint,
+                                        bottomPaddingConstraint), the margin above and below the text viewport and the outline alike (`textInsetVertical`, also half,
+                                        verticalInsetConstraints: outside the scrolling, so scrolled text starts exactly where the outline's first entry starts; the text
+                                        container has no vertical inset), the text's side inset (ReadableColumnController.minInset); the word count row
                                         is its line (16 pt), the syntax bar its symbols (18 pt); NOT padding: the outline's width, the indent per level, fonts, the gaps between
                                         the bar's symbols, the outline's row height (Outline spacing, a slider of its own). The Settings preview applies the same inset
                                         (SettingsPreview.applyPadding: its pixels are compared with an editor's)

@@ -23,11 +23,14 @@ struct Padding: Equatable {
         return points
     }
 
-    /// The frame between the window's edge and the panels, on every side (EditorViewController.windowPaddingConstraints, bottomPaddingConstraint).
+    /// The frame between the window's edge and the panels on the left and the right (EditorViewController.windowPaddingConstraints).
     var window: CGFloat { gap }
+    /// The frame at the top and the bottom: half the padding (the vertical gaps read larger than the horizontal ones; measured by eye, Settings > Layout).
+    var windowVertical: CGFloat { (gap / 2).rounded() }
     /// Above and below the text viewport and the outline alike: a margin outside the scrolling (verticalInsetConstraints), so that scrolled text starts
-    /// exactly where the outline's first entry starts; the text container has no vertical inset of its own.
-    var textInsetVertical: CGFloat { gap }
+    /// exactly where the outline's first entry starts; the text container has no vertical inset of its own. Also the gap between the text viewport and
+    /// the syntax bar below it and the word count row above it. Half the padding, like the frame's top and bottom.
+    var textInsetVertical: CGFloat { (gap / 2).rounded() }
     /// Between the text and the sides of its panel: on the left that is the gap to the outline (`ReadableColumnController.minInset`). (Not part of the
     /// self-test's flush override: a scenario about the window's chrome keeps the bands away from the window's corners.)
     var textInsetHorizontal: CGFloat { points }

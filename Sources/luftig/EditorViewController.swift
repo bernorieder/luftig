@@ -62,6 +62,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     var chromeWordTotal = 0
     var windowPaddingConstraints: [NSLayoutConstraint] = []
     var verticalInsetConstraints: [NSLayoutConstraint] = []
+    var topPaddingConstraint: NSLayoutConstraint!
     var bottomPaddingConstraint: NSLayoutConstraint!
     var barGapConstraint: NSLayoutConstraint!
     var viewportBottomConstraint: NSLayoutConstraint!
@@ -147,13 +148,13 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         banner.isHidden = true
         let root = EditorRootView(frame: NSRect(origin: .zero, size: EditorViewController.initialSize))
         root.addSubview(stack)
-        // the window padding: the frame between the window's edge and the panels (Padding.window), on all four sides
+        // the window padding: the frame between the window's edge and the panels - Padding.window on the sides, Padding.windowVertical (half) at the top and the bottom
         let w = padding.window
         windowPaddingConstraints = [
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: w), root.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: w),
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: w),
         ]
-        bottomPaddingConstraint = root.bottomAnchor.constraint(equalTo: stack.bottomAnchor, constant: w)
+        topPaddingConstraint = stack.topAnchor.constraint(equalTo: root.topAnchor, constant: padding.windowVertical)
+        bottomPaddingConstraint = root.bottomAnchor.constraint(equalTo: stack.bottomAnchor, constant: padding.windowVertical)
         // the vertical padding of the text viewport and of the outline: a margin OUTSIDE the scrolling, the same for both, so that scrolled text starts
         // exactly where the outline's first entry starts (the text container itself has no vertical inset)
         let v = padding.textInsetVertical
@@ -164,7 +165,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
             scrollView.topAnchor.constraint(equalTo: textColumn.topAnchor, constant: v), barGapConstraint, viewportBottomConstraint,
         ]
         viewportBottomConstraint.isActive = false
-        NSLayoutConstraint.activate(windowPaddingConstraints + [verticalInsetConstraints[0], verticalInsetConstraints[1], verticalInsetConstraints[2], barGapConstraint, bottomPaddingConstraint] + [
+        NSLayoutConstraint.activate(windowPaddingConstraints + [verticalInsetConstraints[0], verticalInsetConstraints[1], verticalInsetConstraints[2], barGapConstraint, topPaddingConstraint, bottomPaddingConstraint] + [
             banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor), banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             wordCount.leadingAnchor.constraint(equalTo: stack.leadingAnchor), wordCount.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             middle.leadingAnchor.constraint(equalTo: stack.leadingAnchor), middle.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
@@ -409,7 +410,8 @@ extension EditorViewController {
         let p = Padding(points: EditorPreferences.padding)
         for c in windowPaddingConstraints { c.constant = p.window }
         for c in verticalInsetConstraints { c.constant = p.textInsetVertical }
-        bottomPaddingConstraint.constant = p.window
+        topPaddingConstraint.constant = p.windowVertical
+        bottomPaddingConstraint.constant = p.windowVertical
         outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
         outline.lineHeightFactor = EditorPreferences.outlineLineHeight
         column.minInset = p.textInsetHorizontal; column.verticalInset = 0; column.trailingExtra = p.textTrailingExtra; column.update()

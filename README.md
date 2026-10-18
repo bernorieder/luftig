@@ -176,9 +176,9 @@ on disk: reload automatically - the default, see below -, ask first - a banner o
 merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
 (everything about the text) and **Layout**, for the elements around the text (outline, syntax bar, word count, reading time): which of them are shown (the
 View menu's switches, the other way to reach them; the reading time shares the word count's row), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
-window's edge and the panels on all four sides, between the outline and the text, between the word count row and the outline and text below it,
-between the syntax bar and the text above it (the bar sits under the text column, centred below the text; the outline runs on past it), and between
-the text and the sides of its own panel; at 0 everything touches, at 50 the editor floats,
+window's edge and the panels on the left and the right, between the outline and the text, and between the text and the sides of its own panel; the
+vertical gaps are half of it - the frame at the top and the bottom, between the word count row and the outline and text below it, between the syntax
+bar and the text above it (the bar sits under the text column, centred below the text; the outline runs on past it); at 0 everything touches, at 50 the editor floats,
 and the gaps above the text viewport and the outline are always the same, so scrolled text starts level with the outline's first entry; the thing
 the name is about (the gaps between the bar's symbols and the outline's row height stay put) -, their font ("Same as text font" unless you choose one),
 their size (9 - 20 pt), their opacity (25 - 100 %, less = fainter), whether long headings in the outline wrap onto further lines instead of being
