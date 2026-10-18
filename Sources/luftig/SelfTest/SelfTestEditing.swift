@@ -162,7 +162,7 @@ extension SelfTestScenarios {
         let page2 = t.read(exported)
         t.check(page2.hasPrefix("<!DOCTYPE html>") && page2.contains("<title>html</title>") && page2.contains("<h1>Head</h1>"), "Export as HTML writes a page named after the document with its content")
         t.check(NSApp.mainMenu?.items.first { $0.title == "File" }?.submenu?.items.contains { $0.title == "Export as HTML…" } == true, "File > Export as HTML… exists")
-        t.check(NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items.contains { $0.title == "Copy as Rich Text" } == true, "Edit > Copy as Rich Text exists")
+        t.check(NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items.contains { $0.title.hasSuffix("as Rich Text") } == true, "Edit > Copy (All) as Rich Text exists (the title follows the selection once validated)")
     }
 
     // MARK: edit-focus

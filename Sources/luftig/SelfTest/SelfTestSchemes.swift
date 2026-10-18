@@ -537,7 +537,6 @@ extension SelfTestScenarios {
     }
 }
 
-#endif
 
 // MARK: - schemes-import (SchemeImport: Base16 YAML files)
 
@@ -676,3 +675,4 @@ extension SelfTestScenarios {
         }
     }
 }
+#endif
