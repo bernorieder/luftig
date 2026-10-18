@@ -45,6 +45,7 @@
 // line-spacing slider went below the point where the note appears: `fix-settings-layout`.)
 
 import AppKit
+import UniformTypeIdentifiers
 
 /// The window's content: draws the standard window background itself, so a snapshot of the content view (the self-test renders one) is the whole picture.
 private final class SettingsContentView: NSView {
@@ -197,6 +198,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     func present() {
         #if LUFTIG_SELFTEST
         presentCount += 1
+        #endif
+        // scheme files may have been added or removed by hand since the window was built
+        ColorSchemes.reloadImported()
+        populateSchemePopup()
+        syncFromPreferences()
+        #if LUFTIG_SELFTEST
         if SettingsWindowController.headless { _ = window; return }
         #endif
         showWindow(nil)
@@ -550,8 +557,60 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             menu.addItem(NSMenuItem.sectionHeader(title: family))
             for s in all where s.id != ColorSchemes.defaultID && s.family == family { add(s) }
         }
+        // schemes from files (SchemeImport): Base16 YAML, hundreds of editor themes come in it
+        menu.addItem(.separator())
+        let importItem = NSMenuItem(title: "Import Scheme…", action: nil, keyEquivalent: "")
+        importItem.tag = SettingsWindowController.importSchemeTag
+        menu.addItem(importItem)
+        if !ColorSchemes.imported.isEmpty {
+            let show = NSMenuItem(title: "Show Imported Schemes in Finder", action: nil, keyEquivalent: "")
+            show.tag = SettingsWindowController.showImportedTag
+            menu.addItem(show)
+        }
         schemePopup.menu = menu
     }
+    static let importSchemeTag = 4712
+    static let showImportedTag = 4713
+
+    /// Color scheme > Import Scheme…: a Base16 YAML file; the scheme is copied into Application Support, listed under "Imported" and chosen.
+    func presentImportPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Color Scheme"
+        panel.message = "A Base16 colour scheme (a YAML file with base00 … base0F)."
+        panel.allowedContentTypes = SchemeImport.fileExtensions.compactMap { UTType(filenameExtension: $0) }
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in
+            guard let self else { return }
+            if r == .OK, let url = panel.url { self.importScheme(from: url) } else { self.syncFromPreferences() }
+        }
+        if let w = window, w.isVisible { panel.beginSheetModal(for: w, completionHandler: finish) } else { finish(panel.runModal()) }
+    }
+
+    /// Imports the file (the same as choosing it in the panel); an error is shown as an alert, the popup goes back to the scheme in use.
+    @discardableResult
+    func importScheme(from url: URL) -> Bool {
+        do {
+            let id = try SchemeImport.importFile(url)
+            populateSchemePopup()
+            EditorPreferences.colorSchemeID = id
+            syncFromPreferences()
+            return true
+        } catch {
+            populateSchemePopup()
+            syncFromPreferences()
+            let alert = NSAlert(error: error)
+            #if LUFTIG_SELFTEST
+            lastImportError = error
+            if SettingsWindowController.headless { return false }
+            #endif
+            if let w = window, w.isVisible { alert.beginSheetModal(for: w) } else { alert.runModal() }
+            return false
+        }
+    }
+    #if LUFTIG_SELFTEST
+    private(set) var lastImportError: Error?
+    #endif
 
     private func populateFontPopup(_ popup: NSPopUpButton, defaultTitle: String, families: [String]) {
         let menu = popup.menu ?? NSMenu()
@@ -721,6 +780,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     // MARK: controls -> preferences
 
     @objc func schemeChanged(_ sender: NSPopUpButton) {
+        switch sender.selectedItem?.tag {
+        case SettingsWindowController.importSchemeTag: presentImportPanel(); return
+        case SettingsWindowController.showImportedTag:
+            try? FileManager.default.createDirectory(at: SchemeImport.directory, withIntermediateDirectories: true)
+            NSWorkspace.shared.activateFileViewerSelecting([SchemeImport.directory])
+            syncFromPreferences(); return
+        default: break
+        }
         EditorPreferences.colorSchemeID = (sender.selectedItem?.representedObject as? String) ?? ColorSchemes.defaultID
         syncFromPreferences()
     }

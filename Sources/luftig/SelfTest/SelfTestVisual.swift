@@ -84,7 +84,7 @@ extension SelfTestScenarios {
         .init(name: "visual-rtl", summary: "right-to-left lines are right-aligned; quote / code lines keep bar and marker on the left", run: { t in try await visualRTL(t) }),
         .init(name: "visual-styling-cost", summary: "Theme.styledRuns on a 60 000 character line with ~2000 runs, with and without a right-to-left character (no rescan per run)", run: { t in try await visualStylingCost(t) }),
         .init(name: "visual-perf", summary: "decoration drawing cost for a full visible redraw (budget 1.5 ms)", run: { t in try await visualPerf(t) }),
-    ] + visualContrastScenarios + visualRedrawScenarios + schemeScenarios
+    ] + visualContrastScenarios + visualRedrawScenarios + schemeScenarios + schemesImportScenarios
 
     @MainActor static func settle(_ host: EditorViewController) {
         host.styler.styleVisible()

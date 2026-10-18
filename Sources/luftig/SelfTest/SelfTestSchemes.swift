@@ -29,7 +29,7 @@ extension SelfTestScenarios {
     static let requiredSchemeIDs = ["luftig", "solarized-light", "solarized-dark", "github-light", "github-dark", "one-light", "one-dark", "gruvbox-light", "gruvbox-dark",
                                     "dracula", "nord", "monokai", "tomorrow-night", "catppuccin-latte", "catppuccin-mocha", "tokyo-night"]
 
-    private static func schemeAppearance(_ s: ColorScheme) -> NSAppearance { NSAppearance(named: s.appearance == .dark ? .darkAqua : .aqua)! }
+    static func schemeAppearance(_ s: ColorScheme) -> NSAppearance { NSAppearance(named: s.appearance == .dark ? .darkAqua : .aqua)! }
     private static func rgba(_ c: NSColor, _ appearance: NSAppearance) -> RGBA { Contrast.rgba(c, appearance: appearance) }
     private static func hex(_ c: RGBA) -> String { String(format: "#%02x%02x%02x", Int((c.r * 255).rounded()), Int((c.g * 255).rounded()), Int((c.b * 255).rounded())) }
 
@@ -105,7 +105,7 @@ extension SelfTestScenarios {
     // MARK: contrast
 
     /// All checks of `visual-contrast` that make sense for a fixed scheme, for the CURRENT scheme in one variant. Returns the numbers for the table.
-    @MainActor private static func contrastOfCurrentScheme(_ t: SelfTest.T, label: String, appearance: NSAppearance, variant: PaletteVariant) -> (pairs: Int, tightest: String, markerWorst: Double, caretWorst: Double, selectionBody: Double, failures: Int) {
+    @MainActor static func contrastOfCurrentScheme(_ t: SelfTest.T, label: String, appearance: NSAppearance, variant: PaletteVariant) -> (pairs: Int, tightest: String, markerWorst: Double, caretWorst: Double, selectionBody: Double, failures: Int) {
         typealias S = Palette.FullSurface
         let hc = variant.isHighContrast
         func c(_ x: NSColor) -> RGBA { rgba(x, appearance) }
@@ -538,3 +538,141 @@ extension SelfTestScenarios {
 }
 
 #endif
+
+// MARK: - schemes-import (SchemeImport: Base16 YAML files)
+
+extension SelfTestScenarios {
+    static let schemesImportScenarios: [SelfTest.Scenario] = [
+        .init(name: "schemes-import", summary: "colour schemes from Base16 YAML files: both spellings parsed, the roles, light / dark, the import into Application Support, the list, the Settings popup, legibility, removal", run: { t in try await schemesImport(t) }),
+    ]
+
+    static let base16DefaultDark = """
+    scheme: "Default Dark"
+    author: "Chris Kempson (http://chriskempson.com)"
+    base00: "181818"
+    base01: "282828"
+    base02: "383838"
+    base03: "585858"
+    base04: "b8b8b8"
+    base05: "d8d8d8"
+    base06: "e8e8e8"
+    base07: "f8f8f8"
+    base08: "ab4642"
+    base09: "dc9656"
+    base0A: "f7ca88"
+    base0B: "a1b56c"
+    base0C: "86c1b9"
+    base0D: "7cafc2"
+    base0E: "ba8baf"
+    base0F: "a16946"
+
+    """
+    static let base16DefaultLight = """
+    system: "base16"
+    name: "Default Light"
+    author: "Chris Kempson (http://chriskempson.com)"
+    variant: "light"
+    palette:
+      base00: "#f8f8f8"
+      base01: "#e8e8e8"
+      base02: "#d8d8d8"
+      base03: "#b8b8b8"
+      base04: "#585858"
+      base05: "#383838"
+      base06: "#282828"
+      base07: "#181818"
+      base08: "#ab4642"
+      base09: "#dc9656"
+      base0A: "#f7ca88"
+      base0B: "#a1b56c"
+      base0C: "#86c1b9"
+      base0D: "#7cafc2"
+      base0E: "#ba8baf"
+      base0F: "#a16946"
+
+    """
+
+    @MainActor static func schemesImport(_ t: SelfTest.T) async throws {
+        let savedScheme = EditorPreferences.colorSchemeID
+        defer {
+            EditorPreferences.colorSchemeID = savedScheme
+            Palette.apply(schemeID: EditorPreferences.colorSchemeID); ContrastWatcher.shared.override = nil
+            SchemeImport.directoryOverride = nil; ColorSchemes.reloadImported()
+        }
+        // ---- parsing
+        guard let dark = SchemeImport.spec(fromYAML: base16DefaultDark, id: "imported-x") else { t.check(false, "the classic Base16 spelling parses"); return }
+        t.check(dark.name == "Default Dark" && dark.dark && dark.family == SchemeImport.family, "classic spelling: name, dark (base00 is dark), family Imported: \(dark.name)")
+        t.check(dark.bg == 0x181818 && dark.fg == 0xd8d8d8 && dark.comment == 0x585858 && dark.heading == 0x7cafc2 && dark.accent == 0xba8baf && dark.link == 0x86c1b9 && dark.literal == 0xa1b56c && dark.warn == 0xf7ca88 && dark.info == 0x7cafc2 && dark.caret == 0xd8d8d8, "the roles: page base00, text base05, markers base03, headings base0D, accent base0E, links base0C, inline code base0B, banners base0A / base0D, caret base05")
+        if case .opaque(let s) = dark.selection { t.equal(s, 0x383838, "the selection is base02") } else { t.check(false, "the selection is opaque base02") }
+        guard let light = SchemeImport.spec(fromYAML: base16DefaultLight, id: "imported-y") else { t.check(false, "the newer spelling (system / name / palette:) parses"); return }
+        t.check(light.name == "Default Light" && !light.dark && light.bg == 0xf8f8f8 && light.fg == 0x383838, "newer spelling: name, light (variant), # prefixes removed: \(light.name)")
+        t.check(SchemeImport.spec(fromYAML: base16DefaultDark.replacingOccurrences(of: "base0F: \"a16946\"\n", with: ""), id: "i") == nil, "a missing base0F: not a scheme")
+        t.check(SchemeImport.spec(fromYAML: "# just a comment\nname: x\n", id: "i") == nil && SchemeImport.spec(fromYAML: "", id: "i") == nil, "no colours: not a scheme")
+        t.check(SchemeImport.spec(fromYAML: base16DefaultDark.replacingOccurrences(of: "\"181818\"", with: "\"18181\""), id: "i") == nil, "a malformed colour: not a scheme")
+        t.equal(SchemeImport.hexValue("#abc"), 0xaabbcc, "rgb shorthand")
+        t.equal(SchemeImport.parseYAML("base00: 181818 # the page\nkey: 'quoted value' # c\n  nested: \"#fff\"\n")["base00"], "181818", "an unquoted value ends before a comment")
+        t.equal(SchemeImport.parseYAML("key: 'quoted value' # c\n")["key"], "quoted value", "a quoted value keeps its blanks")
+        t.equal(SchemeImport.parseYAML("  base01: \"#fff\"\n")["base01"], "#fff", "an indented key (inside palette:) counts")
+        let noName = SchemeImport.spec(fromYAML: base16DefaultDark.replacingOccurrences(of: "scheme: \"Default Dark\"\n", with: ""), id: "imported-my-theme")
+        t.equal(noName?.name, "My Theme", "without a name: the file's name, capitalised")
+        t.equal(SchemeImport.id(forFile: URL(fileURLWithPath: "/x/My Theme (v2).YAML")), "imported-my-theme-v2", "the id from the file's name")
+        let luminanceDark = SchemeImport.spec(fromYAML: base16DefaultLight.replacingOccurrences(of: "variant: \"light\"\n", with: ""), id: "i")
+        t.check(luminanceDark?.dark == false, "without a variant the page's luminance decides (f8f8f8: light)")
+
+        // ---- the folder (a private one for the test), the import
+        let dir = t.url("schemes-import")
+        try? FileManager.default.removeItem(at: dir)
+        SchemeImport.directoryOverride = dir
+        ColorSchemes.reloadImported()
+        let before = ColorSchemes.all.count
+        t.check(ColorSchemes.imported.isEmpty, "set-up: no imported schemes in an empty folder")
+        let src = t.write(base16DefaultDark, to: "schemes-src/default-dark.yaml")
+        let id = try SchemeImport.importFile(src)
+        t.equal(id, "imported-default-dark", "the imported scheme's id")
+        t.check(FileManager.default.fileExists(atPath: dir.appendingPathComponent("default-dark.yaml").path), "the file was copied into the schemes folder")
+        t.equal(ColorSchemes.all.count, before + 1, "the list has one scheme more")
+        let scheme = ColorSchemes.scheme(withID: id)
+        t.check(scheme.id == id && scheme.name == "Default Dark" && scheme.family == "Imported" && scheme.appearance == .dark && scheme.swatch.count == 5, "... under the family Imported, dark: \(scheme.name)")
+        EditorPreferences.colorSchemeID = id
+        t.equal(EditorPreferences.colorSchemeID, id, "the preference accepts the imported id")
+        t.equal(Palette.scheme.id, id, "the palette applied it")
+        t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#181818", "the page is base00")
+        // ---- legibility: the same thresholds as every built-in scheme
+        for hc in [false, true] {
+            ContrastWatcher.shared.override = hc
+            let r = contrastOfCurrentScheme(t, label: "\(id) \(hc ? "+ Increase contrast" : "normal")", appearance: NSAppearance(named: .darkAqua)!, variant: hc ? .darkHC : .dark)
+            t.check(r.failures == 0, "\(id) \(hc ? "+ Increase contrast" : "normal"): every text / surface pair legible (\(r.pairs) pairs, tightest \(r.tightest))")
+        }
+        ContrastWatcher.shared.override = nil
+        // ---- the Settings window: the popup lists it, imports through the controller, refuses a file that is no scheme
+        try await preservingSettings {
+            SettingsWindowController.headless = true
+            let c = SettingsWindowController.shared
+            c.present()
+            c.showScreen(.text)
+            let src2 = t.write(base16DefaultLight, to: "schemes-src/default-light.yaml")
+            t.check(c.importScheme(from: src2), "Import Scheme… with a light scheme succeeds")
+            t.equal(EditorPreferences.colorSchemeID, "imported-default-light", "... and chooses it")
+            t.equal(c.schemePopup.selectedItem?.representedObject as? String, "imported-default-light", "the popup shows it")
+            let titles = c.schemePopup.menu?.items.map { $0.title } ?? []
+            t.check(titles.contains("Imported") && titles.contains("Default Dark") && titles.contains("Default Light") && titles.contains("Import Scheme…") && titles.contains("Show Imported Schemes in Finder"), "the popup: an Imported section with both schemes, Import Scheme…, Show in Finder: \(titles.suffix(6))")
+            t.check(ColorSchemes.all.filter { $0.family == "Imported" }.count == 2, "two imported schemes")
+            let bad = t.write("not: a scheme\n", to: "schemes-src/bad.yaml")
+            t.check(!c.importScheme(from: bad) && c.lastImportError != nil, "a file that is no scheme is refused with an error: \(c.lastImportError?.localizedDescription ?? "")")
+            t.equal(EditorPreferences.colorSchemeID, "imported-default-light", "... the scheme in use stays")
+            t.check(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("bad.yaml").path), "... and nothing was copied")
+            // the same file name again with another page colour: the scheme is rebuilt
+            let changed = t.write(base16DefaultDark.replacingOccurrences(of: "base00: \"181818\"", with: "base00: \"202020\""), to: "schemes-src/default-dark.yaml")
+            t.check(c.importScheme(from: changed), "importing a changed file of the same name")
+            t.equal(ColorSchemes.all.filter { $0.family == "Imported" }.count, 2, "... replaces the scheme (still two)")
+            t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#202020", "... with the new colours in use")
+            // removed by hand: gone at the next look, the preference reads as the default
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent("default-dark.yaml"))
+            ColorSchemes.reloadImported()
+            t.check(!ColorSchemes.all.contains { $0.id == "imported-default-dark" }, "a scheme whose file was deleted is gone after a reload")
+            t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "... and the preference that named it reads as the default")
+            EditorPreferences.colorSchemeID = "imported-default-light"
+            t.equal(Palette.scheme.appearance, SchemeAppearance.light, "the light imported scheme forces the light appearance")
+        }
+    }
+}

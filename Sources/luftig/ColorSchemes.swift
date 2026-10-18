@@ -39,8 +39,30 @@ enum ColorSchemes {
     /// The scheme that is used when nothing is chosen, and for an unknown id.
     static let defaultID = "luftig"
 
-    /// All schemes, the default first, then the families in the order of the Settings list.
-    static let all: [ColorScheme] = [defaultScheme] + SchemeSpec.all.map { $0.scheme }
+    /// All schemes, the default first, then the families in the order of the Settings list, then the imported ones (SchemeImport: files in Application
+    /// Support, read once at first use and again after an import).
+    static var all: [ColorScheme] {
+        if let a = cachedAll { return a }
+        let a = [defaultScheme] + SchemeSpec.all.map { $0.scheme } + imported.map { $0.scheme }
+        cachedAll = a
+        return a
+    }
+    nonisolated(unsafe) private static var cachedAll: [ColorScheme]?
+    nonisolated(unsafe) private static var importedSpecs: [SchemeSpec]?
+    /// The imported schemes (files), loaded at first use.
+    static var imported: [SchemeSpec] {
+        if let s = importedSpecs { return s }
+        let s = SchemeImport.load()
+        importedSpecs = s
+        return s
+    }
+    /// Reads the imported schemes' folder again (after an import, or when files were removed); a scheme that was rebuilt gets fresh colours.
+    static func reloadImported() {
+        let fresh = SchemeImport.load()
+        for s in fresh { resolvedCache.removeValue(forKey: s.id) }
+        importedSpecs = fresh
+        cachedAll = nil
+    }
 
     /// The scheme with this id; an unknown id (a preference written by a newer version, a typo) gives the default.
     static func scheme(withID id: String) -> ColorScheme { all.first { $0.id == id } ?? all[0] }
@@ -57,7 +79,7 @@ enum ColorSchemes {
         if let c = resolvedCache[scheme.id] { return c }
         let c: SchemeColors
         if scheme.id == defaultID { return defaultColors }
-        else if let spec = SchemeSpec.all.first(where: { $0.id == scheme.id }) { c = SchemeBuilder.build(spec, info: scheme) }
+        else if let spec = SchemeSpec.all.first(where: { $0.id == scheme.id }) ?? imported.first(where: { $0.id == scheme.id }) { c = SchemeBuilder.build(spec, info: scheme) }
         else { c = colors(for: all[0]) }
         resolvedCache[scheme.id] = c
         return c
