@@ -589,6 +589,18 @@ scheme table too):
 Add a `SchemeSpec` to `SchemeSpec.all` in `ColorSchemesData.swift` (page, text, comment, heading, accent, link, inline code, banner colours, caret, selection), add its id
 to `requiredSchemeIDs` and to `regenerate.sh`, run `schemes-roles,schemes-contrast,schemes-selection`. The legibility step makes it pass the tables; look at the render.
 
+### Importing a scheme (Base16 YAML)
+
+Settings > Text > Color scheme > **Import Scheme…** takes a [Base16](https://github.com/tinted-theming/schemes) (or Base24) YAML file - the format hundreds of editor
+themes are published in - and copies it into `~/Library/Application Support/<bundle id>/Color Schemes/` (`ColorSchemesImport.swift`). Both spellings are read: the
+classic `scheme: "Name"` + `base00: "181818"` … and the newer `system: "base16"` + `name:` + `variant:` + `palette:` with `#`-prefixed values. The 16 slots become luftig's
+roles the way the Base16 styling guide means them: base00 the page, base05 text and code text, base03 syntax markers (and everything mixed from the comment colour),
+base0D headings and the info banner, base0E the accent (list markers, checked tasks, the quote bar), base0C links, base0B inline code, base0A the warning banner, base05 the
+caret, base02 the selection. Light or dark comes from the `variant` line or, without one, from the page's luminance. From there the scheme is built exactly like a
+built-in theme (section 3 and 4: the same tints, surfaces and legibility step), so an imported scheme meets the same contrast tables; `schemes-import` checks the
+Base16 default dark scheme against them. Imported schemes are listed under the family "Imported" with ids `imported-<file name>`; a re-import of a file of the same name
+replaces the scheme; to remove one, delete its file ("Show Imported Schemes in Finder") - a preference that names a scheme whose file is gone reads as the default.
+
 ## 8. Not verified
 
 * The look in a real key window (the active selection is simulated in the offscreen renders, as before) and with the real "Increase contrast" switch (the self-test overrides the

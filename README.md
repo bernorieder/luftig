@@ -153,18 +153,26 @@ rebuilds the gallery.
 | View > Wrap to Readable Width | Centred column of at most 760 pt by default (the width is a setting), default on, remembered. The same switch as "Limit line length" in Settings |
 | View > Toggle Spell Checking | Off by default (also Edit > Spelling and Grammar) |
 | View > Show / Hide Outline, Word Count, Syntax Bar | The three elements around the text (all on by default, remembered, every window follows). Outline: the headings (ATX and setext, not inside code fences or front matter), indented by level, click = that heading at the top of the window with the caret on it. Word count: words are runs of text with a letter or digit (so `---`, `|`, `**` alone do not count), CJK one per character; "12 of 1,234 words" while something is selected. Syntax bar: H1 / H2 / H3 set that heading level (the same level again makes the line plain), ¶ strips heading, quote and list markers, B / I / S / code wrap the selection or unwrap it, link / image put placeholders you can type over, quote / list / numbered / task toggle the prefix on the selected lines, rule / code block / table insert on their own lines. Settings > Layout: the three switches again, the padding (one number of points for every gap), their font (the text font unless chosen), size (9 - 20 pt), opacity, wrapping of long headings in the outline, and the outline's row height |
+| Format menu: ⇧⌘1 / ⇧⌘2 / ⇧⌘3 / ⇧⌘0, ⌘B, ⌘I, ⇧⌘X, ⇧⌘C, ⌘K, ⇧⌘K, ⌥⌘Q, ⌥⌘U, ⌥⌘O, ⌥⌘X, ⌥⌘-, ⌥⌘C, ⌥⌘T | Heading 1 / 2 / 3 / plain paragraph, bold, italic, strikethrough, inline code, link, image, quote, bulleted list, numbered list, task, rule, code block, table: the same edits as the syntax bar's elements (whose tooltips name the shortcut) |
+| Return, Tab, ⇧Tab on a list or quote line | Return continues the list (the next bullet, the next number - the items below are renumbered when they were in sequence -, an unchecked task box, the quote's `>`); Return on an empty item outdents it or removes its marker; Tab nests the item under the one above, ⇧Tab un-nests it. Off with Settings > General > Continue lists on Return. Inside a code block the keys are the ordinary keys |
+| ⌘-click on a link, ⌥⌘L | Follow the link under the mouse (or the caret: Edit > Open Link): a web address in the browser, a Markdown or text file in luftig (at its `#anchor`), any other file in its application, `#heading` in this document. Inline links, images, `<autolinks>`, bare `www.` / `https://` addresses and `[text][ref]` references through their definition |
+| ⇧⌘F / ⇧⌘T | View > Focus Mode (everything but the paragraph at the caret fades towards the page; nothing is restyled) / Typewriter Mode (the line with the caret stays in the middle of the window). Remembered, every window follows |
+| ⌥⇧⌘C / ⌃⇧⌘C | Edit > Copy as HTML (the selection's lines, or everything, as HTML source - also as plain text, so a text editor gets the source) / Copy as Rich Text (the same as RTF, for Mail, Pages, a chat) |
+| ⌥⌘E | File > Export as HTML…: a complete page with a small stylesheet in your fonts, light and dark |
 | ⌃⌘F, ⌘M, ⌘H, ⌘Q | Full screen, Minimize, Hide, Quit |
 | ⌃Tab / ⌃⇧Tab, View > Show Tab Bar | Switch tabs (⌘N opens a tab if "Prefer tabs" is set in System Settings) |
 | ⌘P / ⇧⌘P | Print… / Page Setup… |
 
-Not included on purpose: list auto-continuation, snippets, a preview pane, a toolbar.
+Not included on purpose: snippets, a preview pane, a toolbar.
 
 ## Settings
 
 **luftig > Settings…** (⌘,) opens one small window, a singleton: choosing it again raises the same window, ⌘W closes it, its position is remembered. Every control
 applies at once to every open window and is saved (no OK / Apply buttons); the live preview at the top is styled by the real theme and lexer with the
 current settings, so fonts, size, spacing, column and colours change in front of you. Under the preview a switch chooses between three screens, remembered:
-**General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window), **Text**
+**General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window. When the file changes
+on disk: reload automatically - the default, see below -, ask first - a banner offers Reload from Disk / Keep My Version for every change and nothing is
+merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
 (everything about the text) and **Layout**, for the three elements around the text (outline, word count, syntax bar): which of them are shown (the
 View menu's switches, the other way to reach them), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
 window's edge and the panels on all four sides, between the outline and the text, between the word count row and the outline and text below it,
@@ -182,7 +190,7 @@ a second copy that gets launched (a build next to the installed one, `open -n`) 
 
 | Setting | What it does |
 |---|---|
-| Color scheme | The luftig default (follows the system appearance) or a scheme from a well-known editor theme, grouped by family, each with a colour swatch. A scheme that is always light or always dark also sets the window's appearance (title bar, scrollers, find bar) |
+| Color scheme | The luftig default (follows the system appearance) or a scheme from a well-known editor theme, grouped by family, each with a colour swatch. A scheme that is always light or always dark also sets the window's appearance (title bar, scrollers, find bar). **Import Scheme…** at the end of the list takes a [Base16](https://github.com/tinted-theming/schemes) YAML file (hundreds of editor themes come in that format, both the classic `scheme:` / `base00:` spelling and the newer `palette:` one): the file is copied into `~/Library/Application Support/local.luftig.luftig/Color Schemes/`, the scheme appears under "Imported" and gets the same legibility treatment as the built-in ones (page base00, text base05, markers base03, headings base0D, accent base0E, links base0C, inline code base0B, selection base02; light or dark from the file's variant or the page's luminance). To remove one, delete its file ("Show Imported Schemes in Finder") |
 | Text font | Any installed family (each name shown in its own typeface); the default is the system font (SF Pro). Bold, italic and semibold come from the family's own faces; a family that lacks them gets a slanted (`.obliqueness`) or stroked (`.strokeWidth`) version of the regular face |
 | Code font | Monospaced families only (inline code, code blocks, tables, front matter); the default is the system monospaced font (SF Mono). A tab in code is 4 columns of this font |
 | Size | 9 to 40 pt: stepper and field. The same value as ⌘+ ⌘− ⌘0; headings (1.6 / 1.35 / 1.18 / 1.05 times) and code (0.9 times) keep their ratios |
@@ -259,6 +267,9 @@ decoded when the bytes really differ (so `touch` or an identical rewrite never r
   stays open with your text, is marked edited so closing asks, and autosave is held back (luftig must not resurrect a file you
   deleted on purpose). *Save Again…* writes it. If the file comes back, it is compared like any other change.
 * **File becomes unreadable** (binary, > 200 MB): your text stays, saving is held back until you decide.
+* **Settings > General > When the file changes on disk** chooses between this behaviour (Reload automatically), **Ask first** (every change, with or without unsaved
+  edits, shows the banner with Reload from Disk / Keep My Version and nothing is merged or reloaded by itself) and **Never reload** (the change is not shown; the
+  other version is remembered, so that autosave is held back and ⌘S or closing asks with the sheet: luftig still never writes over a version it was not told to).
 * Network volumes (SMB/NFS/…) do not deliver kqueue events for remote changes: those files are polled every 2 s instead.
   *Not tested against real OneDrive / iCloud / File Provider folders* (they usually write under file coordination, which
   `NSDocument` handles by itself: luftig's own check has normally reloaded already and the system revert is a no-op).
@@ -295,6 +306,9 @@ CRLF / CR files are shown with LF and written back as they were; mixed line endi
   aligned for you (they use a monospaced font so your pipes line up).
 * Files larger than 200 MB and binary files are refused with an error. A file with unsaved changes is never overwritten silently,
   which also means the autosave of a conflicted document waits for your decision.
+* Copy as HTML / Export as HTML follow the lexer, not a full Markdown parser: `[shortcut]` references stay text, footnote definitions become a paragraph, a
+  quote inside a list item ends the list, and what the lexer does not resolve (see the lexer gaps above) is not resolved here either. Tab / Shift-Tab leave
+  list items inside block quotes alone (their indentation sits after the `>`).
 * Not exercised in the automated tests (they run headless, no key window): a real input method (IME), VoiceOver, the look of the
   active selection and the caret in a key window, live window resizing and trackpad scrolling, visible sheets and alerts, a real
   Dock click on minimised windows, real drag to the Dock icon. See docs/ARCHITECTURE.md, "What is not verified".

@@ -40,19 +40,33 @@ Sources/luftig/
                                         (while a slider / stepper of the Settings window is dragged the broadcast is bounded: `beginAdjusting` / `endAdjusting`, invariant 25)
                                         validated on every read, broadcast to every window; `themeSettings` is what a Theme is built from
   LuftigEditorFactory.swift             the exact NSTextView / NSScrollView configuration (non-contiguous TextKit 1)
-  LuftigEditorTextView.swift            drawBackground hook for the decorations; pre-styles jump targets (scrollRangeToVisible, Cmd-Up/Down)
-  LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground)
+  LuftigEditorTextView.swift            drawBackground hook for the decorations; pre-styles jump targets (scrollRangeToVisible, Cmd-Up/Down); no responsive scrolling
+                                        (pitfall 31); the drawInsertionPoint override that keeps full-screen scrolling smooth (pitfall 33); ⌘-click on a link (mouseDown)
+  LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground); Focus Mode's veil over every line but the
+                                        focused paragraph, right after the glyphs (drawGlyphs: no attribute change, no draw(_:) override - pitfall 35)
   Decorations.swift                     .luftigBlock / .luftigInline keys, BlockMark encoding, metrics, band path helpers
   ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset and the text container's WIDTH
-                                        (widthTracksTextView is off: the right side gets `trailingExtra` more air than the left, pitfall 34); follows the clip view's frame
+                                        (widthTracksTextView is off: the right side gets `trailingExtra` more air than the left, pitfall 34); follows the clip view's frame;
+                                        Typewriter Mode's vertical inset (half the viewport, so the first and the last line can sit in the middle)
   BannerView.swift                      the non-modal strip for external-change messages
   EditorChrome.swift                    the three elements around the text, without views: OutlineScanner (ATX / setext headings outside fences and front matter,
                                         chunked), WordCounter (chunked), SyntaxInsertion (text + selection -> TextChange: wrap / unwrap, link, line prefixes, blocks)
   EditorChromeViews.swift               OutlineView (NSTableView, no selection, hover), WordCountView, SyntaxBarView (SoftLabel: text that acts, never a bezel),
                                         EditorRootView (the page colour behind everything); all in Palette.marker, the body / code family at 12 pt; wired in
                                         EditorViewController's `chrome` extension: coalesced recomputation in 1 M-unit steps after edits, View menu switches
+  ListEditing.swift                     Return / Tab / Shift-Tab on list and quote lines (pure: text + selection -> TextChange): the next item with the same prefix, the next
+                                        number (the sequence below renumbered), an unchecked task box, an empty item outdented or unmarked, nesting by the marker's width;
+                                        wired through `textView(_:doCommandBy:)`, never inside a code block or a composition; Settings > General > Continue lists on Return
+  LinkFollowing.swift                   ⌘-click / Edit > Open Link (pure): the link under a character from the lexer's runs (inline, image, autolink, bare URL, reference
+                                        through its definition, `[shortcut]` from the brackets), a destination -> web URL / file (relative to the document, with #anchor) /
+                                        anchor in this document (GitHub heading slugs); the `links` extension of EditorViewController opens them (openExternally /
+                                        openDocument are replaceable for the tests)
+  MarkdownHTML.swift                    Markdown -> HTML from the lexer's runs (pure): the line-level facets open and close blocks, the inline facets nested tags, markers
+                                        left out; Edit > Copy as HTML / Copy as Rich Text (RTF made from the HTML by AppKit), File > Export as HTML… (a page with a small
+                                        stylesheet in the editor's fonts, light and dark)
   SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window; the preview on top, under it a switch between three screens (General: open files in
-                                        tabs; Text; Layout: the three pane switches, the padding factor, pane font / size / opacity, outline wrapping), each an NSGridView in a
+                                        tabs, what happens when the file changes on disk, continue lists on Return; Text, whose scheme popup also imports Base16 files; Layout:
+                                        the three pane switches, the padding, pane font / size / opacity, outline wrapping and spacing), each an NSGridView in a
                                         container of its own; every control applies live and is saved; observes EditorPreferences.didChange
   SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
                                         files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
@@ -73,6 +87,9 @@ Sources/luftig/
   ColorSchemes.swift                    the contract (ColorScheme, ColorSchemes.all / defaultID), SchemeColors, the default scheme (the palette luftig always had)
   ColorSchemesData.swift                the authentic palettes of 15 editor themes (hex values) and the role each colour plays (docs/color-schemes.md)
   ColorSchemesBuild.swift, ColorSchemesMath.swift   roles -> tints -> surfaces -> the contrast-driven lightness adjustment (OKLCH) -> SchemeColors
+  ColorSchemesImport.swift              schemes from Base16 / Base24 YAML files in ~/Library/Application Support/<bundle id>/Color Schemes (both spellings of the format;
+                                        the 16 slots mapped onto the roles; light / dark from the variant or the page's luminance), listed under the family "Imported",
+                                        built like every theme; ColorSchemes.all reads the folder once and again after an import or when the Settings window opens
   SettingsFontFactory.swift             ThemeSettings (what a Theme is built from), FontFactory (faces of any installed family via NSFontManager, cached) and FontFace
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation
@@ -200,6 +217,30 @@ View > Show / Hide ... -> EditorPreferences.showOutline / showWordCount / showSy
     under the text; the outline runs on past it.
 ```
 Nothing here is ever computed per keystroke; a hidden element costs nothing (no scan while both outline and count are hidden).
+
+### Keys, links, writing modes, HTML (ListEditing.swift, LinkFollowing.swift, MarkdownHTML.swift, the `focus` / `links` / `html` extensions of EditorViewController)
+
+```
+Return / Tab / Shift-Tab  -> textView(_:doCommandBy:) -> ListContinuation.returnChange / indentChange (pure, on the storage's NSString) -> apply(_:actionName:)
+    (the same change protocol as the syntax bar: shouldChangeText / replaceCharacters / didChangeText, one named undo step); nil -> the text view's own key.
+    Never inside a code block (the `.luftigBlock` mark at the caret) or a composition; off with Settings > General > Continue lists on Return.
+Format menu / ⌘B ...    -> luftigInsertSyntax (the item's tag names the SyntaxElement) -> insert(_:) - the same edit as a click on the bar.
+⌘-click, Edit > Open Link -> LuftigEditorTextView.mouseDown (the glyph under the mouse, not the insertion index) -> followLink(at:) -> the lexer's runs of that
+    line (styleRuns) -> LinkFollowing.destination -> LinkFollowing.target -> NSWorkspace (web, other files) / NSDocumentController (Markdown, at its anchor)
+    / jump(toAnchor:) (this document: the outline's jump). A jump up to 300 K units into the text styles and lays out everything above its target first
+    (exactJumpLimit, pitfall 36); beyond, it lands on the estimate.
+View > Focus Mode       -> EditorPreferences.focusMode -> every editor: the paragraph at the caret (focusParagraph: the lines without a blank line between them,
+    200 each way) -> LuftigLayoutManager.focusRange -> drawGlyphs veils every other line fragment with the page colour at 60 % after its glyphs; the
+    selection and text notifications move it (a redisplay of the visible rect only when the paragraph changed).
+View > Typewriter Mode  -> ReadableColumnController.typewriter (vertical inset = half the viewport less half a line) + centerCaretLine on every selection /
+    text change: the caret's line fragment (the extra fragment after a trailing line break) to the middle, settling over up to 4 passes (pitfall 27).
+Edit > Copy as HTML / Rich Text, File > Export as HTML… -> MarkdownStyler.lexAll (the whole text: a line's block depends on what is above) ->
+    MarkdownHTML.html(text, runs, range: the selection's lines or everything) -> the pasteboard (.html + .string; Rich Text adds .rtf from
+    NSAttributedString(html:)) / MarkdownHTML.document (stylesheet in the editor's fonts) -> the save panel.
+Settings > General > When the file changes on disk -> EditorPreferences.reloadBehavior -> MarkdownDocument.externalChangeArrived (the policy's one entry for a
+    changed file) and the save gate: automatic (as always), ask (the banner for every change, no merge), never (nothing shown; the other version remembered
+    so that a save asks). The invariant stays: luftig never writes over a version it was not told to.
+```
 
 ## 3. Invariants (a change that breaks one of these breaks the editor)
 
@@ -344,6 +385,27 @@ Nothing here is ever computed per keystroke; a hidden element costs nothing (no 
     `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads `textContainer.size.width` sees the narrower width,
     which is the point (the bands end there). The Settings preview uses the same controller and extra.
 
+35. **Do not override `draw(_:)` on the NSTextView to paint over the text.** Focus Mode's veil was first drawn from an override of `draw(_:)` that called super
+    and filled the page colour over everything but the focused paragraph. Correct on screen, but `visual-redraw` then trapped: with `draw(_:)` overridden,
+    NSTextView invalidates with `NSRect.infinite` (the whole view) on every edit, and the test's row arithmetic overflowed (the same whole-view invalidation also
+    turned out to happen once per edit on the untouched tree on this macOS build - the test now reads an infinite rect as "every row"; it may be the
+    system, not luftig). The veil moved to `LuftigLayoutManager.drawGlyphs(forGlyphRange:at:)`: after `super` draws the glyphs of a range, every line
+    fragment of it that holds none of the focused characters is filled with the page colour at 60 %. No attribute changes (the styled text stays a fresh
+    lex), no invalidation changes, and the extra line fragment after a trailing line break is only veiled once the last glyph is drawn (before the end is
+    laid out its rect is a guess that veiled the whole viewport).
+
+36. **A jump to a heading lands on an ESTIMATED y.** `ensureLayout(forCharacterRange:)` around the target lays out that range only; with non-contiguous
+    layout the y of its line fragments is estimated from the text above that was never laid out (a heading 80 lines down was placed at 192 pt instead of
+    ~1900: `edit-links`), and `scrollRangeToVisible` has the same problem. The outline's and the anchors' jump styles and lays out everything from the
+    start of the text up to the target when the target is within `EditorViewController.exactJumpLimit` (300 K units: a layout pass over the text above,
+    styled first so that headings have their real height) and calls `sizeToFit()` so that the text view's frame follows the layout at once (AppKit does it
+    at the end of a layout pass, which a jump cannot wait for). Beyond the limit the jump lands on the estimate and the display refines it. Typewriter Mode
+    recentres over up to 4 passes for the same reason.
+
+37. **`cacheDisplay(in:to:)` of the (flipped) text view gives a bitmap whose rows run bottom-up.** A test that samples pixels of a line at y (view
+    coordinates) reads rows `(visible.maxY - lineRect.maxY) * scale ... (visible.maxY - lineRect.minY) * scale`, not `lineRect.minY * scale`; `edit-focus`
+    reads whole 23 pt bands from the top instead of single lines, which does not depend on the mapping.
+
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 
 Measured on the merged tree of the three features (Settings window with fonts / line spacing / column width, colour schemes, hanging list indent). Open / typing / idle / memory are three runs of `--selftest open-perf,typing,idle,memory`, EACH INTERLEAVED with the same run of the build without the three features (private bundle copies, load average 1.6-2.4: the machine is the user's and is never idle). The launch rows below are the earlier measurements of the build WITHOUT the three features, not repeated: this environment has no launch driver (a hidden launch through Launch Services that checks what is on screen), and the app's launch path changed by a menu item, `Palette.apply` (0.35 ms, cold) and a first `Theme(settings:)` (0.6 ms); the Settings window is built on the first Cmd-, only. Launch times are the SHIPPING bundle (a byte-identical copy with its own bundle id) launched through Launch Services, hidden (`open -g -j -n` equivalent, `-ApplePersistenceIgnoreState YES`), time from the launch call / from the kernel's process start to the first document window in `CGWindowListCopyWindowInfo`, at load average 2-5.
@@ -410,6 +472,18 @@ Navigation cost, not a keystroke cost: the first jump into the middle of a 10 MB
 * Self-test: `open-perf` replaces the spike's scenario of the same name (its measurements - read / window / layout split, concurrent reading, stall - are included, plus styled + drawn, budgets and cold processes); the `menu` scenario's "Wrap Lines" check became the "Wrap to Readable Width" check and "handled by NSTextView" became "handled by LuftigEditorTextView". No other check was changed, weakened or removed.
 
 ## 7. What is not verified
+
+Added by the editing round (lists, Format menu, reload behaviour, links, Focus / Typewriter Mode, scheme import, HTML):
+* **A real ⌘-click, a real Return / Tab** reach the same code as the synthesised events the scenarios send through `NSWindow.sendEvent` / the text view's
+  `mouseDown`, but no real mouse or keyboard drove them. The Open panel of Import Scheme…, the Save panel of Export as HTML… and the Finder reveal are not
+  exercised (`importScheme(from:)` / `exportHTML(to:)` are driven directly).
+* **Rich text in another application**: the RTF is made by `NSAttributedString(html:)` and checked for a bold face in the right place; what Mail, Pages or a chat
+  make of it was not looked at. The HTML renderer follows the lexer: what the lexer leaves as text (`[shortcut]` references, reference definitions for
+  footnotes) stays text; lists inside quotes work, quotes inside list items close the list first.
+* **Two scenarios fail on this machine on the untouched previous commit as well** (checked by building 3ecc8f7 in a worktree): `visual-redraw` traps on a
+  whole-view invalidation per edit (now read as every row, pitfall 35) and `schemes-apply` reports a long-lived window 0.5 pt wider than a fresh one and
+  46 MB of growth over 300 switches. Both passed in the full run of the morning on the same build; something in the environment changed. To be rerun.
+* **Focus Mode with a selection that spans paragraphs** keeps both; a selection made with the mouse while the veil is drawn was not looked at on screen.
 
 Added by the merge of the fixes round and the look round:
 * **The new look in a real window**: the title bar, the tab bar, full screen and its toolbar / title bar area, the drawing of the new scrollers and of the scroll-edge effect
