@@ -2,10 +2,10 @@
 #
 # build-app.sh - assemble luftig.app from the SwiftPM build, without Xcode.
 #
-#   Scripts/build-app.sh                     release build  ->  <repo>/build/luftig.app
+#   Scripts/build-app.sh                     release build  ->  <repo>/build.noindex/luftig.app
 #   Scripts/build-app.sh --debug             debug build
 #   Scripts/build-app.sh --out /some/dir     ->  /some/dir/luftig.app   (a path ending in .app is used as the bundle itself)
-#   Scripts/build-app.sh --selftest          the SELF-TEST VARIANT  ->  <repo>/build/luftig-SelfTest.app
+#   Scripts/build-app.sh --selftest          the SELF-TEST VARIANT  ->  <repo>/build.noindex/luftig-SelfTest.app
 #
 # The self-test variant is the same code built with -Xswiftc -DLUFTIG_SELFTEST: it additionally understands
 # `luftig-SelfTest --selftest <scenario|all>` (see README.md). It is a separate bundle (CFBundleIdentifier "<id>.selftest",
@@ -31,7 +31,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG=release
-OUT="$ROOT/build/luftig.app"
+OUT="$ROOT/build.noindex/luftig.app"
 PKG="$ROOT"
 SCRATCH=""
 PRODUCT="luftig"
@@ -65,7 +65,7 @@ done
 APP_NAME="luftig"
 if [ "$SELFTEST" = 1 ]; then
   APP_NAME="luftig-SelfTest"
-  [ "$OUT_GIVEN" = 1 ] || OUT="$ROOT/build/luftig-SelfTest.app"
+  [ "$OUT_GIVEN" = 1 ] || OUT="$ROOT/build.noindex/luftig-SelfTest.app"
   [ -n "$SCRATCH" ] || SCRATCH="$ROOT/.build-selftest"
 fi
 
@@ -177,9 +177,10 @@ if [ "$SIGN" = 1 ]; then
   codesign --force --deep --sign - --timestamp=none "$APP" 2>&1 | sed 's/^/    /'
 fi
 
-# ---- Launch Services: the built bundle is a build product, not an installed app. Once Launch Services has registered it (the Finder saw it, or
-# `open build/luftig.app`), the Finder's "Open With" lists every copy of the same name with its version after it ("luftig (1.0.0)") to tell them
-# apart. Unregistering the build output keeps the installed copy the only one (a later `open build/luftig.app` registers it again).
+# ---- Launch Services: the built bundle is a build product, not an installed app. Once Launch Services knows it, the Finder's "Open With" lists
+# every copy of the same name with its version after it ("luftig (1.0.0)") to tell them apart. Spotlight registers every app bundle it indexes,
+# so the build folder is named `build.noindex` (a folder Spotlight skips); unregistering the output here covers a bundle that was seen before
+# (an `open build.noindex/luftig.app` registers it again until the next build).
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 if [ -x "$LSREGISTER" ]; then "$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true; fi
 

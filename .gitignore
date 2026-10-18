@@ -1,5 +1,7 @@
 .build/
+build.noindex/
 *.app
 .DS_Store
 build/
+build.noindex/
 .build-selftest/

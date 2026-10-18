@@ -2,7 +2,7 @@
 #
 # test-lifecycle.sh - black-box tests of the app's launch / reopen / quit / restoration behaviour with the REAL AppDelegate.
 #
-#   Scripts/build-app.sh --selftest              # once: build/luftig-SelfTest.app
+#   Scripts/build-app.sh --selftest              # once: build.noindex/luftig-SelfTest.app
 #   bash Scripts/test-lifecycle.sh [luftig-SelfTest.app]     exit status 0: all checks passed       (about 1 minute)
 #
 # The in-process runner (`luftig-SelfTest --selftest ...`) has its own application delegate, so it cannot see what AppDelegate does
@@ -17,7 +17,7 @@
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="${1:-$HERE/build/luftig-SelfTest.app}"
+SRC="${1:-$HERE/build.noindex/luftig-SelfTest.app}"
 [ -d "$SRC/Contents/MacOS" ] || { echo "no self-test bundle at: $SRC   (build it: Scripts/build-app.sh --selftest)"; exit 2; }
 command -v swiftc >/dev/null || { echo "swiftc not found (Command Line Tools)"; exit 2; }
 PB=/usr/libexec/PlistBuddy

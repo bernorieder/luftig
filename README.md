@@ -34,10 +34,13 @@ was not available). Builds with the Xcode Command Line Tools only, no Xcode need
 ## Build, run, install
 
 ```sh
-Scripts/build-app.sh                  # release build  ->  build/luftig.app   (ad-hoc signed, verified)
-open build/luftig.app                 # run it
-cp -R build/luftig.app /Applications/ # install  (or ~/Applications)
+Scripts/build-app.sh                  # release build  ->  build.noindex/luftig.app   (ad-hoc signed, verified)
+open build.noindex/luftig.app                 # run it
+cp -R build.noindex/luftig.app /Applications/ # install  (or ~/Applications)
 ```
+
+(The build folder is called `build.noindex` so that Spotlight skips it: Spotlight registers every app bundle it indexes with Launch Services, and
+with two copies of luftig known to it the Finder's "Open With" showed both as "luftig (1.0.0)". The installed copy is the only one Launch Services sees.)
 
 `Scripts/build-app.sh --help` lists the options (`--debug`, `--out DIR`, `--scratch-path DIR`, `--no-sign`, ...). The script
 runs `swift build -c release`, assembles `Contents/{MacOS,Resources,Info.plist}`, copies the committed icon, signs ad hoc and
@@ -88,11 +91,11 @@ swift run -c release mdkit-checks                  # the Markdown lexer: 1932 ch
 swift run -c release mdkit-checks --fuzz 250000 7  # differential fuzzing (edits, seed); --bench, --conformance, --unicode-class, --show '<text>'
 
 bash Scripts/test-build-app.sh                     # the build script itself (icon, test-code guard, --out safety, the executable's minos / SDK stamp), ~8 s
-Scripts/build-app.sh --selftest                    # -> build/luftig-SelfTest.app (separate bundle id, same code + test hooks)
+Scripts/build-app.sh --selftest                    # -> build.noindex/luftig-SelfTest.app (separate bundle id, same code + test hooks)
 bash Scripts/test-lifecycle.sh                       # launch / Dock click / quit / restoration through Launch Services, ~45 s, hidden
-build/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest list
-build/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest all           # every scenario (96, 3,400 checks), ~9 minutes, headless; run it alone
-build/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest open-perf,typing,idle,memory   # the numbers
+build.noindex/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest list
+build.noindex/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest all           # every scenario (96, 3,400 checks), ~9 minutes, headless; run it alone
+build.noindex/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest open-perf,typing,idle,memory   # the numbers
 ```
 
 The scenario families: the document layer (`reload-*`, `dirty-*`, `save-gate`, `deleted-moved`, `auditdoc-*`: property tests, bytes in = bytes out,
