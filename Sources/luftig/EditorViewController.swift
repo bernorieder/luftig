@@ -53,6 +53,11 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     var windowPaddingConstraints: [NSLayoutConstraint] = []
     var verticalInsetConstraints: [NSLayoutConstraint] = []
     var bottomPaddingConstraint: NSLayoutConstraint!
+    var barGapConstraint: NSLayoutConstraint!
+    var viewportBottomConstraint: NSLayoutConstraint!
+    /// Whether the outline / word count hold data for the current text (hidden elements are not computed; shown later, they are).
+    var chromeOutlineValid = false
+    var chromeWordsValid = false
     /// How many times the outline / word count were recomputed (tests).
     var chromeRefreshCount = 0
 
@@ -108,17 +113,22 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     }
 
     override func loadView() {
-        // banner / word count / [outline | text] / syntax bar, top to bottom; a hidden element takes no space (NSStackView detaches hidden views)
+        // banner / word count / [outline | text column: viewport over the syntax bar], top to bottom; a hidden element takes no space (NSStackView
+        // detaches hidden views). The bar belongs to the text column, so it is always centred under the text; the outline runs on past it.
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        let middle = NSStackView(views: [outline, scrollView])
+        let textColumn = NSView()
+        textColumn.translatesAutoresizingMaskIntoConstraints = false
+        textColumn.addSubview(scrollView)
+        textColumn.addSubview(syntaxBar)
+        let middle = NSStackView(views: [outline, textColumn])
         middle.orientation = .horizontal
         middle.spacing = 0
         middle.alignment = .top
         middle.distribution = .fill
         middle.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        scrollView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let stack = NSStackView(views: [banner, wordCount, middle, syntaxBar])
+        textColumn.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textColumn.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let stack = NSStackView(views: [banner, wordCount, middle])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
@@ -137,15 +147,21 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         // the vertical padding of the text viewport and of the outline: a margin OUTSIDE the scrolling, the same for both, so that scrolled text starts
         // exactly where the outline's first entry starts (the text container itself has no vertical inset)
         let v = padding.textInsetVertical
+        barGapConstraint = syntaxBar.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: v)                 // the bar shown: the gap above it
+        viewportBottomConstraint = textColumn.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: v)   // the bar hidden: the margin below the viewport
         verticalInsetConstraints = [
             outline.topAnchor.constraint(equalTo: middle.topAnchor, constant: v), middle.bottomAnchor.constraint(equalTo: outline.bottomAnchor, constant: v),
-            scrollView.topAnchor.constraint(equalTo: middle.topAnchor, constant: v), middle.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: v),
+            scrollView.topAnchor.constraint(equalTo: textColumn.topAnchor, constant: v), barGapConstraint, viewportBottomConstraint,
         ]
-        NSLayoutConstraint.activate(windowPaddingConstraints + verticalInsetConstraints + [bottomPaddingConstraint] + [
+        viewportBottomConstraint.isActive = false
+        NSLayoutConstraint.activate(windowPaddingConstraints + [verticalInsetConstraints[0], verticalInsetConstraints[1], verticalInsetConstraints[2], barGapConstraint, bottomPaddingConstraint] + [
             banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor), banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             wordCount.leadingAnchor.constraint(equalTo: stack.leadingAnchor), wordCount.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             middle.leadingAnchor.constraint(equalTo: stack.leadingAnchor), middle.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
-            syntaxBar.leadingAnchor.constraint(equalTo: stack.leadingAnchor), syntaxBar.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            textColumn.topAnchor.constraint(equalTo: middle.topAnchor), textColumn.bottomAnchor.constraint(equalTo: middle.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: textColumn.leadingAnchor), scrollView.trailingAnchor.constraint(equalTo: textColumn.trailingAnchor),
+            syntaxBar.leadingAnchor.constraint(equalTo: textColumn.leadingAnchor), syntaxBar.trailingAnchor.constraint(equalTo: textColumn.trailingAnchor),
+            syntaxBar.bottomAnchor.constraint(equalTo: textColumn.bottomAnchor),
         ])
         view = root
         installChrome()
@@ -348,11 +364,15 @@ extension EditorViewController {
     /// The View menu's three switches, shared by every window.
     func applyChromeVisibility() {
         let o = EditorPreferences.showOutline, w = EditorPreferences.showWordCount, s = EditorPreferences.showSyntaxBar
-        let wasStale = (outline.isHidden && o) || (wordCount.isHidden && w)
         if outline.isHidden == o { outline.isHidden = !o }
         if wordCount.isHidden == w { wordCount.isHidden = !w }
         if syntaxBar.isHidden == s { syntaxBar.isHidden = !s }
-        if wasStale && chromeDataGeneration != chromeGeneration { scheduleChromeRefresh(after: 0) }
+        // the bar shown: the viewport ends a gap above it; hidden (NSStackView would detach it, but it is a plain subview here): the margin below the viewport
+        syntaxBar.isHidden = !s
+        barGapConstraint?.isActive = s
+        viewportBottomConstraint?.isActive = !s
+        // an element shown without data for the current text (hidden at open, or hidden during the last edit) is computed now
+        if (o && !chromeOutlineValid) || (w && !chromeWordsValid) { scheduleChromeRefresh(after: 0) }
     }
 
     /// The coalescing delay after an edit: a little longer for very large documents (their scan takes longer and the user is typing).
@@ -363,6 +383,7 @@ extension EditorViewController {
     /// Recompute now, in one go (open of a small document, tests).
     func refreshChromeNow() {
         chromeGeneration += 1
+        chromeOutlineValid = false; chromeWordsValid = false
         chromeTimer?.invalidate(); chromeTimer = nil
         guard !outline.isHidden || !wordCount.isHidden else { chromeScanner = nil; chromeCounter = nil; return }
         chromeScanner = outline.isHidden ? nil : OutlineScanner()
@@ -375,6 +396,7 @@ extension EditorViewController {
     func scheduleChromeRefresh(after: Double? = nil) {
         chromeGeneration += 1
         chromeScanner = nil; chromeCounter = nil
+        chromeOutlineValid = false; chromeWordsValid = false
         guard !outline.isHidden || !wordCount.isHidden else { return }
         chromeTimer?.invalidate()
         let t = Timer(timeInterval: after ?? chromeRefreshDelay, repeats: false) { [weak self] _ in self?.startChromeScan() }
@@ -398,8 +420,8 @@ extension EditorViewController {
         // done
         chromeDataGeneration = generation
         chromeRefreshCount += 1
-        if let s = chromeScanner { outline.entries = s.entries; updateCurrentOutlineEntry() }
-        if let c = chromeCounter { chromeWordTotal = c.count; updateChromeSelection() }
+        if let s = chromeScanner { outline.entries = s.entries; chromeOutlineValid = true; updateCurrentOutlineEntry() }
+        if let c = chromeCounter { chromeWordTotal = c.count; chromeWordsValid = true; updateChromeSelection() }
         chromeScanner = nil; chromeCounter = nil
     }
 

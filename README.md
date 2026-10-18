@@ -168,7 +168,8 @@ current settings, so fonts, size, spacing, column and colours change in front of
 (everything about the text) and **Layout**, for the three elements around the text (outline, word count, syntax bar): which of them are shown (the
 View menu's switches, the other way to reach them), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
 window's edge and the panels on all four sides, between the outline and the text, between the word count row and the outline and text below it,
-between the syntax bar and the text above it, and between the text and the sides of its own panel; at 0 everything touches, at 50 the editor floats,
+between the syntax bar and the text above it (the bar sits under the text column, centred below the text; the outline runs on past it), and between
+the text and the sides of its own panel; at 0 everything touches, at 50 the editor floats,
 and the gaps above the text viewport and the outline are always the same, so scrolled text starts level with the outline's first entry; the thing
 the name is about (the gaps between the bar's symbols and the outline's row height stay put) -, their font ("Same as text font" unless you choose one),
 their size (9 - 20 pt), their opacity (25 - 100 %, less = fainter), whether long headings in the outline wrap onto further lines instead of being

@@ -261,7 +261,9 @@ extension SelfTestScenarios {
             t.check(inRoot(host.wordCount).minY >= textFrame.maxY - 0.5 && inRoot(host.wordCount).height == Padding.wordCountContentHeight, "the word count row is above the text: \(NSStringFromRect(inRoot(host.wordCount))) vs \(NSStringFromRect(textFrame))")
             t.check(inRoot(host.syntaxBar).maxY <= textFrame.minY + 0.5 && inRoot(host.syntaxBar).height == Padding.barContentHeight, "the syntax bar is below the text: \(NSStringFromRect(inRoot(host.syntaxBar)))")
             t.equal(inRoot(host.outline).maxY, textFrame.maxY, "the outline's top and the text viewport's top are the same (scrolled text starts where the outline starts)")
-            t.equal(inRoot(host.outline).minY, textFrame.minY, "... and their bottoms")
+            t.equal(inRoot(host.syntaxBar).minX, textFrame.minX, "the syntax bar lies under the text column, not under the outline")
+            t.equal(inRoot(host.syntaxBar).width, textFrame.width, "... as wide as the text column (its symbols centred in it)")
+            t.equal(inRoot(host.outline).minY, host.padding.window + host.padding.textInsetVertical, "the outline runs on past the bar, to its margin above the window's bottom edge")
             t.equal(tv.textContainerInset.height, 0, "the text container has no vertical inset of its own: the air is the viewport's margin")
             // a small document: the data is there at open (no wait); a big one computes after the first screen (below)
             t.check(!host.chromeRefreshPending && host.outline.entries.count == 3, "a small document's outline and count are computed at open, synchronously")
@@ -453,6 +455,18 @@ extension SelfTestScenarios {
             t.check(abs(inRoot(host.scrollView).height - (host.view.bounds.height - 2 * host.padding.window - 2 * host.padding.textInsetVertical)) < 1, "with everything hidden the text viewport fills the window inside its frame and its own margin")
             let (doc2, host2, _) = try await openEditor(t, text: "# x\n", name: "chrome2.md")
             t.check(host2.outline.isHidden && host2.wordCount.isHidden && host2.syntaxBar.isHidden, "a window opened later follows the stored switches")
+            // the word count switched on after the document was opened without it: computed then (it used to stay empty)
+            host.luftigToggleOutline(nil)                                                  // outline on (the count still off): the open-time scan computes the outline only
+            let (docLate, hostLate, _) = try await openEditor(t, text: "one two three\n", name: "chrome-late.md")
+            waited = 0
+            while hostLate.chromeRefreshPending && waited < 3000 { await t.spin(20); waited += 20 }
+            t.check(hostLate.wordCount.isHidden && hostLate.wordCount.text.isEmpty, "opened with the word count off: nothing counted yet")
+            host.luftigToggleWordCount(nil)
+            waited = 0
+            while hostLate.chromeRefreshPending && waited < 3000 { await t.spin(20); waited += 20 }
+            t.equal(hostLate.wordCount.text, "3 words", "switched on later: the count appears")
+            t.close(docLate)
+            host.luftigToggleOutline(nil); host.luftigToggleWordCount(nil)             // back to: all off
             host.luftigToggleOutline(nil)
             t.check(!host2.outline.isHidden, "a toggle in one window reaches the other")
             waited = 0

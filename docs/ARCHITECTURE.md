@@ -195,7 +195,9 @@ outline click  -> prestyle, layout around the heading, the heading line at the t
 syntax bar click -> SyntaxInsertion.change(for:in:selection:) (pure) -> shouldChangeText / replaceCharacters / didChangeText on the text view
     (undoable with a named action, marks the document dirty, restyled by the styler from didProcessEditing), then the selection the change asks for
 View > Show / Hide ... -> EditorPreferences.showOutline / showWordCount / showSyntaxBar -> didChange -> every editor: applyChromeVisibility
-    (NSStackView detaches a hidden element: the text takes its place; an element shown with stale data recomputes at once)
+    (NSStackView detaches a hidden element: the text takes its place; an element shown without data for the current text - hidden at open, or during
+    the last edit: chromeOutlineValid / chromeWordsValid - is computed at once). The bar belongs to the TEXT COLUMN (viewport over bar), so it is centred
+    under the text; the outline runs on past it.
 ```
 Nothing here is ever computed per keystroke; a hidden element costs nothing (no scan while both outline and count are hidden).
 
