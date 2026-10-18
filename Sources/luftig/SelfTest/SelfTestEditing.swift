@@ -15,7 +15,155 @@ extension SelfTestScenarios {
         .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
         .init(name: "edit-links", summary: "⌘-click / Edit > Open Link: the link under a character (inline, image, autolink, bare URL, reference), web / file / anchor targets, a real ⌘-click, a Markdown file opens in luftig at its anchor", run: { t in try await editLinks(t) }),
         .init(name: "edit-focus", summary: "View > Focus Mode (the paragraph at the caret keeps its colours, the rest is veiled: on pixels, attributes untouched) and Typewriter Mode (the caret's line in the middle, the inset makes room), remembered, every window follows", run: { t in try await editFocus(t) }),
+        .init(name: "edit-html", summary: "Markdown -> HTML from the lexer's runs: headings, emphasis, code, links / images / autolinks / references, lists (nested, numbered, tasks), quotes, tables, rules, breaks; Copy as HTML / Rich Text on a private pasteboard; Export as HTML", run: { t in try await editHTML(t) }),
+        .init(name: "html-probe", summary: "(probe) prints the HTML of --input f.md (or a built-in sample)", run: { t in try await htmlProbe(t) }, inAll: false),
     ]
+
+    // MARK: html
+
+    static let htmlSample = """
+    ---
+    title: front matter
+    ---
+    # Title with *emphasis*
+
+    A paragraph with **bold**, _italic_, ~~struck~~, `code`, a [link](https://example.org "T") and an ![image](pic.png "alt title").
+    Autolinks: <https://auto.link>, www.bare.com, mail me@example.org, and a \\* escape &amp; entity.
+    Two spaces at the end
+    make a break, a backslash\\
+    too.
+
+    Setext heading
+    --------------
+
+    - one
+    - two **bold**
+      - nested
+        1. deep
+        2. deeper
+    - [ ] task
+    - [x] done
+
+    1. first
+    2. second
+
+       a second paragraph in the item
+
+    > quoted *text*
+    > > deeper
+    > back
+
+    ```swift
+    let x = 1 < 2
+    ```
+
+        indented code
+
+    | a | b |
+    |:--|--:|
+    | 1 | **2** |
+
+    ---
+
+    [ref]: https://ref.example
+    A [reference][ref] and a [shortcut] and a footnote[^1].
+
+    [shortcut]: https://short.example
+    <div class="raw">html block</div>
+    Inline <em>html</em> stays.
+    """
+
+    @MainActor static func htmlProbe(_ t: SelfTest.T) async throws {
+        var text = htmlSample
+        if let input = SelfTest.argument("input"), let s = try? String(contentsOfFile: input, encoding: .utf8) { text = s }
+        let ns = text as NSString
+        let html = MarkdownHTML.html(ns, runs: MarkdownStyler().lexAll(ns))
+        out(html)
+        t.check(true, "\(html.utf8.count) bytes of HTML")
+    }
+
+    @MainActor static func editHTML(_ t: SelfTest.T) async throws {
+        let styler = MarkdownStyler()
+        func h(_ md: String) -> String { let ns = md as NSString; return MarkdownHTML.html(ns, runs: styler.lexAll(ns)) }
+        t.equal(h("# Title\n"), "<h1>Title</h1>\n", "an ATX heading")
+        t.equal(h("Setext\n======\n"), "<h1>Setext</h1>\n", "a setext heading (the underline shows nothing)")
+        t.equal(h("## With *em* and `code` ##\n"), "<h2>With <em>em</em> and <code>code</code></h2>\n", "inline markup in a heading, closing hashes gone")
+        t.equal(h("plain words\nsecond line\n\nnext para\n"), "<p>plain words\nsecond line</p>\n<p>next para</p>\n", "paragraphs: lines joined, blank lines separate")
+        t.equal(h("**bold** _it_ ~~del~~ `a<b`\n"), "<p><strong>bold</strong> <em>it</em> <del>del</del> <code>a&lt;b</code></p>\n", "bold, italic, strikethrough, code (escaped)")
+        t.equal(h("**bold _both_ bold**\n"), "<p><strong>bold <em>both</em> bold</strong></p>\n", "nested emphasis nests its tags")
+        t.equal(h("[text](https://x.org \"T\") and ![alt](pic.png \"t\")\n"), "<p><a href=\"https://x.org\">text</a> and <img src=\"pic.png\" alt=\"alt\" title=\"t\"></p>\n", "a link and an image")
+        t.equal(h("<https://a.b> www.c.d <me@e.f>\n"), "<p><a href=\"https://a.b\">https://a.b</a> <a href=\"https://www.c.d\">www.c.d</a> <a href=\"mailto:me@e.f\">me@e.f</a></p>\n", "autolinks: angle brackets, www, mail")
+        t.equal(h("[r][ref]\n\n[ref]: https://r.e\n"), "<p><a href=\"https://r.e\">r</a></p>\n", "a reference link through its definition; the definition line shows nothing")
+        t.equal(h("a \\* star &amp; entity\n"), "<p>a * star &amp; entity</p>\n", "a backslash escape loses its backslash, an entity stays")
+        t.equal(h("two  \nlines\\\nthree\n"), "<p>two<br>\nlines<br>\nthree</p>\n", "hard breaks: two spaces, a backslash")
+        t.equal(h("- one\n- two\n"), "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n", "a bulleted list")
+        t.equal(h("1. one\n2. two\n"), "<ol>\n<li>one</li>\n<li>two</li>\n</ol>\n", "a numbered list")
+        t.equal(h("3. three\n4. four\n"), "<ol start=\"3\">\n<li>three</li>\n<li>four</li>\n</ol>\n", "a list that starts at 3")
+        t.equal(h("- one\n  - nested\n  - again\n- two\n"), "<ul>\n<li>one\n<ul>\n<li>nested</li>\n<li>again</li>\n</ul>\n</li>\n<li>two</li>\n</ul>\n", "a nested list closes before the next outer item")
+        t.equal(h("- [ ] open\n- [x] done\n"), "<ul class=\"task\">\n<li class=\"task\"><input type=\"checkbox\" disabled> open</li>\n<li class=\"task\"><input type=\"checkbox\" disabled checked> done</li>\n</ul>\n", "tasks")
+        t.equal(h("- item\n  continued\n- next\n"), "<ul>\n<li>item\ncontinued</li>\n<li>next</li>\n</ul>\n", "an indented continuation line belongs to the item")
+        t.equal(h("1. item\n\n   second paragraph\n2. next\n"), "<ol>\n<li>item\n<p>second paragraph</p>\n</li>\n<li>next</li>\n</ol>\n", "a second paragraph inside an item")
+        t.equal(h("- item\n\nparagraph\n"), "<ul>\n<li>item</li>\n</ul>\n<p>paragraph</p>\n", "a blank line and an unindented line end the list")
+        t.equal(h("> quote *em*\n> more\n"), "<blockquote>\n<p>quote <em>em</em>\nmore</p>\n</blockquote>\n", "a block quote")
+        t.equal(h("> one\n> > two\n> one again\n"), "<blockquote>\n<p>one</p>\n<blockquote>\n<p>two\none again</p>\n</blockquote>\n</blockquote>\n", "nested quotes (the last line continues the inner paragraph lazily, as CommonMark says)")
+        t.equal(h("> one\n> > two\n>\n> back\n"), "<blockquote>\n<p>one</p>\n<blockquote>\n<p>two</p>\n</blockquote>\n<p>back</p>\n</blockquote>\n", "... a blank quote line ends the inner quote")
+        t.equal(h("> - a\n> - b\n"), "<blockquote>\n<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n</blockquote>\n", "a list inside a quote")
+        t.equal(h("```swift\nlet x = 1 < 2\n```\n"), "<pre><code class=\"language-swift\">let x = 1 &lt; 2\n</code></pre>\n", "a fenced code block with its language, escaped")
+        t.equal(h("~~~\n# not a heading\n~~~\n"), "<pre><code># not a heading\n</code></pre>\n", "a tilde fence")
+        t.equal(h("    indented\n    code\n\nafter\n"), "<pre><code>indented\ncode\n</code></pre>\n<p>after</p>\n", "indented code")
+        t.equal(h("| a | b |\n|:--|--:|\n| 1 | **2** |\n"), "<table>\n<thead>\n<tr><th align=\"left\">a</th><th align=\"right\">b</th></tr>\n</thead>\n<tbody>\n<tr><td align=\"left\">1</td><td align=\"right\"><strong>2</strong></td></tr>\n</tbody>\n</table>\n", "a table with alignments")
+        t.equal(h("a\n\n---\n\nb\n"), "<p>a</p>\n<hr>\n<p>b</p>\n", "a rule")
+        t.equal(h("---\ntitle: x\n---\n# After\n"), "<h1>After</h1>\n", "front matter shows nothing")
+        t.equal(h("<div class=\"raw\">html</div>\n"), "<div class=\"raw\">html</div>\n", "an HTML block is passed through")
+        t.equal(h("Inline <em>html</em> stays <br/> & more\n"), "<p>Inline <em>html</em> stays <br/> &amp; more</p>\n", "inline HTML passes, a bare ampersand is escaped")
+        t.equal(h("a footnote[^1] here\n\n[^1]: the note\n"), "<p>a footnote<sup>1</sup> here</p>\n<p><sup>1</sup> the note</p>\n", "footnote references and definitions as superscripts")
+        t.equal(h("\"quotes\" & 1 < 2 > 0\n"), "<p>&quot;quotes&quot; &amp; 1 &lt; 2 &gt; 0</p>\n", "text is escaped (a real tag such as <tags> is inline HTML and passes)")
+        t.equal(h(""), "", "empty text")
+        t.equal(h("CRLF\r\nlines\r\n"), "<p>CRLF\nlines</p>\n", "CRLF text")
+        // a range: whole lines around it
+        let doc = "# T\n\npara one\n\n- a\n- b\n\nlast\n" as NSString
+        let runs = styler.lexAll(doc)
+        t.equal(MarkdownHTML.html(doc, runs: runs, range: doc.range(of: "a\n- b")), "<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n", "a selection renders its whole lines")
+        // the page
+        let page = MarkdownHTML.document(body: "<p>x</p>\n", title: "A <b> title", bodyFont: "Georgia", codeFont: nil)
+        t.check(page.hasPrefix("<!DOCTYPE html>") && page.contains("<title>A &lt;b&gt; title</title>") && page.contains("\"Georgia\", -apple-system") && page.contains("ui-monospace") && page.contains("<p>x</p>") && page.contains("prefers-color-scheme: dark"), "the page: a doctype, the escaped title, the fonts, the body, a dark stylesheet")
+        // the sample as a whole: well-formed enough to parse as XML-ish (every opened tag closed): count a few pairs
+        let sample = h(htmlSample)
+        for tag in ["ul", "ol", "li", "blockquote", "p", "strong", "em", "table", "pre", "code", "a", "h1", "h2"] {
+            let opened = sample.components(separatedBy: "<\(tag)>").count - 1 + sample.components(separatedBy: "<\(tag) ").count - 1
+            t.check(opened == sample.components(separatedBy: "</\(tag)>").count - 1, "the sample: every <\(tag)> is closed (\(opened))")
+        }
+        // the editor: Copy as HTML / Copy as Rich Text on a private pasteboard, Export as HTML
+        let (document, host, _) = try await openEditor(t, text: "# Head\n\nsome **bold** text\n\n- a\n", name: "html.md")
+        defer { t.close(document) }
+        let tv = host.textView
+        let pb = AuditEd.privatePasteboard()
+        host.copyAsHTML(to: pb)
+        t.equal(pb.string(forType: .html), "<h1>Head</h1>\n<p>some <strong>bold</strong> text</p>\n<ul>\n<li>a</li>\n</ul>\n", "Copy as HTML without a selection: the whole document as HTML")
+        t.equal(pb.string(forType: .string), pb.string(forType: .html), "... also as plain text (so a text editor gets the source)")
+        tv.setSelectedRange((tv.string as NSString).range(of: "bold"))
+        host.copyAsHTML(to: pb)
+        t.equal(pb.string(forType: .html), "<p>some <strong>bold</strong> text</p>\n", "with a selection: its whole lines")
+        host.copyAsRichText(to: pb)
+        t.check(pb.data(forType: .rtf) != nil && pb.string(forType: .html) == "<p>some <strong>bold</strong> text</p>\n", "Copy as Rich Text: RTF and HTML on the pasteboard")
+        t.check(pb.string(forType: .string)?.contains("some bold text") == true, "... and the words as plain text: \(pb.string(forType: .string) ?? "")")
+        if let rtf = pb.data(forType: .rtf), let a = NSAttributedString(rtf: rtf, documentAttributes: nil) {
+            var boldFound = false
+            a.enumerateAttribute(.font, in: NSRange(location: 0, length: a.length)) { v, r, _ in if let f = v as? NSFont, f.fontDescriptor.symbolicTraits.contains(.bold), (a.string as NSString).substring(with: r).contains("bold") { boldFound = true } }
+            t.check(boldFound, "the RTF has the bold word in a bold face")
+        }
+        let item = NSMenuItem(title: "", action: #selector(LuftigEditorActions.luftigCopyAsHTML(_:)), keyEquivalent: "")
+        t.check(host.validateMenuItem(item) && item.title == "Copy as HTML", "the menu item says Copy as HTML with a selection")
+        tv.setSelectedRange(NSRange(location: 0, length: 0))
+        _ = host.validateMenuItem(item)
+        t.equal(item.title, "Copy All as HTML", "... and Copy All as HTML without one")
+        let exported = t.url("export.html")
+        try document.exportHTML(to: exported)
+        let page2 = t.read(exported)
+        t.check(page2.hasPrefix("<!DOCTYPE html>") && page2.contains("<title>html</title>") && page2.contains("<h1>Head</h1>"), "Export as HTML writes a page named after the document with its content")
+        t.check(NSApp.mainMenu?.items.first { $0.title == "File" }?.submenu?.items.contains { $0.title == "Export as HTML…" } == true, "File > Export as HTML… exists")
+        t.check(NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items.contains { $0.title == "Copy as Rich Text" } == true, "Edit > Copy as Rich Text exists")
+    }
 
     // MARK: edit-focus
 

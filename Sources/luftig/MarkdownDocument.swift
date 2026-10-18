@@ -10,6 +10,7 @@
 // for a 10 MB non-ASCII file and nothing for ASCII, see docs/spike-document.md).
 
 import AppKit
+import MarkdownKit
 
 final class MarkdownDocument: NSDocument {
 
@@ -337,6 +338,7 @@ final class MarkdownDocument: NSDocument {
 
     override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
         if item.action == #selector(luftigReloadFromDisk(_:)) { return fileURL != nil }
+        if item.action == #selector(luftigExportHTML(_:)) { return true }
         return super.validateUserInterfaceItem(item)
     }
 
@@ -389,6 +391,38 @@ final class MarkdownDocument: NSDocument {
         guard MarkdownDocument.captureMergeBase, baseSnapshot == nil, lastDisk != nil, let host, !isApplyingExternal else { return }
         baseSnapshot = host.currentText.copy() as? NSString
         baseFormat = textFormat
+    }
+
+    // MARK: HTML export (File > Export as HTML…)
+
+    /// The document as a complete HTML page (MarkdownHTML.document: the editor's fonts, a neutral stylesheet, light and dark).
+    func htmlDocument() -> String {
+        let text = (host?.currentText ?? pendingText)
+        let runs = MarkdownStyler().lexAll(text)
+        let body = MarkdownHTML.html(text, runs: runs)
+        let title = (displayName as NSString?)?.deletingPathExtension ?? "Untitled"
+        return MarkdownHTML.document(body: body, title: title, bodyFont: EditorPreferences.bodyFontFamily, codeFont: EditorPreferences.codeFontFamily)
+    }
+
+    /// Writes the HTML page to `url` (UTF-8).
+    func exportHTML(to url: URL) throws {
+        try htmlDocument().write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    @objc func luftigExportHTML(_ sender: Any?) {
+        let panel = NSSavePanel()
+        panel.title = "Export as HTML"
+        panel.allowedContentTypes = [.html]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        if let dir = fileURL?.deletingLastPathComponent() { panel.directoryURL = dir }
+        let stem = (fileURL?.deletingPathExtension().lastPathComponent) ?? ((displayName as NSString?)?.deletingPathExtension ?? "Untitled")
+        panel.nameFieldStringValue = stem + ".html"
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in
+            guard let self, r == .OK, let url = panel.url else { return }
+            do { try self.exportHTML(to: url) } catch { self.presentError(error) }
+        }
+        if let w = sheetWindow { panel.beginSheetModal(for: w, completionHandler: finish) } else { finish(panel.runModal()) }
     }
 
     // MARK: printing

@@ -27,6 +27,9 @@ import MarkdownKit
     /// View > Focus Mode / Typewriter Mode (the `focus` extension).
     func luftigToggleFocusMode(_ sender: Any?)
     func luftigToggleTypewriterMode(_ sender: Any?)
+    /// Edit > Copy as HTML / Copy as Rich Text: the selection (or everything) rendered (MarkdownHTML.swift).
+    func luftigCopyAsHTML(_ sender: Any?)
+    func luftigCopyAsRichText(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -360,6 +363,9 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
         case #selector(luftigToggleFocusMode(_:)): item.state = EditorPreferences.focusMode ? .on : .off
         case #selector(luftigToggleTypewriterMode(_:)): item.state = EditorPreferences.typewriterMode ? .on : .off
+        case #selector(luftigCopyAsHTML(_:)), #selector(luftigCopyAsRichText(_:)):
+            item.title = (item.action == #selector(luftigCopyAsHTML(_:)) ? "Copy" : "Copy") + (textView.selectedRange().length > 0 ? "" : " All") + (item.action == #selector(luftigCopyAsHTML(_:)) ? " as HTML" : " as Rich Text")
+            return storage.length > 0
         case #selector(luftigToggleReadableWidth(_:)): item.state = column.isEnabled ? .on : .off
         case #selector(luftigToggleSpellChecking(_:)): item.state = textView.isContinuousSpellCheckingEnabled ? .on : .off
         case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"
@@ -743,4 +749,48 @@ extension EditorViewController {
             lm.ensureLayout(forBoundingRect: textView.visibleRect.offsetBy(dx: -textView.textContainerOrigin.x, dy: -textView.textContainerOrigin.y), in: tc)
         }
     }
+}
+
+// MARK: - HTML (Edit > Copy as HTML / Copy as Rich Text; MarkdownHTML.swift)
+
+extension EditorViewController {
+
+    /// The HTML body of the selection (whole lines) or, without a selection, of the whole document.
+    func htmlOfSelectionOrAll() -> String {
+        let text = storage.string as NSString
+        guard text.length > 0 else { return "" }
+        let sel = textView.selectedRange()
+        let runs = provider.styler.lexAll(text)
+        return MarkdownHTML.html(text, runs: runs, range: sel.length > 0 ? sel : nil)
+    }
+
+    /// The HTML (as text and as HTML) on `pasteboard`.
+    func copyAsHTML(to pasteboard: NSPasteboard) {
+        let html = htmlOfSelectionOrAll()
+        pasteboard.clearContents()
+        pasteboard.declareTypes([.html, .string], owner: nil)
+        pasteboard.setString(html, forType: .html)
+        pasteboard.setString(html, forType: .string)
+    }
+
+    /// Rich text (RTF, made from the HTML by AppKit), the HTML and the plain words on `pasteboard`.
+    func copyAsRichText(to pasteboard: NSPasteboard) {
+        let html = htmlOfSelectionOrAll()
+        pasteboard.clearContents()
+        var types: [NSPasteboard.PasteboardType] = [.html, .string]
+        var rtf: Data?
+        var plain = ""
+        if let data = html.data(using: .utf8), let attributed = NSAttributedString(html: data, options: [.characterEncoding: String.Encoding.utf8.rawValue], documentAttributes: nil) {
+            rtf = attributed.rtf(from: NSRange(location: 0, length: attributed.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+            plain = attributed.string
+            if rtf != nil { types.insert(.rtf, at: 0) }
+        }
+        pasteboard.declareTypes(types, owner: nil)
+        if let rtf { pasteboard.setData(rtf, forType: .rtf) }
+        pasteboard.setString(html, forType: .html)
+        pasteboard.setString(plain.isEmpty ? html : plain, forType: .string)
+    }
+
+    @objc func luftigCopyAsHTML(_ sender: Any?) { copyAsHTML(to: .general) }
+    @objc func luftigCopyAsRichText(_ sender: Any?) { copyAsRichText(to: .general) }
 }

@@ -66,6 +66,8 @@ enum MainMenu {
         file.addItem(item("Revert to Saved", #selector(NSDocument.revertToSaved(_:))))       // AppKit turns it into the Versions "Revert To" submenu
         file.addItem(item("Reload from Disk", #selector(MarkdownDocument.luftigReloadFromDisk(_:)), "r", [.command, .option]))
         file.addItem(.separator())
+        file.addItem(item("Export as HTML…", #selector(MarkdownDocument.luftigExportHTML(_:)), "e", [.command, .option]))
+        file.addItem(.separator())
         file.addItem(item("Page Setup…", #selector(NSDocument.runPageLayout(_:)), "p", [.command, .shift]))
         file.addItem(item("Print…", #selector(NSDocument.printDocument(_:)), "p"))
         add(file, to: main, title: "File")
@@ -84,6 +86,10 @@ enum MainMenu {
         edit.addItem(.separator())
         // the link at the caret (also ⌘-click on a link): a web URL in the browser, a Markdown file in luftig, `#anchor` in this document
         edit.addItem(item("Open Link", #selector(LuftigEditorActions.luftigOpenLink(_:)), "l", [.command, .option]))
+        edit.addItem(.separator())
+        // the selection (or everything) rendered: as HTML source, or as rich text for Mail, Pages, a chat (the titles say "Copy All …" without a selection)
+        edit.addItem(item("Copy as HTML", #selector(LuftigEditorActions.luftigCopyAsHTML(_:)), "c", [.command, .option, .shift]))
+        edit.addItem(item("Copy as Rich Text", #selector(LuftigEditorActions.luftigCopyAsRichText(_:)), "c", [.command, .control, .shift]))
         edit.addItem(.separator())
 
         let find = NSMenu(title: "Find")
