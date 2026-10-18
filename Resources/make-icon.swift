@@ -6,8 +6,8 @@
 // Every size is rendered natively from vectors (no downscaling), so 16 px and 1024 px are both crisp.
 //
 // Design ("air"): the macOS icon grid (body = 80.5 % of the canvas, continuous-ish 22.4 % corners), a near-white page with a cool
-// cast, and a short block of text set in generous white space - an indigo heading bar and three grey text bars, the last two of
-// which end in the small upward curl of a breeze (the "luftig" in it). Nothing else: the white space is the subject.
+// cast, and a short block of thin text lines centred in generous white space - an indigo heading and three grey lines, each ending in
+// the hook of a wind line (the heading's turns up, the text lines' down: the "luftig" in it). Nothing else: the white space is the subject.
 
 import AppKit
 import CoreGraphics
@@ -47,36 +47,33 @@ func renderIcon(pixels px: Int) -> Data {
     ctx.addPath(path); ctx.setStrokeColor(rgb(1, 1, 1, 0.5)); ctx.setLineWidth(max(1, s * 0.004)); ctx.strokePath()
     ctx.restoreGState()
 
-    // the text block: a heading bar (indigo) and three text bars (grey), left-aligned, bigger than the page's air around them is small
+    // the text block, centred on the page: an indigo heading line and three grey text lines, thin, each ending in the hook of a wind line (an arc
+    // of a little more than a half turn: the heading's up, the text lines' down)
     let indigo = rgb(0.20, 0.23, 0.62)
     let grey = rgb(0.58, 0.61, 0.72)
     let x = body.minX + w * 0.24
-    let h = w * 0.075                                     // a text bar's height
-    let gap = w * 0.115                                   // from one bar's bottom to the next one's
-    func bar(_ y: CGFloat, width: CGFloat, height: CGFloat, _ color: CGColor) {
-        let r = CGRect(x: x, y: y, width: width, height: height)
-        ctx.addPath(CGPath(roundedRect: r, cornerWidth: height / 2, cornerHeight: height / 2, transform: nil)); ctx.setFillColor(color); ctx.fillPath()
-    }
-    /// A text bar whose end turns into the small curl of a breeze: a thinner stroke that leaves the bar's end and bends up (`direction` 1) or down
-    /// (-1) and a little back, like the hook of a wind line (thinner than the bar, so it reads as air leaving the text).
-    func breezeBar(_ y: CGFloat, width: CGFloat, height: CGFloat, curl: CGFloat, direction: CGFloat, _ color: CGColor) {
-        bar(y, width: width, height: height, color)
+    let h = w * 0.04                                      // a text line's thickness
+    let gap = w * 0.08                                    // from one line's bottom to the next one's top
+    let r = w * 0.06                                      // the hook's radius
+    let sweep: CGFloat = 0.62                             // of a full turn's half: how far the hook turns
+    let heads = h * 1.35
+    func line(_ yMid: CGFloat, width: CGFloat, height: CGFloat, direction: CGFloat, _ color: CGColor) {
         ctx.saveGState()
-        ctx.setStrokeColor(color); ctx.setLineWidth(height * 0.5); ctx.setLineCap(.round)
-        let yMid = y + height / 2
-        let endX = x + width - height / 2
+        ctx.setStrokeColor(color); ctx.setLineWidth(height); ctx.setLineCap(.round); ctx.setLineJoin(.round)
         let p = CGMutablePath()
-        p.move(to: CGPoint(x: endX, y: yMid))
-        p.addCurve(to: CGPoint(x: endX + curl * 0.35, y: yMid + direction * curl * 0.95),
-                   control1: CGPoint(x: endX + curl * 0.9, y: yMid), control2: CGPoint(x: endX + curl * 0.95, y: yMid + direction * curl * 0.9))
+        let endX = x + width - height / 2
+        p.move(to: CGPoint(x: x + height / 2, y: yMid))
+        p.addLine(to: CGPoint(x: endX, y: yMid))
+        let start = -direction * CGFloat.pi / 2
+        p.addArc(center: CGPoint(x: endX, y: yMid + direction * r), radius: r, startAngle: start, endAngle: start + direction * sweep * CGFloat.pi, clockwise: direction < 0)
         ctx.addPath(p); ctx.strokePath()
         ctx.restoreGState()
     }
-    let top = body.minY + w * 0.665
-    breezeBar(top, width: w * 0.24, height: h * 1.35, curl: w * 0.085, direction: 1, indigo)      // the heading curls up
-    breezeBar(top - gap - h, width: w * 0.50, height: h, curl: w * 0.085, direction: -1, grey)     // the text lines curl down
-    breezeBar(top - 2 * gap - 2 * h, width: w * 0.42, height: h, curl: w * 0.085, direction: -1, grey)
-    breezeBar(top - 3 * gap - 3 * h, width: w * 0.30, height: h, curl: w * 0.085, direction: -1, grey)
+    let total = heads + 3 * h + 3 * gap
+    var y = body.midY + total / 2 - heads / 2
+    line(y, width: w * 0.24, height: heads, direction: 1, indigo)
+    y -= heads / 2 + gap + h / 2
+    for f in [0.50, 0.42, 0.30] { line(y, width: w * f, height: h, direction: -1, grey); y -= gap + h }
 
     let img = ctx.makeImage()!
     let data = NSMutableData()
