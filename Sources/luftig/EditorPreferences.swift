@@ -25,8 +25,10 @@ enum EditorPreferences {
     static let paddingKey = "LuftigPadding"
     /// Settings > General: new documents open as tabs of the front window (NSWindow.tabbingMode .preferred) instead of windows of their own (.disallowed).
     static let openInTabsKey = "LuftigOpenInTabs"
+    /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
+    static let outlineLineHeightKey = "LuftigOutlineLineHeight"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -257,6 +259,23 @@ enum EditorPreferences {
             let v = min(paddingRange.upperBound, max(paddingRange.lowerBound, (newValue * 20).rounded() / 20))     // steps of 0.05
             guard v != padding else { return }
             defaults.set(Double(v), forKey: paddingKey)
+            post()
+        }
+    }
+
+    static let outlineLineHeightRange: ClosedRange<CGFloat> = 1.0...2.5
+    static let defaultOutlineLineHeight: CGFloat = 1.4
+    /// The outline's row height as a multiple of its font's height (ascent + descent), `outlineLineHeightRange`, default 1.4 (the look it always had).
+    static var outlineLineHeight: CGFloat {
+        get {
+            guard let n = number(forKey: outlineLineHeightKey), n.isFinite else { return defaultOutlineLineHeight }
+            return min(outlineLineHeightRange.upperBound, max(outlineLineHeightRange.lowerBound, CGFloat(n)))
+        }
+        set {
+            guard newValue.isFinite else { return }
+            let v = min(outlineLineHeightRange.upperBound, max(outlineLineHeightRange.lowerBound, (newValue * 20).rounded() / 20))     // steps of 0.05
+            guard v != outlineLineHeight else { return }
+            defaults.set(Double(v), forKey: outlineLineHeightKey)
             post()
         }
     }

@@ -26,6 +26,7 @@
 //   Size            [12 pt v]
 //   Opacity         ----o------   100 %
 //   Outline         [x] Wrap long headings
+//   Outline spacing ----o------   1.40 ×                                (the row height as a multiple of the outline font's height: not padding)
 //                                                               [Restore Defaults]
 //
 // The window's height is that of the taller screen, computed once; switching screens hides one container and shows the other, nothing moves.
@@ -132,6 +133,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     static let paneSizes: [CGFloat] = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20]
     static let paneFontDefaultTitle = "Same as text font"
     let outlineWrapCheckbox = NSButton(checkboxWithTitle: "Wrap long headings", target: nil, action: nil)
+    let outlineSpacingSlider = SettingsSlider(value: Double(EditorPreferences.defaultOutlineLineHeight), minValue: Double(EditorPreferences.outlineLineHeightRange.lowerBound), maxValue: Double(EditorPreferences.outlineLineHeightRange.upperBound), target: nil, action: nil)
+    let outlineSpacingValueLabel = NSTextField(labelWithString: "")
     let restoreButton = NSButton(title: "Restore Defaults", target: nil, action: nil)
     // the three panes (the View menu's switches too) and the padding factor
     let showOutlineCheckbox = NSButton(checkboxWithTitle: "Outline", target: nil, action: nil)
@@ -286,6 +289,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         paneOpacitySlider.widthAnchor.constraint(equalToConstant: W.sliderWidth).isActive = true
         paneOpacitySlider.onTracking = { [weak self, weak paneOpacitySlider] began in if let paneOpacitySlider { self?.tracking(paneOpacitySlider, began: began) } }
         fixedLabel(paneOpacityValueLabel, width: W.valueLabelWidth, font: W.valueFont)
+        outlineSpacingSlider.target = self; outlineSpacingSlider.action = #selector(outlineSpacingChanged(_:))
+        outlineSpacingSlider.isContinuous = true
+        outlineSpacingSlider.setAccessibilityLabel("Outline spacing")
+        outlineSpacingSlider.widthAnchor.constraint(equalToConstant: W.sliderWidth).isActive = true
+        outlineSpacingSlider.onTracking = { [weak self, weak outlineSpacingSlider] began in if let outlineSpacingSlider { self?.tracking(outlineSpacingSlider, began: began) } }
+        fixedLabel(outlineSpacingValueLabel, width: W.valueLabelWidth, font: W.valueFont)
         outlineWrapCheckbox.target = self; outlineWrapCheckbox.action = #selector(outlineWrapChanged(_:))
         outlineWrapCheckbox.setAccessibilityLabel("Wrap long headings in the outline")
 
@@ -331,6 +340,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         let opacityRow = NSStackView(views: [paneOpacitySlider, paneOpacityValueLabel])
         opacityRow.orientation = .horizontal; opacityRow.spacing = W.sliderGap
+        let outlineSpacingRow = NSStackView(views: [outlineSpacingSlider, outlineSpacingValueLabel])
+        outlineSpacingRow.orientation = .horizontal; outlineSpacingRow.spacing = W.sliderGap
         let showRow = NSStackView(views: [showOutlineCheckbox, showWordCountCheckbox, showSyntaxBarCheckbox])
         showRow.orientation = .horizontal; showRow.spacing = 14
         let paddingSliderRow = NSStackView(views: [paddingSlider, paddingValueLabel])
@@ -341,7 +352,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         // the grids share the label column width, so the controls of every screen start at the same x
         let generalLabels = ["Files:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
-        let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:"].map { label($0) }
+        let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
@@ -373,6 +384,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [panesLabels[3], paneSizePopup],
             [panesLabels[4], opacityRow],
             [panesLabels[5], outlineWrapCheckbox],
+            [panesLabels[6], outlineSpacingRow],
         ])
 
         let previewView = preview.scrollView
@@ -609,6 +621,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         if trackedControl !== paneOpacitySlider { paneOpacitySlider.doubleValue = Double(opacity) }
         paneOpacityValueLabel.stringValue = "\(Int((opacity * 100).rounded())) %"
         outlineWrapCheckbox.state = EditorPreferences.outlineWraps ? .on : .off
+        let spacing = EditorPreferences.outlineLineHeight
+        if trackedControl !== outlineSpacingSlider { outlineSpacingSlider.doubleValue = Double(spacing) }
+        outlineSpacingValueLabel.stringValue = String(format: "%.2f ×", Double(spacing))
 
         openInTabsCheckbox.state = EditorPreferences.openInTabs ? .on : .off
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
@@ -733,6 +748,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }
     @objc func paddingSliderChanged(_ sender: NSSlider) {
         EditorPreferences.padding = CGFloat(sender.doubleValue)
+        syncFromPreferences()
+    }
+    @objc func outlineSpacingChanged(_ sender: NSSlider) {
+        EditorPreferences.outlineLineHeight = CGFloat(sender.doubleValue)
         syncFromPreferences()
     }
     @objc func outlineWrapChanged(_ sender: NSButton) {

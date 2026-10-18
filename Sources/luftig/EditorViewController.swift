@@ -322,7 +322,8 @@ extension EditorViewController {
         outline.wrapsHeadings = EditorPreferences.outlineWraps
         let p = Padding(factor: EditorPreferences.padding)
         outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
-        column.minInset = p.textInsetHorizontal; column.verticalInset = p.textInsetVertical; column.update()
+        outline.lineHeightFactor = EditorPreferences.outlineLineHeight
+        column.minInset = p.textInsetHorizontal; column.verticalInset = p.textInsetVertical; column.trailingExtra = p.textTrailingExtra; column.update()
         outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
     }
     /// The padding in effect (tests).

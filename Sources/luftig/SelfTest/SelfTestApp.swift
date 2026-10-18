@@ -217,7 +217,8 @@ extension SelfTestScenarios {
         let doc = try t.newUntitled()
         if let w = doc.windowControllers.first?.window {
             t.check(NSWindow.allowsAutomaticWindowTabbing, "allowsAutomaticWindowTabbing")
-            t.equal(w.tabbingMode, .automatic, "tabbingMode = .automatic (follows the system 'Prefer tabs' setting; Cmd-N = new window unless the user chose tabs)")
+            t.equal(w.tabbingMode, EditorPreferences.tabbingMode, "tabbingMode follows Settings > General > Open files in tabs (.disallowed by default: a window of its own; never .automatic, the system's 'Prefer tabs in full screen only' put files into full-screen windows)")
+            t.equal(w.tabbingMode, .disallowed, "... which is .disallowed by default")
             t.equal(w.tabbingIdentifier, "local.luftig.document", "tabbingIdentifier shared by all document windows")
             t.check(w.collectionBehavior.contains(.fullScreenPrimary), "full-screen capable (fullScreenPrimary)")
             t.check(w.styleMask.contains(.resizable) && w.styleMask.contains(.titled), "titled + resizable (zoom button)")

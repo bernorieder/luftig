@@ -53,7 +53,7 @@ extension SelfTestScenarios {
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
-            ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl), ("openInTabsCheckbox", c.openInTabsCheckbox),
+            ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl), ("openInTabsCheckbox", c.openInTabsCheckbox), ("outlineSpacingSlider", c.outlineSpacingSlider), ("outlineSpacingValueLabel", c.outlineSpacingValueLabel),
             ("showOutlineCheckbox", c.showOutlineCheckbox), ("showWordCountCheckbox", c.showWordCountCheckbox), ("showSyntaxBarCheckbox", c.showSyntaxBarCheckbox),
             ("paddingSlider", c.paddingSlider), ("paddingValueLabel", c.paddingValueLabel), ("paddingNoteLabel", c.paddingNoteLabel),
         ]
@@ -149,6 +149,8 @@ extension SelfTestScenarios {
             }
             for p in stride(from: 50, through: 200, by: 5) { probe("padding \(p)") { c.paddingSlider.doubleValue = Double(p) / 100; send(c.paddingSlider) } }
             probe("padding back to 1") { c.paddingSlider.doubleValue = 1; send(c.paddingSlider) }
+            for v in stride(from: 100, through: 250, by: 10) { probe("outline spacing \(v)") { c.outlineSpacingSlider.doubleValue = Double(v) / 100; send(c.outlineSpacingSlider) } }
+            probe("outline spacing back to 1.4") { c.outlineSpacingSlider.doubleValue = 1.4; send(c.outlineSpacingSlider) }
             probe("screen: General") { c.showScreen(.general) }
             probe("open in tabs on") { c.openInTabsCheckbox.state = .on; send(c.openInTabsCheckbox) }
             probe("open in tabs off") { c.openInTabsCheckbox.state = .off; send(c.openInTabsCheckbox) }

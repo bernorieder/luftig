@@ -322,10 +322,15 @@ extension SelfTestScenarios {
             t.equal(Padding(factor: 1).textInsetVertical, 20, "padding 1: vertical inset 20 pt")
             t.equal(Padding(factor: 1).barHeight, 40, "padding 1: the bar is 40 pt")
             t.check(Padding(factor: 0.5).textInsetHorizontal >= DecorationMetrics.bandOutset + 4, "padding 0.5: the horizontal inset keeps room for the bands")
+            let rowBefore = host.outline.table.rect(ofRow: 0).height
+            let containerBefore = tv.textContainer!.size.width
             EditorPreferences.padding = 2
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
             t.equal(tv.textContainerInset.height, 40, "padding 2: the text's vertical inset doubles")
+            t.equal(host.outline.table.rect(ofRow: 0).height, rowBefore, "padding 2: the outline's row height does NOT change (it has a slider of its own)")
+            t.check(tv.textContainer!.size.width < containerBefore, "padding 2: the text container is narrower (left inset and the right extra both grew: \(Int(containerBefore)) -> \(Int(tv.textContainer!.size.width)) pt)")
+            t.check(abs(Double(tv.textContainerInset.width + tv.textContainer!.size.width + host.padding.textTrailingExtra + tv.textContainerInset.width) - Double(tv.frame.width)) < 1.5, "padding 2: inset + container + inset + extra = the text view's width (the extra air is on the right)")
             t.equal(inRoot(host.syntaxBar).height, 80, "padding 2: the syntax bar is 80 pt tall")
             t.equal(inRoot(host.wordCount).height, 44, "padding 2: the word count row is 44 pt")
             t.equal(host.outline.scroll.contentInsets.top, 40, "padding 2: the outline's top inset is 40 pt")
@@ -342,6 +347,18 @@ extension SelfTestScenarios {
             EditorPreferences.padding = 1.337
             t.equal(EditorPreferences.padding, 1.35, "the factor is stored in steps of 0.05")
             EditorPreferences.padding = 1
+            // Settings > Layout > Outline spacing: the row height as a multiple of the font's height
+            let fontH = (host.outline.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTextField)?.font.map { $0.ascender - $0.descender } ?? 14
+            t.equal(host.outline.table.rect(ofRow: 0).height, ceil(fontH * 1.4), "outline spacing 1.4 (default): row height = 1.4 x the font's height")
+            EditorPreferences.outlineLineHeight = 2
+            await t.spin(10)
+            t.equal(host.outline.table.rect(ofRow: 0).height, ceil(fontH * 2), "outline spacing 2: twice the font's height")
+            EditorPreferences.outlineLineHeight = 1
+            await t.spin(10)
+            t.equal(host.outline.table.rect(ofRow: 0).height, ceil(fontH), "outline spacing 1: the font's height, no air")
+            EditorPreferences.outlineLineHeight = EditorPreferences.defaultOutlineLineHeight
+            await t.spin(10)
+            t.equal(host.outline.table.rect(ofRow: 0).height, rowBefore, "back to the default")
             // Settings > General > Open files in tabs: the windows' tabbing mode follows, never the system's "Prefer tabs" (.automatic)
             t.check(!EditorPreferences.openInTabs && doc.windowControllers.first?.window?.tabbingMode == .disallowed, "default: windows of their own (tabbing disallowed)")
             EditorPreferences.openInTabs = true

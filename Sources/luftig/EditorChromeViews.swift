@@ -202,14 +202,17 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     var wrapsHeadings = false {
         didSet { if wrapsHeadings != oldValue { table.reloadData() } }
     }
-    /// Settings > General > Padding: the left margin, the air above the first and below the last entry, the air around every entry's text.
+    /// Settings > Layout > Padding: the left margin, the air above the first and below the last entry.
     var padding = Padding.standard {
         didSet {
             guard padding != oldValue else { return }
             scroll.contentInsets = NSEdgeInsets(top: padding.outlineTop, left: 0, bottom: padding.outlineTop, right: 0)
-            table.rowHeight = singleRowHeight
             table.reloadData()
         }
+    }
+    /// Settings > Layout > Outline spacing: a row's height as a multiple of the font's height (ascent + descent).
+    var lineHeightFactor: CGFloat = EditorPreferences.defaultOutlineLineHeight {
+        didSet { if lineHeightFactor != oldValue { table.rowHeight = singleRowHeight; table.reloadData() } }
     }
     /// The entry whose section the window shows (drawn in the text colour).
     var currentIndex: Int? {
@@ -267,7 +270,8 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         table.rowHeight = singleRowHeight
         table.reloadData()
     }
-    private var singleRowHeight: CGFloat { max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + padding.outlineRowExtra) }
+    private var fontHeight: CGFloat { font.ascender - font.descender }
+    private var singleRowHeight: CGFloat { ceil(fontHeight * lineHeightFactor) }
     private func indent(forLevel level: Int) -> CGFloat { padding.outlineLeading + CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
     /// The width a title has in its row: the column minus the indent and the right margin.
     private func titleWidth(forLevel level: Int) -> CGFloat { max(20, OutlineView.width - indent(forLevel: level) - 12) }
@@ -326,8 +330,11 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         guard wrapsHeadings, row < entries.count else { return singleRowHeight }
         let e = entries[row]
         let text = (e.title.isEmpty ? "(untitled)" : e.title) as NSString
-        let bounds = text.boundingRect(with: NSSize(width: titleWidth(forLevel: e.level), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font])
-        return max(singleRowHeight, ceil(bounds.height) + padding.outlineRowExtra)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let bounds = text.boundingRect(with: NSSize(width: titleWidth(forLevel: e.level), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attrs)
+        let oneLine = ("X" as NSString).boundingRect(with: NSSize(width: 1000, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attrs).height
+        // a one-line title has exactly the single-row height; every further line adds its own height
+        return max(singleRowHeight, ceil(singleRowHeight + (bounds.height - oneLine)))
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = OutlineRowView()

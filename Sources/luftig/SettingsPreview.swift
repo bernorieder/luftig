@@ -50,6 +50,7 @@ final class SettingsPreview {
         storage = stack.storage
         layoutManager = stack.layoutManager
         column = ReadableColumnController(scrollView: stack.scrollView, textView: stack.textView, maxColumnWidth: EditorPreferences.columnWidth)
+        column.trailingExtra = Padding(factor: EditorPreferences.padding).textTrailingExtra
         textView.isEditable = false
         textView.isSelectable = false
         scrollView.borderType = .bezelBorder

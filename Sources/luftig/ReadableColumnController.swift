@@ -1,9 +1,11 @@
 import AppKit
 
-/// Centered readable column without a custom container: the text container keeps tracking the text view width
-/// (`widthTracksTextView = true`) and the horizontal `textContainerInset` is computed from the clip view width.
+/// Centered readable column without a custom container: the horizontal `textContainerInset` is computed from the clip view width, and the text
+/// container's width is set by hand (`widthTracksTextView` is off), so that the RIGHT side can have more air than the left (`trailingExtra`: the
+/// text's right edge keeps its distance from the scroller, Settings > Layout > Padding). NSTextView draws the container at the inset's origin and
+/// never centres a narrower one (measured), so left = inset, right = inset + trailingExtra.
 ///
-///   inset = max(minInset, (clipWidth - maxColumnWidth) / 2)
+///   inset = max(minInset, (clipWidth - trailingExtra - maxColumnWidth) / 2);  container width = clipWidth - 2 * inset - trailingExtra
 ///
 /// Measured (6e): a resize step incl. inset update, layout of the visible area and a full redraw costs 5-9 ms in a 20 MB document
 /// (the inset update itself 0.2-1.4 ms). TK1 non-contiguous keeps the first visible character in place across a width change
@@ -15,6 +17,8 @@ final class ReadableColumnController {
     var isEnabled = true { didSet { if isEnabled != oldValue { update() } } }
     var minInset: CGFloat
     var verticalInset: CGFloat
+    /// Extra air on the right of the text, on top of the inset (0: symmetric, as it always was).
+    var trailingExtra: CGFloat = 0 { didSet { if trailingExtra != oldValue { update() } } }
     private weak var scrollView: NSScrollView?
     private weak var textView: NSTextView?
     private var observer: NSObjectProtocol?
@@ -26,6 +30,7 @@ final class ReadableColumnController {
         self.minInset = minInset
         self.verticalInset = verticalInset
         scrollView.contentView.postsFrameChangedNotifications = true
+        textView.textContainer?.widthTracksTextView = false                   // the width is ours (set in update), the height stays unlimited
         observer = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: nil) { [weak self] _ in
             self?.update()
         }
@@ -37,9 +42,14 @@ final class ReadableColumnController {
     func update() {
         guard let sv = scrollView, let tv = textView else { return }
         let width = sv.contentView.bounds.width
-        let inset = isEnabled ? max(minInset, ((width - maxColumnWidth) / 2).rounded(.down)) : minInset
+        let inset = isEnabled ? max(minInset, ((width - trailingExtra - maxColumnWidth) / 2).rounded(.down)) : minInset
         if abs(tv.textContainerInset.width - inset) > 0.5 || abs(tv.textContainerInset.height - verticalInset) > 0.5 {
             tv.textContainerInset = NSSize(width: inset, height: verticalInset)
+        }
+        // the container: the text view is as wide as the clip view (autoresizing); the container leaves the inset on the left and inset + extra on the right
+        let containerWidth = max(50, tv.frame.width - 2 * inset - trailingExtra)
+        if let tc = tv.textContainer, abs(tc.size.width - containerWidth) > 0.5 {
+            tc.size = NSSize(width: containerWidth, height: tc.size.height)
         }
     }
 }

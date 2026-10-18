@@ -43,7 +43,8 @@ Sources/luftig/
   LuftigEditorTextView.swift            drawBackground hook for the decorations; pre-styles jump targets (scrollRangeToVisible, Cmd-Up/Down)
   LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground)
   Decorations.swift                     .luftigBlock / .luftigInline keys, BlockMark encoding, metrics, band path helpers
-  ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset, follows the clip view width
+  ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset and the text container's WIDTH
+                                        (widthTracksTextView is off: the right side gets `trailingExtra` more air than the left, pitfall 34); follows the clip view's frame
   BannerView.swift                      the non-modal strip for external-change messages
   EditorChrome.swift                    the three elements around the text, without views: OutlineScanner (ATX / setext headings outside fences and front matter,
                                         chunked), WordCounter (chunked), SyntaxInsertion (text + selection -> TextChange: wrap / unwrap, link, line prefixes, blocks)
@@ -56,8 +57,9 @@ Sources/luftig/
   SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
                                         files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
   Padding.swift                         ONE factor (Settings > Layout > Padding, 0.5 ... 2, default 1) -> every inset and margin, rounded to whole points with floors: the text's
-                                        insets (ReadableColumnController.minInset / verticalInset), the outline's margin / top inset / row air, the word count's height / margin,
-                                        the syntax bar's height / gaps; structural sizes (outline width, indent per level, fonts) are not padding
+                                        insets (ReadableColumnController.minInset / verticalInset) and the extra air on its right (trailingExtra), the outline's margin / top
+                                        inset, the word count's height / margin, the syntax bar's height / gaps; structural sizes (outline width, indent per level, fonts) are not
+                                        padding, and the outline's row height is a setting of its own (Outline spacing: a multiple of the outline font's height)
                                         FIXED layout (plain constraints, fixed column widths and label widths: nothing moves or resizes whatever a value says, invariant 24); the size field shows the
                                         size in use even while it is being edited (pitfall 24); sliders and the stepper report their drags (`tracking`)
   SettingsPreview.swift                 the live preview in that window: the SAME factory, Theme and lexer as an editor (pixel-identical to an editor of the same width: matrix-preview)
@@ -330,6 +332,12 @@ Nothing here is ever computed per keystroke; a hidden element costs nothing (no 
     on the classic path (it uses its `NSTextInsertionIndicator` subview, macOS 14+, only for subclasses that do not override the method): 0 - 1 dropped
     frames in every pass, three runs and the reverse pass. The caret then is the classic bar in `insertionPointColor` (`Palette.caret`), blinking as
     before. The headless benchmarks (`fix-scroll-bench`, `fix-scroll`) could never see any of this: no window server, no render server.
+34. **An asymmetric text inset: the container's width is set by hand.** `textContainerInset` is symmetric. For more air on the right of the text than on the left
+    (Settings > Layout > Padding: `Padding.textTrailingExtra`), `ReadableColumnController` switches `widthTracksTextView` off and sets the container's width itself on
+    every clip-frame change: `clip width - 2 * inset - trailingExtra`. NSTextView draws a container narrower than the view at the inset's origin and never centres it
+    (measured with a bare NSTextView: origin (28, 20) whatever the container's width), so left = inset, right = inset + extra. Everything that reads
+    `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads `textContainer.size.width` sees the narrower width,
+    which is the point (the bands end there). The Settings preview uses the same controller and extra.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

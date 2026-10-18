@@ -18,12 +18,13 @@ struct Padding: Equatable {
     var textInsetHorizontal: CGFloat { scaled(28, min: DecorationMetrics.bandOutset + 4) }
     /// Space above the first and below the last line of the text.
     var textInsetVertical: CGFloat { scaled(20, min: 4) }
+    /// Extra air on the RIGHT of the text, on top of the horizontal inset (`ReadableColumnController.trailingExtra`): the text's right edge keeps the same
+    /// distance from the scroller as the outline's entries keep from the window's left edge.
+    var textTrailingExtra: CGFloat { scaled(16, min: 4) }
 
-    // the outline (left)
+    // the outline (left); the height of its rows is a setting of its own (Settings > Layout > Outline spacing), not padding
     var outlineLeading: CGFloat { scaled(16, min: 4) }
     var outlineTop: CGFloat { scaled(20, min: 2) }
-    /// Air above and below an entry's text (added to the font's height).
-    var outlineRowExtra: CGFloat { scaled(6, min: 2) }
 
     // the word count (top right)
     var wordCountHeight: CGFloat { scaled(22, min: 16) }
