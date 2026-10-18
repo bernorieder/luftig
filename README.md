@@ -5,8 +5,8 @@ A small, very fast, native macOS Markdown editor for writing and thinking in pla
 **One text view, no preview.** The Markdown source is what you edit, styled in place: headings are bigger, code blocks and quotes are marked, emphasis looks
 emphasised, the syntax characters are dimmed but stay visible and editable. What you see is the file.
 
-![luftig, light](docs/screenshots/01-top-light.png)
-![luftig with the Dracula colour scheme, a serif text font and a taller line spacing](docs/screenshots/18-settings-combined-dracula.png)
+![luftig, dark: the outline on the left, the word count and reading time at the top right, the syntax bar below the text](docs/screenshots/window-dark.png)
+![luftig, light](docs/screenshots/window-light.png)
 
 ## Why
 
