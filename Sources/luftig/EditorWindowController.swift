@@ -8,6 +8,22 @@ import AppKit
 final class EditorWindowController: NSWindowController {
 
     var editorHost: EditorHost? { contentViewController as? EditorViewController }
+    private var preferenceObserver: NSObjectProtocol?
+    deinit { if let o = preferenceObserver { NotificationCenter.default.removeObserver(o) } }
+
+    /// Every editor window that is in full screen leaves it (except the windows of `document`, which is about to be shown): a file opened while another
+    /// one filled the screen used to land in that full-screen Space, sometimes as a full-screen window of its own. Returns how many windows were told.
+    @discardableResult
+    static func leaveFullScreenEverywhere(except document: NSDocument? = nil) -> Int {
+        var n = 0
+        for w in NSApp.windows where w.styleMask.contains(.fullScreen) {
+            guard let wc = w.windowController as? EditorWindowController else { continue }
+            if let document, wc.document === document { continue }
+            w.toggleFullScreen(nil)
+            n += 1
+        }
+        return n
+    }
 
     init() {
         #if LUFTIG_SELFTEST
@@ -19,11 +35,15 @@ final class EditorWindowController: NSWindowController {
         w.minSize = NSSize(width: 360, height: 240)
         w.isReleasedWhenClosed = false
         w.collectionBehavior.insert(.fullScreenPrimary)
-        // Tabbing: .automatic = follow the system setting ("Prefer tabs: in full screen only" by default).
-        // All luftig windows share one tabbing identifier so "Merge All Windows" / drag-to-tab work.
+        // Tabbing: Settings > General > Open files in tabs (.preferred) or windows of their own (.disallowed); never the system's "Prefer tabs: in full
+        // screen only", which put a file opened from the Finder into the full-screen window as a tab. All luftig windows share one tabbing identifier
+        // so "Merge All Windows" / drag-to-tab work whatever the setting.
         w.tabbingIdentifier = NSWindow.TabbingIdentifier("local.luftig.document")
-        w.tabbingMode = .automatic
+        w.tabbingMode = EditorPreferences.tabbingMode
         super.init(window: w)
+        preferenceObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.didChange, object: nil, queue: nil) { [weak w] _ in
+            w?.tabbingMode = EditorPreferences.tabbingMode
+        }
         shouldCascadeWindows = true
         #if LUFTIG_SELFTEST
         LaunchProbe.mark("window created, creating EditorViewController")

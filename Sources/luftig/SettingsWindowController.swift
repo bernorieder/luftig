@@ -5,8 +5,10 @@
 // own: it reads the preferences, shows them, and writes them back when a control is used; it follows changes made elsewhere (⌘+ ⌘- ⌘0, the
 // View menu) because it observes `EditorPreferences.didChange` like an editor does.
 //
-//   [ live preview: the real Theme + lexer + decorations, read-only ]   <- on both screens
-//   ( Text | Panes )                                   <- two screens, a segmented control under the preview; the chosen one is remembered
+//   [ live preview: the real Theme + lexer + decorations, read-only ]   <- on every screen
+//   ( General | Text | Layout )                        <- three screens, a segmented control under the preview; the chosen one is remembered
+//   General:
+//   Files           [ ] Open files in tabs
 //   Text:
 //   Color scheme   [swatch luftig (follows system appearance)  v]
 //   Text font       [System (SF Pro)  v]
@@ -17,7 +19,7 @@
 //   Column width    [x] Limit line length (centered column)
 //                   ----o------   760 pt
 //                   about 85 characters per line
-//   Panes:
+//   Layout:
 //   Show            [x] Outline  [x] Word count  [x] Syntax bar       (the View menu's switches, the other way to reach them)
 //   Padding         ----o------   1.00 ×                                (ONE factor for all the air: text insets, pane margins and heights - luftig)
 //   Font            [Same as text font  v]
@@ -138,15 +140,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let paddingSlider = SettingsSlider(value: 1, minValue: Double(EditorPreferences.paddingRange.lowerBound), maxValue: Double(EditorPreferences.paddingRange.upperBound), target: nil, action: nil)
     let paddingValueLabel = NSTextField(labelWithString: "")
     let paddingNoteLabel = NSTextField(labelWithString: "")
-    /// The screens: Text and Panes; the segmented control under the preview switches, the choice is remembered.
-    enum Screen: Int, CaseIterable { case text = 0, panes = 1
-        var title: String { self == .text ? "Text" : "Panes" }
+    // the General screen
+    let openInTabsCheckbox = NSButton(checkboxWithTitle: "Open files in tabs", target: nil, action: nil)
+    /// The screens: General, Text and Layout; the segmented control under the preview switches, the choice is remembered.
+    enum Screen: Int, CaseIterable { case general = 0, text = 1, layout = 2
+        var title: String { self == .general ? "General" : self == .text ? "Text" : "Layout" }
     }
     static let screenKey = "LuftigSettingsScreen"
     let screenControl = NSSegmentedControl(labels: Screen.allCases.map { $0.title }, trackingMode: .selectOne, target: nil, action: nil)
+    let generalScreen = NSView()
     let textScreen = NSView()
-    let panesScreen = NSView()
-    private(set) var screen: Screen = .text
+    let layoutScreen = NSView()
+    private(set) var screen: Screen = .general
 
     /// The families the two font popups offer (the code font: monospaced ones only).
     private(set) var textFamilies: [String] = []
@@ -297,6 +302,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         fixedLabel(paddingNoteLabel, width: W.controlColumnWidth, font: paddingNoteLabel.font)
         paddingNoteLabel.stringValue = "The air around the text and in the panes, all in proportion."
 
+        openInTabsCheckbox.target = self; openInTabsCheckbox.action = #selector(openInTabsChanged(_:))
+        openInTabsCheckbox.setAccessibilityLabel("Open files in tabs")
+
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
         screenControl.setAccessibilityLabel("Settings screen")
@@ -330,10 +338,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let paddingColumn = NSStackView(views: [paddingSliderRow, paddingNoteLabel])
         paddingColumn.orientation = .vertical; paddingColumn.alignment = .leading; paddingColumn.spacing = 6
 
-        // the grids share the label column width, so the controls of both screens start at the same x
+        // the grids share the label column width, so the controls of every screen start at the same x
+        let generalLabels = ["Files:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:"].map { label($0) }
-        let labelWidth = ceil((textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
+        let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
             grid.translatesAutoresizingMaskIntoConstraints = false
@@ -346,6 +355,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             grid.rowAlignment = .firstBaseline
             return grid
         }
+        let generalGrid = makeGrid([
+            [generalLabels[0], openInTabsCheckbox],
+        ])
         let grid = makeGrid([
             [textLabels[0], schemePopup],
             [textLabels[1], bodyFontPopup],
@@ -367,11 +379,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         previewView.translatesAutoresizingMaskIntoConstraints = false
 
         let content = SettingsContentView(frame: NSRect(x: 0, y: 0, width: W.defaultContentWidth, height: 700))
-        for screenView in [textScreen, panesScreen] { screenView.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(screenView) }
+        for screenView in [generalScreen, textScreen, layoutScreen] { screenView.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(screenView) }
         content.addSubview(previewView)
         content.addSubview(screenControl)
+        generalScreen.addSubview(generalGrid)
         textScreen.addSubview(grid)
-        panesScreen.addSubview(panesGrid)
+        layoutScreen.addSubview(panesGrid)
         content.addSubview(restoreButton)
         let m = W.margin
         NSLayoutConstraint.activate([
@@ -385,8 +398,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             // both screens fill the same place under the switch; the hidden one keeps its layout (so nothing moves when it comes back)
             textScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
             textScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), textScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            panesScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
-            panesScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), panesScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            layoutScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
+            layoutScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), layoutScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            generalScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
+            generalScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), generalScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            generalGrid.topAnchor.constraint(equalTo: generalScreen.topAnchor),
+            generalGrid.centerXAnchor.constraint(equalTo: generalScreen.centerXAnchor),
+            generalGrid.leadingAnchor.constraint(greaterThanOrEqualTo: generalScreen.leadingAnchor, constant: m),
+            generalGrid.trailingAnchor.constraint(lessThanOrEqualTo: generalScreen.trailingAnchor, constant: -m),
+            generalGrid.bottomAnchor.constraint(equalTo: generalScreen.bottomAnchor),
             // Text: its grid
             grid.topAnchor.constraint(equalTo: textScreen.topAnchor),
             grid.centerXAnchor.constraint(equalTo: textScreen.centerXAnchor),                       // centred, at its own fixed width: nothing is left to stretch or to guess
@@ -394,19 +414,20 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             grid.trailingAnchor.constraint(lessThanOrEqualTo: textScreen.trailingAnchor, constant: -m),
             grid.bottomAnchor.constraint(equalTo: textScreen.bottomAnchor),
             // Panes: its grid, at the top of the screen
-            panesGrid.topAnchor.constraint(equalTo: panesScreen.topAnchor),
-            panesGrid.centerXAnchor.constraint(equalTo: panesScreen.centerXAnchor),
-            panesGrid.leadingAnchor.constraint(greaterThanOrEqualTo: panesScreen.leadingAnchor, constant: m),
-            panesGrid.trailingAnchor.constraint(lessThanOrEqualTo: panesScreen.trailingAnchor, constant: -m),
-            panesGrid.bottomAnchor.constraint(equalTo: panesScreen.bottomAnchor),
+            panesGrid.topAnchor.constraint(equalTo: layoutScreen.topAnchor),
+            panesGrid.centerXAnchor.constraint(equalTo: layoutScreen.centerXAnchor),
+            panesGrid.leadingAnchor.constraint(greaterThanOrEqualTo: layoutScreen.leadingAnchor, constant: m),
+            panesGrid.trailingAnchor.constraint(lessThanOrEqualTo: layoutScreen.trailingAnchor, constant: -m),
+            panesGrid.bottomAnchor.constraint(equalTo: layoutScreen.bottomAnchor),
             // the button under the taller screen, on both screens
             restoreButton.topAnchor.constraint(greaterThanOrEqualTo: textScreen.bottomAnchor, constant: 18),
-            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: panesScreen.bottomAnchor, constant: 18),
+            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: generalScreen.bottomAnchor, constant: 18),
+            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: layoutScreen.bottomAnchor, constant: 18),
             restoreButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m),
             restoreButton.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
         ])
         window.contentView = content
-        showScreen(Screen(rawValue: UserDefaults.standard.integer(forKey: W.screenKey)) ?? .text)
+        showScreen(Screen(rawValue: UserDefaults.standard.integer(forKey: W.screenKey)) ?? .general)
 
         // -- size: the height is the content's (computed ONCE: nothing in the window changes size), the width is the user's from the minimum up; the position is remembered
         syncFromPreferences()
@@ -427,12 +448,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     /// Show one screen (the segmented control follows; the choice is remembered).
     func showScreen(_ sc: Screen) {
         screen = sc
+        generalScreen.isHidden = sc != .general
         textScreen.isHidden = sc != .text
-        panesScreen.isHidden = sc != .panes
+        layoutScreen.isHidden = sc != .layout
         screenControl.selectedSegment = sc.rawValue
         UserDefaults.standard.set(sc.rawValue, forKey: SettingsWindowController.screenKey)
     }
-    @objc func screenChanged(_ sender: NSSegmentedControl) { showScreen(Screen(rawValue: sender.selectedSegment) ?? .text) }
+    @objc func screenChanged(_ sender: NSSegmentedControl) { showScreen(Screen(rawValue: sender.selectedSegment) ?? .general) }
 
     /// A label that shows values: a fixed width whatever it says (it truncates, it never asks the layout for more), so the text can change without moving anything.
     private func fixedLabel(_ l: NSTextField, width: CGFloat, font: NSFont?) {
@@ -588,6 +610,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         paneOpacityValueLabel.stringValue = "\(Int((opacity * 100).rounded())) %"
         outlineWrapCheckbox.state = EditorPreferences.outlineWraps ? .on : .off
 
+        openInTabsCheckbox.state = EditorPreferences.openInTabs ? .on : .off
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
         showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
@@ -704,6 +727,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         EditorPreferences.paneOpacity = CGFloat(sender.doubleValue)
         syncFromPreferences()
     }
+    @objc func openInTabsChanged(_ sender: NSButton) { EditorPreferences.openInTabs = sender.state == .on; syncFromPreferences() }
     @objc func showOutlineChanged(_ sender: NSButton) { EditorPreferences.showOutline = sender.state == .on; syncFromPreferences() }
     @objc func showWordCountChanged(_ sender: NSButton) { EditorPreferences.showWordCount = sender.state == .on; syncFromPreferences() }
     @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }

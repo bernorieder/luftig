@@ -28,7 +28,7 @@ extension SelfTestScenarios {
         ]
         @MainActor func walk(_ v: NSView) {
             if let g = v as? NSGridView {
-                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: the Text screen's, grid1: the Panes screen's
+                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: General, grid1: Text, grid2: Layout (the order of the containers)
                 views.append((name, g))
                 for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("\(name).label\(row)", l)) } }
             }
@@ -78,8 +78,11 @@ extension SelfTestScenarios {
             var states = 0
             for k in cases {
                 enter(k)
-                await t.sleep(30)          // a changed NSApp.appearance reaches the window's effectiveAppearance one run-loop turn later (measured: right after the switch it is still the old one)
-                let isDark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                // a changed NSApp.appearance reaches the window's effectiveAppearance one run-loop turn later (measured: right after the switch it is still the
+                // old one), and on a busy machine later still: wait for it, up to a second
+                var isDark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                var waited = 0.0
+                while isDark != k.dark && waited < 1000 { await t.sleep(30); waited += 30; isDark = window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
                 t.equal(isDark, k.dark, "\(k.label): the window is drawn \(k.dark ? "dark" : "light")")
                 var moved: [String] = []
                 var noteSeen = Set<Bool>()

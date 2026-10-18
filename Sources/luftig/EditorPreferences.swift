@@ -21,10 +21,12 @@ enum EditorPreferences {
     static let paneFontSizeKey = "LuftigPaneFontSize"
     static let paneOpacityKey = "LuftigPaneOpacity"
     static let outlineWrapsKey = "LuftigOutlineWraps"
-    /// Settings > General > Padding: ONE factor for every bit of air in the editor (the text's insets, the panes' margins and heights): what makes it luftig.
+    /// Settings > Layout > Padding: ONE factor for every bit of air in the editor (the text's insets, the panes' margins and heights): what makes it luftig.
     static let paddingKey = "LuftigPadding"
+    /// Settings > General: new documents open as tabs of the front window (NSWindow.tabbingMode .preferred) instead of windows of their own (.disallowed).
+    static let openInTabsKey = "LuftigOpenInTabs"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -259,7 +261,15 @@ enum EditorPreferences {
         }
     }
 
-    /// Settings > Panes > Outline: long headings wrap onto further lines instead of being cut off. Default off.
+    /// Settings > General > Open files in tabs. Default off: every document gets a window of its own (the system's "Prefer tabs" setting is not consulted).
+    static var openInTabs: Bool {
+        get { flag(forKey: openInTabsKey, default: false) }
+        set { setFlag(newValue, forKey: openInTabsKey, current: openInTabs) }
+    }
+    /// The tabbing mode for the editor windows.
+    static var tabbingMode: NSWindow.TabbingMode { openInTabs ? .preferred : .disallowed }
+
+    /// Settings > Layout > Outline: long headings wrap onto further lines instead of being cut off. Default off.
     static var outlineWraps: Bool {
         get { flag(forKey: outlineWrapsKey, default: false) }
         set { setFlag(newValue, forKey: outlineWrapsKey, current: outlineWraps) }

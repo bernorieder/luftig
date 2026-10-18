@@ -97,6 +97,13 @@ final class MarkdownDocument: NSDocument {
         }
     }
 
+    /// A document about to be shown (opened, created, or opened again): no other document stays in full screen, so the new window opens on the normal
+    /// desktop and not in the full-screen Space of another file (where macOS put it as a tab or as a second full-screen window).
+    override func showWindows() {
+        EditorWindowController.leaveFullScreenEverywhere(except: self)
+        super.showWindows()
+    }
+
     /// The window for sheets. (`EditorWindowController.editorHost` is the only coupling to the editor, see makeWindowControllers.)
     var sheetWindow: NSWindow? { windowControllers.first?.window }
 

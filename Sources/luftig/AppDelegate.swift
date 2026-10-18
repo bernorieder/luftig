@@ -9,15 +9,21 @@
 //   * window restoration: NSDocument restores last windows by itself; secure restorable state must be declared
 //   * quitting with dirty documents: autosave in place means nothing is dirty for more than a few seconds; untitled
 //     documents are drafts that survive the quit; conflicts are asked about by MarkdownDocument.canClose
+//   * one instance: a luftig launched while another one runs hands it its files and quits (SingleInstance.swift)
 
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
+    /// True when another luftig was already running at launch: this process hands it the files and quits (SingleInstance).
+    private(set) var yielding = false
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if LUFTIG_SELFTEST
         LaunchProbe.mark("applicationWillFinishLaunching begin")
         #endif
+        yielding = SingleInstance.checkAtLaunch()
+        if yielding { return }                                   // (no menu, no documents: the other instance has them)
         // Settings of the app's previous name (Scribe), once; before register(defaults:). Never in a self-test build, whose runs must
         // start from known preferences and must not read the user's real ones.
         if let id = Bundle.main.bundleIdentifier, !id.hasSuffix(".selftest") {
@@ -42,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if yielding { SingleInstance.finishYielding(); return }
         openUntitledIfNothingRestored()
         #if LUFTIG_SELFTEST
         SelfTestHooks.applicationDidFinishLaunching()
@@ -62,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { !yielding }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         !flag      // true -> AppKit creates an untitled document (via applicationShouldOpenUntitledFile)

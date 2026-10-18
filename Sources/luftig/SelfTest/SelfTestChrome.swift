@@ -342,6 +342,15 @@ extension SelfTestScenarios {
             EditorPreferences.padding = 1.337
             t.equal(EditorPreferences.padding, 1.35, "the factor is stored in steps of 0.05")
             EditorPreferences.padding = 1
+            // Settings > General > Open files in tabs: the windows' tabbing mode follows, never the system's "Prefer tabs" (.automatic)
+            t.check(!EditorPreferences.openInTabs && doc.windowControllers.first?.window?.tabbingMode == .disallowed, "default: windows of their own (tabbing disallowed)")
+            EditorPreferences.openInTabs = true
+            t.check(doc.windowControllers.first?.window?.tabbingMode == .preferred, "Open files in tabs: the open window prefers tabs")
+            let (doc4, _, _) = try await openEditor(t, text: "# t\n", name: "tabs.md")
+            t.check(doc4.windowControllers.first?.window?.tabbingMode == .preferred, "... and a new one too")
+            t.close(doc4)
+            EditorPreferences.openInTabs = false
+            t.check(doc.windowControllers.first?.window?.tabbingMode == .disallowed, "off again: disallowed")
 
             // typing: recomputed once, after the pause
             let before = host.chromeRefreshCount

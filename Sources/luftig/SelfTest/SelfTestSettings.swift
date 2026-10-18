@@ -131,7 +131,7 @@ extension SelfTestScenarios {
             let c = SettingsWindowController.shared
             c.present()
             guard let window = c.window else { t.check(false, "no settings window"); return }
-            if SelfTest.argument("screen") == "panes" { c.showScreen(.panes) } else { c.showScreen(.text) }     // --screen text|panes
+            switch SelfTest.argument("screen") { case "layout", "panes": c.showScreen(.layout); case "general": c.showScreen(.general); default: c.showScreen(.text) }     // --screen general|text|layout
             // a fixed (light / dark) colour scheme sets the appearance of the whole app (Palette.apply): the window then inherits it, as in the real app;
             // only the system scheme follows `--appearance`
             window.appearance = Palette.isSystemScheme ? NSAppearance(named: SelfTest.appearanceName(SelfTest.argument("appearance"))) : nil

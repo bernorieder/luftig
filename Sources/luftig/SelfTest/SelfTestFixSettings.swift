@@ -53,13 +53,13 @@ extension SelfTestScenarios {
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
-            ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl),
+            ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl), ("openInTabsCheckbox", c.openInTabsCheckbox),
             ("showOutlineCheckbox", c.showOutlineCheckbox), ("showWordCountCheckbox", c.showWordCountCheckbox), ("showSyntaxBarCheckbox", c.showSyntaxBarCheckbox),
             ("paddingSlider", c.paddingSlider), ("paddingValueLabel", c.paddingValueLabel), ("paddingNoteLabel", c.paddingNoteLabel),
         ]
         func walk(_ v: NSView) {
             if let g = v as? NSGridView {
-                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: the Text screen's, grid1: the Panes screen's
+                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: General, grid1: Text, grid2: Layout (the order of the containers)
                 views.append((name, g))
                 for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("\(name).label\(row)", l)) } }
             }
@@ -138,7 +138,7 @@ extension SelfTestScenarios {
             for w in stride(from: 480, through: 1400, by: 10) { probe("column width \(w)") { c.widthSlider.doubleValue = Double(w); send(c.widthSlider) } }
             probe("column width back to 760") { c.widthSlider.doubleValue = 760; send(c.widthSlider) }
             // the two screens: switching hides one container and shows the other; every frame stays where it is (the hidden screen keeps its layout)
-            probe("screen: Panes") { c.showScreen(.panes) }
+            probe("screen: Layout") { c.showScreen(.layout) }
             probe("outline wrap on") { c.outlineWrapCheckbox.state = .on; send(c.outlineWrapCheckbox) }
             probe("outline wrap off") { c.outlineWrapCheckbox.state = .off; send(c.outlineWrapCheckbox) }
             for (i, size) in SettingsWindowController.paneSizes.enumerated() { probe("panes size \(Int(size))") { c.paneSizePopup.selectItem(at: i); send(c.paneSizePopup) } }
@@ -149,6 +149,9 @@ extension SelfTestScenarios {
             }
             for p in stride(from: 50, through: 200, by: 5) { probe("padding \(p)") { c.paddingSlider.doubleValue = Double(p) / 100; send(c.paddingSlider) } }
             probe("padding back to 1") { c.paddingSlider.doubleValue = 1; send(c.paddingSlider) }
+            probe("screen: General") { c.showScreen(.general) }
+            probe("open in tabs on") { c.openInTabsCheckbox.state = .on; send(c.openInTabsCheckbox) }
+            probe("open in tabs off") { c.openInTabsCheckbox.state = .off; send(c.openInTabsCheckbox) }
             probe("screen: Text") { c.showScreen(.text) }
 
             // ---- size: every size from 9 to 40 (the note and the value label follow the floor of the fonts)

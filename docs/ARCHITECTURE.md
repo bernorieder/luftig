@@ -33,7 +33,8 @@ Sources/luftig/
                                         (top-of-window anchor that survives text changes), TextDiff.apply
 
   -- the editor (docs/spike-textkit.md) -------------------------------------------------------------------------------------------
-  EditorWindowController.swift          window (~860 x 1000, tabbing identifier, full screen), hosts the view controller
+  EditorWindowController.swift          window (~860 x 1000, tabbing identifier, full screen), hosts the view controller; tabbingMode from Settings > General (never the system's
+                                        "Prefer tabs"); `leaveFullScreenEverywhere` (MarkdownDocument.showWindows calls it: a file opened while another fills the screen opens on the desktop)
   EditorViewController.swift            THE editor: TextKit 1 stack + styler + column + banner; EditorHost conformance; font size; actions
   EditorPreferences.swift               every setting in UserDefaults (font size, text / code family, line spacing, column width, readable-width flag, colour scheme),
                                         (while a slider / stepper of the Settings window is dragged the broadcast is bounded: `beginAdjusting` / `endAdjusting`, invariant 25)
@@ -49,10 +50,12 @@ Sources/luftig/
   EditorChromeViews.swift               OutlineView (NSTableView, no selection, hover), WordCountView, SyntaxBarView (SoftLabel: text that acts, never a bezel),
                                         EditorRootView (the page colour behind everything); all in Palette.marker, the body / code family at 12 pt; wired in
                                         EditorViewController's `chrome` extension: coalesced recomputation in 1 M-unit steps after edits, View menu switches
-  SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window; the preview on top, under it a switch between two screens (Text; Panes: the three
-                                        pane switches, the padding factor, pane font / size / opacity, outline wrapping), each an NSGridView in a container of its own; every control
-                                        applies live and is saved; observes EditorPreferences.didChange
-  Padding.swift                         ONE factor (Settings > Panes > Padding, 0.5 ... 2, default 1) -> every inset and margin, rounded to whole points with floors: the text's
+  SettingsWindowController.swift        luftig > Settings... (Cmd-,): one singleton window; the preview on top, under it a switch between three screens (General: open files in
+                                        tabs; Text; Layout: the three pane switches, the padding factor, pane font / size / opacity, outline wrapping), each an NSGridView in a
+                                        container of its own; every control applies live and is saved; observes EditorPreferences.didChange
+  SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
+                                        files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
+  Padding.swift                         ONE factor (Settings > Layout > Padding, 0.5 ... 2, default 1) -> every inset and margin, rounded to whole points with floors: the text's
                                         insets (ReadableColumnController.minInset / verticalInset), the outline's margin / top inset / row air, the word count's height / margin,
                                         the syntax bar's height / gaps; structural sizes (outline width, indent per level, fonts) are not padding
                                         FIXED layout (plain constraints, fixed column widths and label widths: nothing moves or resizes whatever a value says, invariant 24); the size field shows the
