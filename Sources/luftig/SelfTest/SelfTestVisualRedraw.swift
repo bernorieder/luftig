@@ -188,10 +188,14 @@ extension SelfTestScenarios {
             recorder.stop()
             let scale = before.scale
             var marked = [Bool](repeating: false, count: before.rep.pixelsHigh)
+            var wholeView = 0
             for r in recorder.rects {
+                // an infinite rect (NSRect.infinite: "everything") or one beyond any view: every row (the Int conversion below would trap on it)
+                if !r.minY.isFinite || !r.maxY.isFinite || abs(r.minY) > 1e9 || abs(r.maxY) > 1e9 { wholeView += 1; for y in marked.indices { marked[y] = true }; continue }
                 let lo = max(0, Int(((r.minY - before.rect.minY) * scale).rounded(.down))), hi = min(marked.count, Int(((r.maxY - before.rect.minY) * scale).rounded(.up)))
                 if lo < hi { for y in lo..<hi { marked[y] = true } }
             }
+            if wholeView > 0 { t.info("\(c.name): \(wholeView) of \(recorder.rects.count) invalidations were the whole view (an infinite rect): \(recorder.rects.filter { !$0.minY.isFinite || abs($0.minY) > 1e9 }.prefix(2).map { NSStringFromRect($0) })") }
             let anyMarked = !recorder.rects.isEmpty
             guard let after = ViewPixels(tv) else { t.check(false, "no pixels"); return }
             let rows = differingRows(before, after)

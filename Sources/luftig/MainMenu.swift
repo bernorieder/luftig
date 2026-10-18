@@ -160,6 +160,10 @@ enum MainMenu {
         view.addItem(item("Wrap to Readable Width", #selector(LuftigEditorActions.luftigToggleReadableWidth(_:))))
         view.addItem(item("Toggle Spell Checking", #selector(LuftigEditorActions.luftigToggleSpellChecking(_:))))
         view.addItem(.separator())
+        // writing modes (checked while on, remembered, every window follows): the paragraph at the caret alone in full colour / the caret's line in the middle
+        view.addItem(item("Focus Mode", #selector(LuftigEditorActions.luftigToggleFocusMode(_:)), "f", [.command, .shift]))
+        view.addItem(item("Typewriter Mode", #selector(LuftigEditorActions.luftigToggleTypewriterMode(_:)), "t", [.command, .shift]))
+        view.addItem(.separator())
         // the three elements around the text; the titles flip to "Hide …" while an element is shown (EditorViewController.validateMenuItem)
         view.addItem(item("Show Outline", #selector(LuftigEditorActions.luftigToggleOutline(_:))))
         view.addItem(item("Show Word Count", #selector(LuftigEditorActions.luftigToggleWordCount(_:))))

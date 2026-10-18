@@ -118,6 +118,43 @@ final class LuftigLayoutManager: NSLayoutManager {
         return e.bottom + min(pad, room)
     }
 
+    // MARK: Focus Mode
+
+    /// The characters that keep their colours while Focus Mode is on (nil: no focus). The line fragments that hold none of them are veiled with the
+    /// text view's page colour at `focusVeilAlpha`, right after their glyphs are drawn: the text fades towards the page, nothing is restyled.
+    var focusRange: NSRange?
+    static let focusVeilAlpha: CGFloat = 0.6
+    #if LUFTIG_SELFTEST
+    /// Self-test only: every line fragment's decision (focus range, the line's characters, kept or veiled).
+    nonisolated(unsafe) static var veilLog: ((NSRange, NSRange, Bool) -> Void)?
+    nonisolated(unsafe) static var drawLog: ((NSRange, Int, NSRect) -> Void)?
+    #endif
+
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        guard let focus = focusRange, let tv = firstTextView else { return }
+        let width = tv.bounds.width
+        #if LUFTIG_SELFTEST
+        LuftigLayoutManager.drawLog?(glyphsToShow, numberOfGlyphs, extraLineFragmentTextContainer != nil ? extraLineFragmentRect : NSRect.null)
+        #endif
+        let veil = tv.backgroundColor.withAlphaComponent(LuftigLayoutManager.focusVeilAlpha)
+        veil.setFill()
+        enumerateLineFragments(forGlyphRange: glyphsToShow) { rect, _, _, glyphRange, _ in
+            let chars = self.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+            let keep = NSIntersectionRange(chars, focus).length > 0 || (chars.length == 0 && NSLocationInRange(chars.location, focus))
+            #if LUFTIG_SELFTEST
+            LuftigLayoutManager.veilLog?(focus, chars, keep)
+            #endif
+            if keep { return }
+            NSRect(x: 0, y: rect.minY + origin.y, width: width, height: rect.height).fill(using: .sourceOver)
+        }
+        // the empty line after a trailing line break belongs to the end of the text (only once the last glyph is drawn: before the end is laid out the
+        // extra fragment's rect is a guess that veiled the whole viewport)
+        if let ts = textStorage, NSMaxRange(glyphsToShow) >= numberOfGlyphs, extraLineFragmentTextContainer != nil, extraLineFragmentRect.height > 0, NSMaxRange(focus) < ts.length {
+            NSRect(x: 0, y: extraLineFragmentRect.minY + origin.y, width: width, height: extraLineFragmentRect.height).fill(using: .sourceOver)
+        }
+    }
+
     func drawDecorations(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         guard let ts = textStorage,
               let tc = textContainers.first,

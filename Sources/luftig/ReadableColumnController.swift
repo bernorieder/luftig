@@ -19,6 +19,9 @@ final class ReadableColumnController {
     var verticalInset: CGFloat
     /// Extra air on the right of the text, on top of the inset (0: symmetric, as it always was).
     var trailingExtra: CGFloat = 0 { didSet { if trailingExtra != oldValue { update() } } }
+    /// Typewriter Mode: the vertical inset grows to half the clip view's height (less half a line), so that the first and the last line can sit in the middle.
+    var typewriter = false
+    var typewriterLineHeight: CGFloat = 23
     private weak var scrollView: NSScrollView?
     private weak var textView: NSTextView?
     private var observer: NSObjectProtocol?
@@ -43,8 +46,9 @@ final class ReadableColumnController {
         guard let sv = scrollView, let tv = textView else { return }
         let width = sv.contentView.bounds.width
         let inset = isEnabled ? max(minInset, ((width - trailingExtra - maxColumnWidth) / 2).rounded(.down)) : minInset
-        if abs(tv.textContainerInset.width - inset) > 0.5 || abs(tv.textContainerInset.height - verticalInset) > 0.5 {
-            tv.textContainerInset = NSSize(width: inset, height: verticalInset)
+        let vertical = typewriter ? max(verticalInset, ((sv.contentView.bounds.height - typewriterLineHeight) / 2).rounded(.down)) : verticalInset
+        if abs(tv.textContainerInset.width - inset) > 0.5 || abs(tv.textContainerInset.height - vertical) > 0.5 {
+            tv.textContainerInset = NSSize(width: inset, height: vertical)
         }
         // the container: the text view is as wide as the clip view (autoresizing); the container leaves the inset on the left and inset + extra on the right
         let containerWidth = max(50, tv.frame.width - 2 * inset - trailingExtra)

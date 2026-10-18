@@ -24,6 +24,9 @@ import MarkdownKit
     func luftigInsertSyntax(_ sender: Any?)
     /// Edit > Open Link: the link at the caret (the same as a ⌘-click on it).
     func luftigOpenLink(_ sender: Any?)
+    /// View > Focus Mode / Typewriter Mode (the `focus` extension).
+    func luftigToggleFocusMode(_ sender: Any?)
+    func luftigToggleTypewriterMode(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -273,6 +276,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         column.isEnabled = EditorPreferences.readableWidth
         applyChromeVisibility()
         applyChromeTheme()                   // (the panes' font, size and opacity are preferences of their own: cheap to re-apply on every change)
+        applyWritingModes()
     }
 
     /// The user cannot see this window right now. `isVisible` is false for a minimized window, a background tab and a hidden app; `occlusionState` has no
@@ -354,6 +358,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         switch item.action {
         case #selector(luftigInsertSyntax(_:)): return textView.isEditable && SyntaxElement.element(menuTag: item.tag) != nil
         case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
+        case #selector(luftigToggleFocusMode(_:)): item.state = EditorPreferences.focusMode ? .on : .off
+        case #selector(luftigToggleTypewriterMode(_:)): item.state = EditorPreferences.typewriterMode ? .on : .off
         case #selector(luftigToggleReadableWidth(_:)): item.state = column.isEnabled ? .on : .off
         case #selector(luftigToggleSpellChecking(_:)): item.state = textView.isContinuousSpellCheckingEnabled ? .on : .off
         case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"
@@ -385,7 +391,9 @@ extension EditorViewController {
         let nc = NotificationCenter.default
         // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
-        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection() })
+        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection(); self?.writingModesSelectionChanged() })
+        chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.writingModesTextChanged() })
+        applyWritingModes()
         chromeObservers.append(nc.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) { [weak self] _ in self?.updateCurrentOutlineEntry() })
     }
 
@@ -624,5 +632,115 @@ extension EditorViewController {
 
     @objc func luftigOpenLink(_ sender: Any?) {
         if !followLink(at: textView.selectedRange().location) { NSSound.beep() }
+    }
+}
+
+// MARK: - writing modes: Focus Mode and Typewriter Mode (View menu; EditorPreferences.focusMode / typewriterMode)
+
+extension EditorViewController {
+
+    @objc func luftigToggleFocusMode(_ sender: Any?) { EditorPreferences.focusMode.toggle() }
+    @objc func luftigToggleTypewriterMode(_ sender: Any?) { EditorPreferences.typewriterMode.toggle() }
+
+    /// Both switches, from the preferences (every window follows): the text view's focus range and the column's typewriter inset.
+    func applyWritingModes() {
+        let focus = EditorPreferences.focusMode, typewriter = EditorPreferences.typewriterMode
+        if column.typewriter != typewriter {
+            column.typewriter = typewriter
+            column.typewriterLineHeight = theme.bodyLineHeight
+            column.update()
+        } else if typewriter, column.typewriterLineHeight != theme.bodyLineHeight {
+            column.typewriterLineHeight = theme.bodyLineHeight
+            column.update()
+        }
+        if !focus, editorTextView.focusRange != nil {
+            editorTextView.focusRange = nil
+            editorTextView.needsDisplay = true
+        }
+        if focus { updateFocusRange(redisplay: true) }
+        if typewriter { centerCaretLine() }
+    }
+
+    /// The paragraph at the caret: the block of lines without a blank line between them that holds the selection (bounded: 200 lines each way).
+    func focusParagraph(for selection: NSRange) -> NSRange {
+        let text = storage.string as NSString
+        let length = text.length
+        guard length > 0 else { return NSRange(location: 0, length: 0) }
+        func isBlank(_ r: NSRange) -> Bool {
+            var i = r.location
+            let end = NSMaxRange(r)
+            while i < end { let c = text.character(at: i); if c != 0x20 && c != 0x09 && c != 0x0A && c != 0x0D { return false }; i += 1 }
+            return true
+        }
+        let sel = NSIntersectionRange(selection, NSRange(location: 0, length: length))
+        let anchor = min(sel.location, length - 1)
+        var start = text.lineRange(for: NSRange(location: anchor, length: 0)).location
+        var end = NSMaxRange(text.lineRange(for: NSRange(location: min(max(anchor, NSMaxRange(sel) - 1), length - 1), length: 0)))
+        if isBlank(NSRange(location: start, length: end - start)) { return NSRange(location: start, length: end - start) }      // a blank line: only itself
+        var n = 0
+        while start > 0, n < 200 {
+            let prev = text.lineRange(for: NSRange(location: start - 1, length: 0))
+            if isBlank(prev) { break }
+            start = prev.location; n += 1
+        }
+        n = 0
+        while end < length, n < 200 {
+            let next = text.lineRange(for: NSRange(location: end, length: 0))
+            if isBlank(next) || next.length == 0 { break }
+            end = NSMaxRange(next); n += 1
+        }
+        return NSRange(location: start, length: end - start)
+    }
+
+    private func updateFocusRange(redisplay: Bool) {
+        let r = focusParagraph(for: textView.selectedRange())
+        if editorTextView.focusRange != r {
+            editorTextView.focusRange = r
+            if redisplay { editorTextView.setNeedsDisplay(editorTextView.visibleRect) }
+        }
+    }
+
+    func writingModesSelectionChanged() {
+        if EditorPreferences.focusMode { updateFocusRange(redisplay: true) }
+        if EditorPreferences.typewriterMode { centerCaretLine() }
+    }
+
+    func writingModesTextChanged() {
+        if EditorPreferences.focusMode { updateFocusRange(redisplay: true) }
+        if EditorPreferences.typewriterMode { centerCaretLine() }
+    }
+
+    /// The line fragment (container coordinates) that holds the caret at `location`; the extra line after a trailing line break for a caret at the very end.
+    func caretLineRect(at location: Int) -> NSRect? {
+        guard let lm = textView.layoutManager, storage.length > 0 else { return nil }
+        let length = storage.length
+        if location >= length {
+            let last = storage.string.utf16.last ?? 0
+            if last == 0x0A || last == 0x0D { lm.ensureLayout(forCharacterRange: NSRange(location: length - 1, length: 1)); if lm.extraLineFragmentRect.height > 0 { return lm.extraLineFragmentRect } }
+        }
+        let loc = min(location, length - 1)
+        lm.ensureLayout(forCharacterRange: NSRange(location: loc, length: 1))
+        let glyph = lm.glyphIndexForCharacter(at: loc)
+        guard glyph < lm.numberOfGlyphs else { return nil }
+        return lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+    }
+
+    /// Typewriter Mode: the line that holds the caret in the middle of the viewport (the column's inset gives the first and the last line room to get there).
+    /// The non-contiguous layout only estimates the height of text it has not laid out, so the line's y settles in a few passes (pitfall 27: like ViewportAnchor).
+    func centerCaretLine() {
+        guard let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0, !textView.hasMarkedText() else { return }
+        let clip = scrollView.contentView
+        for _ in 0..<4 {
+            guard let line = caretLineRect(at: textView.selectedRange().location) else { return }
+            textView.sizeToFit()
+            let target = (line.midY + textView.textContainerOrigin.y - clip.bounds.height / 2).rounded()
+            let maxY = max(0, textView.frame.height - clip.bounds.height)
+            let y = max(0, min(target, maxY))
+            if abs(clip.bounds.origin.y - y) < 0.5 { return }
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scrollView.reflectScrolledClipView(clip)
+            styler.styleVisible()
+            lm.ensureLayout(forBoundingRect: textView.visibleRect.offsetBy(dx: -textView.textContainerOrigin.x, dy: -textView.textContainerOrigin.y), in: tc)
+        }
     }
 }
