@@ -53,11 +53,13 @@ extension SelfTestScenarios {
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
+            ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl),
         ]
         func walk(_ v: NSView) {
             if let g = v as? NSGridView {
-                views.append(("grid", g))
-                for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("label\(row)", l)) } }
+                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: the Text screen's, grid1: the Panes screen's
+                views.append((name, g))
+                for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("\(name).label\(row)", l)) } }
             }
             v.subviews.forEach(walk)
         }
@@ -91,7 +93,7 @@ extension SelfTestScenarios {
             let P = EditorPreferences.self
             let fira = fixUserSettings()
             let c = SettingsWindowController.shared
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             guard let window = c.window, let content = window.contentView else { t.check(false, "no settings window"); return }
             let userWidth: CGFloat = 679                                    // the width of the user's screenshot (1358 px at 2x)
             window.setContentSize(NSSize(width: userWidth, height: content.frame.height))
@@ -133,6 +135,13 @@ extension SelfTestScenarios {
             // ---- column width: the whole range in steps of 10 (the value label and the characters-per-line note change at every step)
             for w in stride(from: 480, through: 1400, by: 10) { probe("column width \(w)") { c.widthSlider.doubleValue = Double(w); send(c.widthSlider) } }
             probe("column width back to 760") { c.widthSlider.doubleValue = 760; send(c.widthSlider) }
+            // the two screens: switching hides one container and shows the other; every frame stays where it is (the hidden screen keeps its layout)
+            probe("screen: Panes") { c.showScreen(.panes) }
+            probe("outline wrap on") { c.outlineWrapCheckbox.state = .on; send(c.outlineWrapCheckbox) }
+            probe("outline wrap off") { c.outlineWrapCheckbox.state = .off; send(c.outlineWrapCheckbox) }
+            for (i, size) in SettingsWindowController.paneSizes.enumerated() { probe("panes size \(Int(size))") { c.paneSizePopup.selectItem(at: i); send(c.paneSizePopup) } }
+            for o in stride(from: 25, through: 100, by: 5) { probe("panes opacity \(o)") { c.paneOpacitySlider.doubleValue = Double(o) / 100; send(c.paneOpacitySlider) } }
+            probe("screen: Text") { c.showScreen(.text) }
 
             // ---- size: every size from 9 to 40 (the note and the value label follow the floor of the fonts)
             for s in 9...40 { probe("size \(s)") { c.sizeStepper.doubleValue = Double(s); send(c.sizeStepper) } }
@@ -184,17 +193,17 @@ extension SelfTestScenarios {
             t.check(abs(window.frame.width - (reference["window"]?.width ?? 0)) < 0.5 && abs(window.frame.height - (reference["window"]?.height ?? 0)) < 0.5, "the window kept its size (\(Int(window.frame.width)) x \(Int(window.frame.height)) pt)")
 
             // ---- three window widths: the grid stays centred, as wide as its content, and keeps its inner layout; nothing runs out of the window
-            let gridWidth = reference["grid"]?.width ?? 0
+            let gridWidth = reference["grid0"]?.width ?? 0
             let innerNames = ["schemePopup", "bodyFontPopup", "codeFontPopup", "sizeField", "sizeStepper", "spacingSlider", "spacingValueLabel", "spacingAutomaticCheckbox", "spacingNoteLabel", "limitCheckbox", "widthSlider", "widthValueLabel", "widthNoteLabel"]
             for width in [window.contentMinSize.width, 700, 1100, 2000] {
                 window.setContentSize(NSSize(width: width, height: window.contentView!.frame.height))
                 let f = fixFrames(c)
                 var bad: [String] = []
-                if let g = f["grid"] {
+                if let g = f["grid0"] {
                     if abs(g.width - gridWidth) > 0.01 { bad.append("grid width \(g.width) != \(gridWidth)") }
                     if abs(g.midX - width / 2) > 0.5 { bad.append("grid not centred: midX \(g.midX) of \(width / 2)") }
                     if g.minX < 19.5 { bad.append("grid starts at \(g.minX)") }
-                    for n in innerNames { if let r = f[n], let r0 = reference[n], let g0 = reference["grid"], abs((r.minX - g.minX) - (r0.minX - g0.minX)) > 0.01 || abs(r.width - r0.width) > 0.01 || abs(r.minY - r0.minY) > 0.01 { bad.append("\(n) moved inside the grid") } }
+                    for n in innerNames { if let r = f[n], let r0 = reference[n], let g0 = reference["grid0"], abs((r.minX - g.minX) - (r0.minX - g0.minX)) > 0.01 || abs(r.width - r0.width) > 0.01 || abs(r.minY - r0.minY) > 0.01 { bad.append("\(n) moved inside the grid") } }
                 } else { bad.append("no grid") }
                 for (n, r) in f where n != "content" && n != "window" && (r.minX < -0.5 || r.maxX > width + 0.5) { bad.append("\(n) outside the window") }
                 t.check(bad.isEmpty, "window \(Int(width)) pt wide: the grid is centred, \(Int(gridWidth)) pt wide, laid out as at 679 pt, every control inside \(bad.prefix(3))")
@@ -228,7 +237,7 @@ extension SelfTestScenarios {
             let (docA, a, _) = try await openEditor(t, text: settingsDocument(times: 1), name: "fs-a.md", size: NSSize(width: 900, height: 600))
             _ = docA
             let c = SettingsWindowController.shared
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             guard let window = c.window else { t.check(false, "no settings window"); return }
             window.contentView?.layoutSubtreeIfNeeded()
             let field = c.sizeField
@@ -411,7 +420,7 @@ extension SelfTestScenarios {
             let (docB, b, _) = try await openEditor(t, text: settingsDocument(times: 40), name: "drag-b.md", size: NSSize(width: 900, height: 700))
             _ = (docA, docB)
             let c = SettingsWindowController.shared
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             let fira = fixUserSettings()
             await t.sleep(50)
             _ = fira
@@ -530,7 +539,7 @@ extension SelfTestScenarios {
             // coalescing relies on - is seen only with a real mouse.
             EditorViewController.visibilityOverride = true
             P.lineHeightFactor = 1.2; c.syncFromPreferences()
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             if let win = c.window, let content = win.contentView {
                 content.layoutSubtreeIfNeeded()
                 let slider = c.spacingSlider

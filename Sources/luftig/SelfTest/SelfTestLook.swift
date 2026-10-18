@@ -314,7 +314,7 @@ extension SelfTestScenarios {
         await preservingSettings {
             SettingsWindowController.headless = true
             let c = SettingsWindowController.shared
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             guard let w = c.window, let content = w.contentView else { t.check(false, "no settings window"); return }
             t.note("Settings window: title bar \(lookTitleBarHeight(w)) pt, content \(lookRect(content.frame))")
             let controls: [(String, NSView)] = [("scheme pop-up", c.schemePopup), ("text font pop-up", c.bodyFontPopup), ("code font pop-up", c.codeFontPopup), ("size field", c.sizeField), ("size stepper", c.sizeStepper),

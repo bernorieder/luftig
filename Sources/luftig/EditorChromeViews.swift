@@ -190,6 +190,10 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     var entries: [OutlineEntry] = [] {
         didSet { if entries != oldValue { table.reloadData(); if let c = currentIndex, c >= entries.count { currentIndex = nil } } }
     }
+    /// Settings > Panes > Outline: long headings wrap onto further lines (row heights follow) instead of being cut off.
+    var wrapsHeadings = false {
+        didSet { if wrapsHeadings != oldValue { table.reloadData() } }
+    }
     /// The entry whose section the window shows (drawn in the text colour).
     var currentIndex: Int? {
         didSet {
@@ -242,9 +246,13 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
 
     func apply(theme: Theme) {
         font = ChromeStyle.font(theme)
-        table.rowHeight = max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + 6)
+        table.rowHeight = singleRowHeight
         table.reloadData()
     }
+    private var singleRowHeight: CGFloat { max(OutlineView.rowHeight, ceil(font.ascender - font.descender) + 6) }
+    private func indent(forLevel level: Int) -> CGFloat { 16 + CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
+    /// The width a title has in its row: the column minus the indent and the right margin.
+    private func titleWidth(forLevel level: Int) -> CGFloat { max(20, OutlineView.width - indent(forLevel: level) - 12) }
     func refreshColors() { table.reloadData() }
     override func viewDidChangeEffectiveAppearance() { refreshColors() }
 
@@ -290,11 +298,22 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         cell.font = font
         cell.stringValue = e.title.isEmpty ? "(untitled)" : e.title
         cell.textColor = color(forRow: row)
+        cell.lineBreakMode = wrapsHeadings ? .byWordWrapping : .byTruncatingTail
+        cell.maximumNumberOfLines = wrapsHeadings ? 0 : 1
+        cell.cell?.wraps = wrapsHeadings
+        cell.preferredMaxLayoutWidth = wrapsHeadings ? titleWidth(forLevel: e.level) : 0
         return cell
+    }
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard wrapsHeadings, row < entries.count else { return singleRowHeight }
+        let e = entries[row]
+        let text = (e.title.isEmpty ? "(untitled)" : e.title) as NSString
+        let bounds = text.boundingRect(with: NSSize(width: titleWidth(forLevel: e.level), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: font])
+        return max(singleRowHeight, ceil(bounds.height) + 6)
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let v = OutlineRowView()
-        v.indent = 16 + CGFloat(max(0, entries[row].level - 1)) * OutlineView.indentPerLevel
+        v.indent = indent(forLevel: entries[row].level)
         return v
     }
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }

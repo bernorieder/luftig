@@ -67,7 +67,7 @@ extension SelfTestScenarios {
             window.saveFrame(usingName: SettingsWindowController.frameAutosaveName)
             t.check((UserDefaults.standard.string(forKey: "NSWindow Frame " + SettingsWindowController.frameAutosaveName) ?? "").hasPrefix("321 234"), "... saved in the preferences: \(UserDefaults.standard.string(forKey: "NSWindow Frame " + SettingsWindowController.frameAutosaveName) ?? "nothing")")
             window.performClose(nil)
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             t.check(SettingsWindowController.shared === c && c.window === window, "closed and presented again: the same window")
 
             // ---- the layout: every control lies inside the window at the minimum width, at the default width and at a wide one
@@ -312,7 +312,7 @@ extension SelfTestScenarios {
             window.performClose(nil)
             P.fontSize = 22
             t.check(c.sizeField.doubleValue == 22, "a hidden Settings window still follows the preferences (field \(c.sizeField.doubleValue))")
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             t.equal(c.sizeField.doubleValue, 22, "... so it shows the right values when it comes back")
             for d in [docA, docB] { t.close(d) }
         }

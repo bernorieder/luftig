@@ -319,6 +319,7 @@ extension EditorViewController {
     }
 
     func applyChromeTheme() {
+        outline.wrapsHeadings = EditorPreferences.outlineWraps
         outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
     }
 

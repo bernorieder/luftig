@@ -103,7 +103,7 @@ extension SelfTestScenarios {
     /// Starts from the defaults.
     @MainActor static func preservingSettings(_ body: @MainActor () async throws -> Void) async rethrows {
         let ud = UserDefaults.standard
-        let keys = EditorPreferences.allKeys + EditorPreferences.chromeKeys
+        let keys = EditorPreferences.allKeys + EditorPreferences.chromeKeys + [SettingsWindowController.screenKey]     // (the remembered Settings screen: tests start on Text)
         let saved = keys.map { ($0, ud.object(forKey: $0)) }
         for k in keys { ud.removeObject(forKey: k) }
         Palette.apply(schemeID: ColorSchemes.defaultID)
@@ -131,6 +131,7 @@ extension SelfTestScenarios {
             let c = SettingsWindowController.shared
             c.present()
             guard let window = c.window else { t.check(false, "no settings window"); return }
+            if SelfTest.argument("screen") == "panes" { c.showScreen(.panes) } else { c.showScreen(.text) }     // --screen text|panes
             // a fixed (light / dark) colour scheme sets the appearance of the whole app (Palette.apply): the window then inherits it, as in the real app;
             // only the system scheme follows `--appearance`
             window.appearance = Palette.isSystemScheme ? NSAppearance(named: SelfTest.appearanceName(SelfTest.argument("appearance"))) : nil

@@ -20,8 +20,9 @@ enum EditorPreferences {
     static let paneFontFamilyKey = "LuftigPaneFontFamily"
     static let paneFontSizeKey = "LuftigPaneFontSize"
     static let paneOpacityKey = "LuftigPaneOpacity"
+    static let outlineWrapsKey = "LuftigOutlineWraps"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -238,6 +239,12 @@ enum EditorPreferences {
             defaults.set(Double(v), forKey: paneOpacityKey)
             post()
         }
+    }
+
+    /// Settings > Panes > Outline: long headings wrap onto further lines instead of being cut off. Default off.
+    static var outlineWraps: Bool {
+        get { flag(forKey: outlineWrapsKey, default: false) }
+        set { setFlag(newValue, forKey: outlineWrapsKey, current: outlineWraps) }
     }
 
     private static func flag(forKey key: String, default d: Bool) -> Bool {

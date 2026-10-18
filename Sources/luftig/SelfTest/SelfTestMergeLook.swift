@@ -28,8 +28,9 @@ extension SelfTestScenarios {
         ]
         @MainActor func walk(_ v: NSView) {
             if let g = v as? NSGridView {
-                views.append(("grid", g))
-                for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("label\(row)", l)) } }
+                let name = "grid\(views.filter { $0.0.hasPrefix("grid") && !$0.0.contains(".") }.count)"      // grid0: the Text screen's, grid1: the Panes screen's
+                views.append((name, g))
+                for row in 0..<g.numberOfRows { if let l = g.cell(atColumnIndex: 0, rowIndex: row).contentView { views.append(("\(name).label\(row)", l)) } }
             }
             v.subviews.forEach(walk)
         }
@@ -50,7 +51,7 @@ extension SelfTestScenarios {
             let (doc, a, _) = try await openEditor(t, text: settingsDocument(times: 40), name: "merge-look.md", size: NSSize(width: 900, height: 700))
             _ = doc
             let c = SettingsWindowController.shared
-            c.present()
+            c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             guard let window = c.window, let content = window.contentView else { t.check(false, "no settings window"); return }
             defer { window.appearance = nil }
             window.setContentSize(NSSize(width: 679, height: content.frame.height))       // the width of the user's screenshot

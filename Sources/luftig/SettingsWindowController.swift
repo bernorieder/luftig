@@ -5,7 +5,9 @@
 // own: it reads the preferences, shows them, and writes them back when a control is used; it follows changes made elsewhere (⌘+ ⌘- ⌘0, the
 // View menu) because it observes `EditorPreferences.didChange` like an editor does.
 //
-//   [ live preview: the real Theme + lexer + decorations, read-only ]
+//   [ live preview: the real Theme + lexer + decorations, read-only ]   <- on both screens
+//   ( Text | Panes )                                   <- two screens, a segmented control under the preview; the chosen one is remembered
+//   Text:
 //   Color scheme   [swatch luftig (follows system appearance)  v]
 //   Text font       [System (SF Pro)  v]
 //   Code font       [System Mono (SF Mono)  v]
@@ -15,7 +17,15 @@
 //   Column width    [x] Limit line length (centered column)
 //                   ----o------   760 pt
 //                   about 85 characters per line
+//   Panes:
+//   Font            [Same as text font  v]
+//   Size            [12 pt v]
+//   Opacity         ----o------   100 %
+//   Outline         [x] Wrap long headings
 //                                                               [Restore Defaults]
+//
+// The window's height is that of the taller screen (Text), computed once; switching screens hides one container and shows the other, nothing moves.
+// The preview stays on both screens: a pane setting has no preview of its own, and the text one keeps the window familiar.
 //
 // LAYOUT IS FIXED. The controls grid has fixed column widths (labels: the widest label; controls: slider + value label) and is centred in the window
 // by plain constraints; every label that shows a value has a fixed width (monospaced digits, truncating, never compressing the grid); the note under
@@ -117,7 +127,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let paneOpacityValueLabel = NSTextField(labelWithString: "")
     static let paneSizes: [CGFloat] = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20]
     static let paneFontDefaultTitle = "Same as text font"
+    let outlineWrapCheckbox = NSButton(checkboxWithTitle: "Wrap long headings", target: nil, action: nil)
     let restoreButton = NSButton(title: "Restore Defaults", target: nil, action: nil)
+    /// The screens: Text (preview + the text settings) and Panes; the segmented control switches, the choice is remembered.
+    enum Screen: Int, CaseIterable { case text = 0, panes = 1
+        var title: String { self == .text ? "Text" : "Panes" }
+    }
+    static let screenKey = "LuftigSettingsScreen"
+    let screenControl = NSSegmentedControl(labels: Screen.allCases.map { $0.title }, trackingMode: .selectOne, target: nil, action: nil)
+    let textScreen = NSView()
+    let panesScreen = NSView()
+    private(set) var screen: Screen = .text
 
     /// The families the two font popups offer (the code font: monospaced ones only).
     private(set) var textFamilies: [String] = []
@@ -252,6 +272,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         paneOpacitySlider.widthAnchor.constraint(equalToConstant: W.sliderWidth).isActive = true
         paneOpacitySlider.onTracking = { [weak self, weak paneOpacitySlider] began in if let paneOpacitySlider { self?.tracking(paneOpacitySlider, began: began) } }
         fixedLabel(paneOpacityValueLabel, width: W.valueLabelWidth, font: W.valueFont)
+        outlineWrapCheckbox.target = self; outlineWrapCheckbox.action = #selector(outlineWrapChanged(_:))
+        outlineWrapCheckbox.setAccessibilityLabel("Wrap long headings in the outline")
+
+        screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
+        screenControl.segmentStyle = .automatic
+        screenControl.setAccessibilityLabel("Settings screen")
+        screenControl.translatesAutoresizingMaskIntoConstraints = false
+        for (i, sc) in Screen.allCases.enumerated() { screenControl.setWidth(90, forSegment: i); screenControl.setLabel(sc.title, forSegment: i) }
 
         restoreButton.target = self; restoreButton.action = #selector(restoreDefaults(_:))
         restoreButton.bezelStyle = .rounded
@@ -274,56 +302,88 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let opacityRow = NSStackView(views: [paneOpacitySlider, paneOpacityValueLabel])
         opacityRow.orientation = .horizontal; opacityRow.spacing = W.sliderGap
 
-        let labels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:", "Panes font:", "Panes size:", "Panes opacity:"].map { label($0) }
-        let grid = NSGridView(views: [
-            [labels[0], schemePopup],
-            [labels[1], bodyFontPopup],
-            [labels[2], codeFontPopup],
-            [labels[3], sizeRow],
-            [labels[4], spacingRow],
-            [labels[5], widthColumn],
-            [labels[6], paneFontPopup],
-            [labels[7], paneSizePopup],
-            [labels[8], opacityRow],
+        // the two grids share the label column width, so the controls of both screens start at the same x
+        let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
+        let panesLabels = ["Font:", "Size:", "Opacity:", "Outline:"].map { label($0) }
+        let labelWidth = ceil((textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
+        func makeGrid(_ rows: [[NSView]]) -> NSGridView {
+            let grid = NSGridView(views: rows)
+            grid.translatesAutoresizingMaskIntoConstraints = false
+            grid.rowSpacing = 12
+            grid.columnSpacing = 10
+            grid.column(at: 0).xPlacement = .trailing
+            grid.column(at: 1).xPlacement = .leading
+            grid.column(at: 0).width = labelWidth                                                            // FIXED widths: the grid never stretches to the window,
+            grid.column(at: 1).width = W.controlColumnWidth                                                  // so no column can be handed spare width
+            grid.rowAlignment = .firstBaseline
+            return grid
+        }
+        let grid = makeGrid([
+            [textLabels[0], schemePopup],
+            [textLabels[1], bodyFontPopup],
+            [textLabels[2], codeFontPopup],
+            [textLabels[3], sizeRow],
+            [textLabels[4], spacingRow],
+            [textLabels[5], widthColumn],
         ])
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 12
-        grid.columnSpacing = 10
-        grid.column(at: 0).xPlacement = .trailing
-        grid.column(at: 1).xPlacement = .leading
-        grid.column(at: 0).width = ceil(labels.map { $0.intrinsicContentSize.width }.max() ?? 90)          // FIXED widths: the grid never stretches to the window,
-        grid.column(at: 1).width = W.controlColumnWidth                                                       // so no column can be handed spare width
-        grid.rowAlignment = .firstBaseline
+        let panesGrid = makeGrid([
+            [panesLabels[0], paneFontPopup],
+            [panesLabels[1], paneSizePopup],
+            [panesLabels[2], opacityRow],
+            [panesLabels[3], outlineWrapCheckbox],
+        ])
 
         let previewView = preview.scrollView
         previewView.translatesAutoresizingMaskIntoConstraints = false
 
         let content = SettingsContentView(frame: NSRect(x: 0, y: 0, width: W.defaultContentWidth, height: 700))
+        for screenView in [textScreen, panesScreen] { screenView.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(screenView) }
         content.addSubview(previewView)
-        content.addSubview(grid)
+        content.addSubview(screenControl)
+        textScreen.addSubview(grid)
+        panesScreen.addSubview(panesGrid)
         content.addSubview(restoreButton)
         let m = W.margin
         NSLayoutConstraint.activate([
+            // the preview on top, on both screens; the switch under it
             previewView.topAnchor.constraint(equalTo: content.topAnchor, constant: m),
             previewView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: m),
             previewView.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m),
             previewView.heightAnchor.constraint(equalToConstant: W.previewHeight),
-            grid.topAnchor.constraint(equalTo: previewView.bottomAnchor, constant: 18),
-            grid.centerXAnchor.constraint(equalTo: content.centerXAnchor),                          // centred, at its own fixed width: nothing is left to stretch or to guess
-            grid.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: m),    // (the minimum window width keeps these two satisfied)
-            grid.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -m),
-            restoreButton.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 18),
+            screenControl.topAnchor.constraint(equalTo: previewView.bottomAnchor, constant: 14),
+            screenControl.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            // both screens fill the same place under the switch; the hidden one keeps its layout (so nothing moves when it comes back)
+            textScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
+            textScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), textScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            panesScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
+            panesScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), panesScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            // Text: its grid
+            grid.topAnchor.constraint(equalTo: textScreen.topAnchor),
+            grid.centerXAnchor.constraint(equalTo: textScreen.centerXAnchor),                       // centred, at its own fixed width: nothing is left to stretch or to guess
+            grid.leadingAnchor.constraint(greaterThanOrEqualTo: textScreen.leadingAnchor, constant: m),    // (the minimum window width keeps these two satisfied)
+            grid.trailingAnchor.constraint(lessThanOrEqualTo: textScreen.trailingAnchor, constant: -m),
+            grid.bottomAnchor.constraint(equalTo: textScreen.bottomAnchor),
+            // Panes: its grid, at the top of the screen
+            panesGrid.topAnchor.constraint(equalTo: panesScreen.topAnchor),
+            panesGrid.centerXAnchor.constraint(equalTo: panesScreen.centerXAnchor),
+            panesGrid.leadingAnchor.constraint(greaterThanOrEqualTo: panesScreen.leadingAnchor, constant: m),
+            panesGrid.trailingAnchor.constraint(lessThanOrEqualTo: panesScreen.trailingAnchor, constant: -m),
+            panesGrid.bottomAnchor.constraint(equalTo: panesScreen.bottomAnchor),
+            // the button under the taller screen (Text), on both screens
+            restoreButton.topAnchor.constraint(equalTo: textScreen.bottomAnchor, constant: 18),
             restoreButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m),
             restoreButton.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
         ])
         window.contentView = content
+        showScreen(Screen(rawValue: UserDefaults.standard.integer(forKey: W.screenKey)) ?? .text)
 
         // -- size: the height is the content's (computed ONCE: nothing in the window changes size), the width is the user's from the minimum up; the position is remembered
         syncFromPreferences()
         content.layoutSubtreeIfNeeded()
         // (the button's FRAME is taller than the rectangle the constraints place - its alignment rect - by the room of its shadow and focus ring)
         let restoreHeight = restoreButton.alignmentRect(forFrame: NSRect(origin: .zero, size: restoreButton.fittingSize)).height
-        let height = ceil(m + W.previewHeight + 18 + grid.fittingSize.height + 18 + restoreHeight + 18)
+        let switchHeight = ceil(screenControl.fittingSize.height)
+        let height = ceil(m + W.previewHeight + 14 + switchHeight + 14 + grid.fittingSize.height + 18 + restoreHeight + 18)
         window.setContentSize(NSSize(width: W.defaultContentWidth, height: height))
         window.contentMinSize = NSSize(width: W.minContentWidth, height: height)
         window.contentMaxSize = NSSize(width: 2000, height: height)
@@ -331,6 +391,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         window.setFrameAutosaveName(SettingsWindowController.frameAutosaveName)
         if !hadFrame { window.center() }
     }
+
+    /// Show one screen (the segmented control follows; the choice is remembered).
+    func showScreen(_ sc: Screen) {
+        screen = sc
+        textScreen.isHidden = sc != .text
+        panesScreen.isHidden = sc != .panes
+        screenControl.selectedSegment = sc.rawValue
+        UserDefaults.standard.set(sc.rawValue, forKey: SettingsWindowController.screenKey)
+    }
+    @objc func screenChanged(_ sender: NSSegmentedControl) { showScreen(Screen(rawValue: sender.selectedSegment) ?? .text) }
 
     /// A label that shows values: a fixed width whatever it says (it truncates, it never asks the layout for more), so the text can change without moving anything.
     private func fixedLabel(_ l: NSTextField, width: CGFloat, font: NSFont?) {
@@ -484,6 +554,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let opacity = EditorPreferences.paneOpacity
         if trackedControl !== paneOpacitySlider { paneOpacitySlider.doubleValue = Double(opacity) }
         paneOpacityValueLabel.stringValue = "\(Int((opacity * 100).rounded())) %"
+        outlineWrapCheckbox.state = EditorPreferences.outlineWraps ? .on : .off
     }
 
     /// The size field and its stepper show `size`, whatever has the keyboard focus.
@@ -592,6 +663,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func paneOpacityChanged(_ sender: NSSlider) {
         EditorPreferences.paneOpacity = CGFloat(sender.doubleValue)
+        syncFromPreferences()
+    }
+    @objc func outlineWrapChanged(_ sender: NSButton) {
+        EditorPreferences.outlineWraps = sender.state == .on
         syncFromPreferences()
     }
     @objc func restoreDefaults(_ sender: Any?) {

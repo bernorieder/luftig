@@ -298,6 +298,25 @@ extension SelfTestScenarios {
             EditorPreferences.paneOpacity = 1; EditorPreferences.paneFontFamily = nil; EditorPreferences.paneFontSize = 12
             await t.spin(10)
             t.check(abs((host.wordCount.field.textColor?.alphaComponent ?? 0) - 1) < 0.01 && host.wordCount.field.font?.pointSize == 12, "back to the defaults")
+            // Settings > Panes > Outline: wrap long headings
+            let longTitle = "A heading that is far too long to fit into the outline column in one line of text"
+            t.typeText("\n\n## " + longTitle + "\n", into: doc, at: NSRange(location: (tv.string as NSString).length, length: 0))
+            waited = 0
+            while host.chromeRefreshPending && waited < 3000 { await t.spin(20); waited += 20 }
+            let lastRow = host.outline.entries.count - 1
+            t.equal(host.outline.entries.last?.title, longTitle, "the long heading is in the outline")
+            let single = host.outline.table.rowHeight
+            t.check(host.outline.table.rect(ofRow: lastRow).height == single, "without wrapping the long heading has the single-line row height (\(single) pt)")
+            t.check((host.outline.table.view(atColumn: 0, row: lastRow, makeIfNecessary: true) as? NSTextField)?.lineBreakMode == .byTruncatingTail, "... and is truncated")
+            EditorPreferences.outlineWraps = true
+            await t.spin(10)
+            let wrapped = host.outline.table.rect(ofRow: lastRow).height
+            t.check(wrapped >= single * 2 - 2, "Wrap long headings: the row grows to hold the lines (\(wrapped) pt vs \(single))")
+            t.check((host.outline.table.view(atColumn: 0, row: lastRow, makeIfNecessary: true) as? NSTextField)?.lineBreakMode == .byWordWrapping, "... and the cell wraps by words")
+            t.check(host.outline.table.rect(ofRow: 0).height == single, "a short heading keeps the single-line height")
+            EditorPreferences.outlineWraps = false
+            await t.spin(10)
+            t.check(host.outline.table.rect(ofRow: lastRow).height == single, "off again: single-line rows")
 
             // typing: recomputed once, after the pause
             let before = host.chromeRefreshCount
