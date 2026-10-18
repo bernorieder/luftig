@@ -219,7 +219,7 @@ extension SelfTestScenarios {
         if let sc = sv.verticalScroller {
             t.check(!sc.isHidden && sc.isEnabled && abs(sc.frame.width - sw) < 0.5 && sc.knobProportion > 0 && sc.knobProportion < 1, "legacy scroller: it is shown (frame \(lookRect(sc.frame)), knob \(String(format: "%.3f", sc.knobProportion)) of the track, \(sw) pt wide)")
         } else { t.check(false, "no vertical scroller") }
-        let cw = tv.textContainer!.size.width, inset = tv.textContainerInset.width, extra = host.padding.textTrailingExtra
+        let cw = tv.textContainer!.size.width, inset = tv.textContainerInset.width, extra = CGFloat(0)
         t.check(abs(inset - ((clip.frame.width - extra - 760) / 2).rounded(.down)) <= 1 && abs(inset + cw + inset + extra - clip.frame.width) <= 1.5, "legacy scroller: the 760 pt column is centred in the clip view minus the right-hand extra (inset \(inset) + \(cw) + \(inset) + extra \(extra) = \(2 * inset + cw + extra) of \(clip.frame.width))")
         sv.scrollerStyle = NSScroller.preferredScrollerStyle
         content.layoutSubtreeIfNeeded()

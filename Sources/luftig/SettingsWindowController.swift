@@ -27,9 +27,9 @@
 //   Show            [x] Outline  [x] Syntax bar                       (the View menu's switches, the other way to reach them)
 //                   [x] Word count  [ ] Reading time                  (both in one row at the top right)
 //   Padding         ----o------   20 pt                                 (ONE number for every gap: the window's frame, between the panels, around the text)
-//   Font            [Same as text font  v]
-//   Size            [12 pt v]
-//   Opacity         ----o------   100 %
+//   Panes font      [Same as text font  v]
+//   Panes size      [12 pt v]
+//   Panes opacity   ----o------   100 %
 //   Outline         [x] Wrap long headings
 //   Outline spacing ----o------   1.40 ×                                (the row height as a multiple of the outline font's height: not padding)
 //                                                               [Restore Defaults]
@@ -394,7 +394,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         // the grids share the label column width, so the controls of every screen start at the same x
         let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
-        let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:", "Outline spacing:"].map { label($0) }
+        let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)

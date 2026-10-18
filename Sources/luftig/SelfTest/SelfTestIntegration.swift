@@ -624,7 +624,7 @@ extension SelfTestScenarios {
         host.luftigToggleReadableWidth(nil)
         w.setContentSize(NSSize(width: 1400, height: 800)); w.contentView?.layoutSubtreeIfNeeded()
         let area = host.scrollView.contentView.bounds.width                          // (the outline on the left takes its 220 pt from the window first)
-        let extra = host.padding.textTrailingExtra                                      // (the right side has `textTrailingExtra` more air than the left: pitfall 34)
+        let extra = CGFloat(0)                                      // (the right side has `textTrailingExtra` more air than the left: pitfall 34)
         let inset = host.padding.textInsetHorizontal
         t.check(tv.textContainerInset.width == inset && abs(tv.textContainer!.size.width - (area - 2 * inset - extra)) < 1.5 && area > 1100, "Wrap to Readable Width OFF: the text fills the text area of the 1400 pt window (\(Int(tv.textContainer!.size.width)) of \(Int(area)) pt, inset \(Int(inset)))")
         host.luftigToggleReadableWidth(nil)

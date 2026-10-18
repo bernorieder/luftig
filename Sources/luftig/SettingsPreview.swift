@@ -68,7 +68,7 @@ final class SettingsPreview {
     /// container (the editor's vertical padding is a margin of its viewport), the extra on the right.
     func applyPadding() {
         let p = Padding(points: EditorPreferences.padding)
-        column.minInset = p.textInsetHorizontal; column.verticalInset = 0; column.trailingExtra = p.textTrailingExtra; column.update()
+        column.minInset = p.textInsetHorizontal; column.update()
     }
 
     func refresh() -> Bool {

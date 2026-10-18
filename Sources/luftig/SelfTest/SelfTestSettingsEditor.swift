@@ -106,14 +106,14 @@ extension SelfTestScenarios {
                 let tv = host.textView
                 host.view.window?.contentView?.layoutSubtreeIfNeeded()
                 t.check(abs(tv.textContainer!.size.width - 600) < 1.5, "column width: the text column of \(name) is \(Int(tv.textContainer!.size.width)) pt (600 expected)")
-                t.check(abs(tv.textContainerInset.width - ((host.scrollView.contentView.bounds.width - host.padding.textTrailingExtra - 600) / 2).rounded(.down)) < 1.5, "column width: ... centred in the clip view minus the right-hand extra (inset \(Int(tv.textContainerInset.width)) pt, extra \(Int(host.padding.textTrailingExtra)))")
+                t.check(abs(tv.textContainerInset.width - ((host.scrollView.contentView.bounds.width - CGFloat(0) - 600) / 2).rounded(.down)) < 1.5, "column width: ... centred in the clip view minus the right-hand extra (inset \(Int(tv.textContainerInset.width)) pt, extra \(Int(CGFloat(0))))")
             }
             P.columnWidth = 1000                   // (a 1400 pt window minus the outline, the scroller, the window frame and the insets holds about 1060 pt of column)
             for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1000) < 1.5, "column width: widened to \(Int(host.textView.textContainer!.size.width)) pt in \(name)") }
             P.readableWidth = false
             for (name, host) in hosts {           // (the outline on the left takes its 220 pt first: the text fills the text area, not the window)
                 let area = host.scrollView.contentView.bounds.width
-                let extra = host.padding.textTrailingExtra
+                let extra = CGFloat(0)
                 let inset = host.padding.textInsetHorizontal
                 t.check(host.textView.textContainerInset.width == inset && abs(host.textView.textContainer!.size.width - (area - 2 * inset - extra)) < 1.5 && area > 1000, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt, inset \(Int(inset)))")
             }

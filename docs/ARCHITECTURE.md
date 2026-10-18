@@ -45,7 +45,7 @@ Sources/luftig/
   LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground)
   Decorations.swift                     .luftigBlock / .luftigInline keys, BlockMark encoding, metrics, band path helpers
   ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset and the text container's WIDTH
-                                        (widthTracksTextView is off: the right side gets `trailingExtra` more air than the left, pitfall 34); follows the clip view's frame;
+                                        (widthTracksTextView is off and the container's width is set by hand, pitfall 34); follows the clip view's frame;
                                         Typewriter Mode's vertical inset (half the viewport, so the first and the last line can sit in the middle)
   BannerView.swift                      the non-modal strip for external-change messages
   EditorChrome.swift                    the three elements around the text, without views: OutlineScanner (ATX / setext headings outside fences and front matter,
@@ -379,12 +379,13 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     on the classic path (it uses its `NSTextInsertionIndicator` subview, macOS 14+, only for subclasses that do not override the method): 0 - 1 dropped
     frames in every pass, three runs and the reverse pass. The caret then is the classic bar in `insertionPointColor` (`Palette.caret`), blinking as
     before. The headless benchmarks (`fix-scroll-bench`, `fix-scroll`) could never see any of this: no window server, no render server.
-34. **An asymmetric text inset: the container's width is set by hand.** `textContainerInset` is symmetric. For more air on the right of the text than on the left
-    (Settings > Layout > Padding: `Padding.textTrailingExtra`), `ReadableColumnController` switches `widthTracksTextView` off and sets the container's width itself on
-    every clip-frame change: `clip width - 2 * inset - trailingExtra`. NSTextView draws a container narrower than the view at the inset's origin and never centres it
-    (measured with a bare NSTextView: origin (28, 20) whatever the container's width), so left = inset, right = inset + extra. Everything that reads
-    `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads `textContainer.size.width` sees the narrower width,
-    which is the point (the bands end there). The Settings preview uses the same controller and extra.
+34. **The container's width is set by hand.** `textContainerInset` is symmetric. A round of the padding work gave the text more air on its right than on
+    its left (`trailingExtra`), for which `ReadableColumnController` switched `widthTracksTextView` off and set the container's width itself on every
+    clip-frame change: `clip width - 2 * inset - extra`. NSTextView draws a container narrower than the view at the inset's origin and never centres it
+    (measured with a bare NSTextView: origin (28, 20) whatever the container's width), so left = inset, right = inset + extra. The extra was dropped
+    again (the window frame right of the scroller is the air there) but the mechanism stayed: the width is `clip width - 2 * inset`, spelled out.
+    Everything that reads `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads
+    `textContainer.size.width` sees the container's width, which is the point (the bands end there). The Settings preview uses the same controller.
 
 35. **Do not override `draw(_:)` on the NSTextView to paint over the text.** A (since removed) Focus Mode veiled everything but the paragraph at the caret;
     drawn from an override of `draw(_:)` that called super and filled the page colour over the rest, it was correct on screen, but `visual-redraw` then

@@ -216,7 +216,7 @@ extension SelfTestScenarios {
             let glyphTop0 = used0.maxY - (lm.location(forGlyphAt: 0).y) - font0.ascender + used0.minY - used0.minY   // baseline - ascender
             let baseline0 = line0.minY + lm.location(forGlyphAt: 0).y
             let p = host.padding
-            out(String(format: "GEOMETRY padding %.0f pt: window frame %.0f, viewport margin %.0f, text inset h %.0f, outline leading %.0f, word count row %.0f, bar %.0f", EditorPreferences.padding, p.window, p.textInsetVertical, p.textInsetHorizontal, p.outlineLeading, p.wordCountHeight, p.barHeight))
+            out(String(format: "GEOMETRY padding %.0f pt: window frame %.0f (top / bottom %.0f), viewport margin %.0f, text inset h %.0f, word count row %.0f, bar %.0f", EditorPreferences.padding, p.window, p.windowVertical, p.textInsetVertical, p.textInsetHorizontal, p.wordCountHeight, p.barHeight))
             out(String(format: "GEOMETRY text: scroll view top %.1f; first line fragment top %.1f, baseline %.1f, ascender %.1f -> glyph top %.1f; text left %.1f", top(host.scrollView.bounds, in: host.scrollView), top(NSRect(x: 0, y: line0.minY, width: 1, height: 0), in: tv) - 0, top(NSRect(x: 0, y: baseline0, width: 1, height: 0), in: tv), font0.ascender, top(NSRect(x: 0, y: baseline0, width: 1, height: 0), in: tv) - font0.ascender, host.view.convert(used0, from: tv).minX))
             _ = glyphTop0
             if let cell = host.outline.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTextField, let cfont = cell.font {

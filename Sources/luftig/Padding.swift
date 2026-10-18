@@ -34,14 +34,9 @@ struct Padding: Equatable {
     /// Between the text and the sides of its panel: on the left that is the gap to the outline (`ReadableColumnController.minInset`). (Not part of the
     /// self-test's flush override: a scenario about the window's chrome keeps the bands away from the window's corners.)
     var textInsetHorizontal: CGFloat { points }
-    /// Extra air on the right of the text: none - the window frame right of the scroller is the padding there.
-    var textTrailingExtra: CGFloat { 0 }
-    /// The outline's entries start at the window frame; the indent per level (OutlineView.indentPerLevel) is structure, not padding.
-    var outlineLeading: CGFloat { 0 }
-    /// The word count row is its line; the gap to the window frame on its right is the frame itself.
+    /// The word count row is its line (the outline's entries and the row's text start at the window frame: no gaps of their own).
     static let wordCountContentHeight: CGFloat = 16
     var wordCountHeight: CGFloat { Padding.wordCountContentHeight }
-    var wordCountTrailing: CGFloat { 0 }
     /// The syntax bar is its symbols; the gaps between them are fixed (SyntaxBarView.gapInGroup / gapBetweenGroups).
     static let barContentHeight: CGFloat = 18
     var barHeight: CGFloat { Padding.barContentHeight }

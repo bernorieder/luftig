@@ -280,7 +280,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         column.isEnabled = EditorPreferences.readableWidth
         applyChromeVisibility()
         applyChromeTheme()                   // (the panes' font, size and opacity are preferences of their own: cheap to re-apply on every change)
-        applyWritingModes()
+        applyTypewriterMode()
     }
 
     /// The user cannot see this window right now. `isVisible` is false for a minimized window, a background tab and a hidden app; `occlusionState` has no
@@ -399,9 +399,9 @@ extension EditorViewController {
         let nc = NotificationCenter.default
         // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
-        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection(); self?.writingModesSelectionChanged() })
-        chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.writingModesTextChanged() })
-        applyWritingModes()
+        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection(); self?.typewriterSelectionChanged() })
+        chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.typewriterTextChanged() })
+        applyTypewriterMode()
         chromeObservers.append(nc.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) { [weak self] _ in self?.updateCurrentOutlineEntry() })
     }
 
@@ -414,7 +414,7 @@ extension EditorViewController {
         bottomPaddingConstraint.constant = p.windowVertical
         outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
         outline.lineHeightFactor = EditorPreferences.outlineLineHeight
-        column.minInset = p.textInsetHorizontal; column.verticalInset = 0; column.trailingExtra = p.textTrailingExtra; column.update()
+        column.minInset = p.textInsetHorizontal; column.update()
         outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
     }
     /// The padding in effect (tests).
@@ -512,7 +512,7 @@ extension EditorViewController {
         guard !outline.isHidden, !outline.entries.isEmpty, let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0 else { return }
         // the character just under the top edge plus the text inset: a heading that sits at the top of the window (where a click puts it) is current
         let origin = textView.textContainerOrigin
-        let probe = NSPoint(x: 0, y: textView.visibleRect.minY - origin.y + column.verticalInset + 2)
+        let probe = NSPoint(x: 0, y: textView.visibleRect.minY - origin.y + 2)
         let top = lm.characterIndexForGlyph(at: lm.glyphIndex(for: probe, in: tc, fractionOfDistanceThroughGlyph: nil))
         // the last heading at or before `top` (binary search: entries are in document order)
         var lo = 0, hi = outline.entries.count
@@ -538,7 +538,7 @@ extension EditorViewController {
             textView.sizeToFit()                      // the frame follows the layout now (AppKit does it at the end of a layout pass; a jump cannot wait for one)
             let glyph = lm.glyphIndexForCharacter(at: loc)
             let line = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-            let y = max(0, line.minY + textView.textContainerOrigin.y - column.verticalInset)
+            let y = max(0, line.minY + textView.textContainerOrigin.y)
             let clip = scrollView.contentView
             let maxY = max(0, textView.frame.height - clip.bounds.height)
             clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(y, maxY)))
@@ -652,7 +652,7 @@ extension EditorViewController {
     @objc func luftigToggleTypewriterMode(_ sender: Any?) { EditorPreferences.typewriterMode.toggle() }
 
     /// The switch, from the preferences (every window follows): the column's typewriter inset, and the caret's line to the middle.
-    func applyWritingModes() {
+    func applyTypewriterMode() {
         let typewriter = EditorPreferences.typewriterMode
         if column.typewriter != typewriter {
             column.typewriter = typewriter
@@ -665,8 +665,8 @@ extension EditorViewController {
         if typewriter { centerCaretLine() }
     }
 
-    func writingModesSelectionChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
-    func writingModesTextChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
+    func typewriterSelectionChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
+    func typewriterTextChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
 
     /// The line fragment (container coordinates) that holds the caret at `location`; the extra line after a trailing line break for a caret at the very end.
     func caretLineRect(at location: Int) -> NSRect? {

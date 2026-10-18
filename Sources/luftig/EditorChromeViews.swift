@@ -131,15 +131,13 @@ final class SoftLabel: NSView {
 // MARK: - the word count
 
 final class WordCountView: NSView {
-    static let height: CGFloat = 22
     let field = NSTextField(labelWithString: "")
     private var schemeObserver: NSObjectProtocol?
 
     private var heightConstraint: NSLayoutConstraint!
-    private var trailingConstraint: NSLayoutConstraint!
-    /// Settings > Layout > Padding: the row's height and the margin on the right.
+    /// Settings > Layout > Padding: the row's height (its line).
     var padding = Padding.standard {
-        didSet { heightConstraint.constant = padding.wordCountHeight; trailingConstraint.constant = -padding.wordCountTrailing }
+        didSet { heightConstraint.constant = padding.wordCountHeight }
     }
 
     override init(frame: NSRect) {
@@ -150,10 +148,9 @@ final class WordCountView: NSView {
         field.lineBreakMode = .byClipping
         field.isSelectable = false
         addSubview(field)
-        heightConstraint = heightAnchor.constraint(equalToConstant: WordCountView.height)
-        trailingConstraint = field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+        heightConstraint = heightAnchor.constraint(equalToConstant: Padding.wordCountContentHeight)
         NSLayoutConstraint.activate([
-            heightConstraint, trailingConstraint,
+            heightConstraint, field.trailingAnchor.constraint(equalTo: trailingAnchor),
             field.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 1),
             field.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
         ])
@@ -278,7 +275,7 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     }
     private var fontHeight: CGFloat { font.ascender - font.descender }
     private var singleRowHeight: CGFloat { ceil(fontHeight * lineHeightFactor) }
-    private func indent(forLevel level: Int) -> CGFloat { padding.outlineLeading + CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
+    private func indent(forLevel level: Int) -> CGFloat { CGFloat(max(0, level - 1)) * OutlineView.indentPerLevel }
     /// The width a title has in its row: the column minus the indent and the right margin.
     private func titleWidth(forLevel level: Int) -> CGFloat { max(20, OutlineView.width - indent(forLevel: level) - 12) }
     func refreshColors() { table.reloadData() }
@@ -372,7 +369,6 @@ final class OutlineRowView: NSTableRowView {
 // MARK: - the syntax bar
 
 final class SyntaxBarView: NSView {
-    static let height: CGFloat = 40
     static let gapInGroup: CGFloat = 16
     static let gapBetweenGroups: CGFloat = 30
     let stack = NSStackView()
@@ -410,7 +406,7 @@ final class SyntaxBarView: NSView {
             stack.addArrangedSubview(g)
         }
         addSubview(stack)
-        heightConstraint = heightAnchor.constraint(equalToConstant: SyntaxBarView.height)
+        heightConstraint = heightAnchor.constraint(equalToConstant: Padding.barContentHeight)
         NSLayoutConstraint.activate([
             heightConstraint,
             stack.centerXAnchor.constraint(equalTo: centerXAnchor),
