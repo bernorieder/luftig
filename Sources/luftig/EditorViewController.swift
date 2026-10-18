@@ -22,6 +22,8 @@ import MarkdownKit
     func luftigToggleSyntaxBar(_ sender: Any?)
     /// Format menu: the item's `tag` names the SyntaxElement (`SyntaxElement.menuTag`); the same edit as a click on the syntax bar.
     func luftigInsertSyntax(_ sender: Any?)
+    /// Edit > Open Link: the link at the caret (the same as a ⌘-click on it).
+    func luftigOpenLink(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -351,6 +353,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(luftigInsertSyntax(_:)): return textView.isEditable && SyntaxElement.element(menuTag: item.tag) != nil
+        case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
         case #selector(luftigToggleReadableWidth(_:)): item.state = column.isEnabled ? .on : .off
         case #selector(luftigToggleSpellChecking(_:)): item.state = textView.isContinuousSpellCheckingEnabled ? .on : .off
         case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"
@@ -378,6 +381,7 @@ extension EditorViewController {
         applyChromeVisibility()
         outline.onSelect = { [weak self] e in self?.jump(toOutlineEntry: e) }
         syntaxBar.onInsert = { [weak self] e in self?.insert(e) }
+        editorTextView.onCommandClick = { [weak self] index in self?.followLink(at: index) ?? false }
         let nc = NotificationCenter.default
         // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
@@ -498,14 +502,22 @@ extension EditorViewController {
         outline.currentIndex = lo > 0 ? lo - 1 : nil
     }
 
-    /// A click on an outline entry: the heading line at the top of the window, the caret on it.
+    /// Up to this many UTF-16 units above the target a jump styles and lays out EVERYTHING above it first, so that it lands exactly (the non-contiguous
+    /// layout only estimates the height of text it has not laid out, pitfall 27: measured, a heading 80 lines down was placed at 192 pt instead of ~1900).
+    /// Beyond it the jump lands on the estimate and the display refines it (the cost of an exact jump is a layout pass over the text above).
+    static let exactJumpLimit = 300_000
+
+    /// A click on an outline entry (or an anchor link): the heading line at the top of the window, the caret on it.
     func jump(toOutlineEntry e: OutlineEntry) {
         let length = storage.length
         guard e.location <= length else { return }
         let loc = min(e.location, max(0, length - 1))
-        styler.prestyle(aroundCharacter: loc)
+        let exact = loc <= EditorViewController.exactJumpLimit
+        if exact { styler.styleAll(upTo: min(length, loc + 2000)) } else { styler.prestyle(aroundCharacter: loc) }
         if let lm = textView.layoutManager, let tc = textView.textContainer, length > 0 {
-            lm.ensureLayout(forCharacterRange: NSRange(location: loc, length: min(2000, length - loc)))
+            if exact { lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: min(length, loc + 2000))) }
+            else { lm.ensureLayout(forCharacterRange: NSRange(location: loc, length: min(2000, length - loc))) }
+            textView.sizeToFit()                      // the frame follows the layout now (AppKit does it at the end of a layout pass; a jump cannot wait for one)
             let glyph = lm.glyphIndexForCharacter(at: loc)
             let line = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
             let y = max(0, line.minY + textView.textContainerOrigin.y - column.verticalInset)
@@ -547,5 +559,70 @@ extension EditorViewController {
         let sel = NSIntersectionRange(change.selection, NSRange(location: 0, length: storage.length))
         tv.setSelectedRange(sel.length == 0 && change.selection.location <= storage.length ? NSRange(location: change.selection.location, length: 0) : sel)
         tv.scrollRangeToVisible(tv.selectedRange())
+    }
+}
+
+// MARK: - links (⌘-click, Edit > Open Link; LinkFollowing.swift)
+
+extension EditorViewController {
+
+    /// What opens a web URL or a file luftig does not edit itself (NSWorkspace; the self-test replaces it to see what would open).
+    nonisolated(unsafe) static var openExternally: (URL) -> Void = { NSWorkspace.shared.open($0) }
+    /// What opens a Markdown / text file as a document (the self-test replaces it as well).
+    nonisolated(unsafe) static var openDocument: (URL, _ anchor: String?) -> Void = { url, anchor in
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { doc, _, _ in
+            if let anchor, let host = (doc as? MarkdownDocument)?.host as? EditorViewController { host.jump(toAnchor: anchor) }
+        }
+    }
+
+    /// The destination of the link at `index`, as written (nil: no link there).
+    func linkDestination(at index: Int) -> String? {
+        let text = storage.string as NSString
+        guard text.length > 0, index <= text.length else { return nil }
+        let line = text.lineRange(for: NSRange(location: min(index, text.length - 1), length: 0))
+        let runs = provider.styler.styleRuns(in: line, of: text).runs
+        return LinkFollowing.destination(at: index, in: text, runs: runs)
+    }
+
+    /// The target of the link at `index`.
+    func linkTarget(at index: Int) -> LinkTarget? {
+        guard let d = linkDestination(at: index) else { return nil }
+        return LinkFollowing.target(for: d, base: document?.fileURL?.deletingLastPathComponent())
+    }
+
+    /// Follow the link at `index`: a web URL in the browser, a Markdown / text file in luftig (at its anchor), any other file in its application, an
+    /// anchor in this document by scrolling to the heading. Returns false when there is no link there (the click is an ordinary click then).
+    @discardableResult
+    func followLink(at index: Int) -> Bool {
+        guard let target = linkTarget(at: index) else { return false }
+        switch target {
+        case .web(let url):
+            EditorViewController.openExternally(url)
+        case .anchor(let a):
+            if !jump(toAnchor: a) { NSSound.beep() }
+        case .file(let url, let anchor):
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { NSSound.beep(); return true }
+            if !isDir.boolValue, LinkFollowing.opensAsDocument(url) {
+                if document?.fileURL?.standardizedFileURL == url { if let anchor { _ = jump(toAnchor: anchor) } }
+                else { EditorViewController.openDocument(url, anchor) }
+            } else {
+                EditorViewController.openExternally(url)
+            }
+        }
+        return true
+    }
+
+    /// The heading an anchor names at the top of the window (the outline's jump). False when no heading matches.
+    @discardableResult
+    func jump(toAnchor anchor: String) -> Bool {
+        let entries = outline.entries.isEmpty || !chromeOutlineValid ? OutlineScanner.headings(in: storage.string as NSString) : outline.entries
+        guard let e = LinkFollowing.entry(for: anchor, in: entries) else { return false }
+        jump(toOutlineEntry: e)
+        return true
+    }
+
+    @objc func luftigOpenLink(_ sender: Any?) {
+        if !followLink(at: textView.selectedRange().location) { NSSound.beep() }
     }
 }

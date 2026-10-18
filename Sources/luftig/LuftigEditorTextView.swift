@@ -11,6 +11,27 @@ final class LuftigEditorTextView: NSTextView {
 
     /// Set by the editor view controller; used to pre-style jump targets.
     weak var lazyStyler: LazyStyler?
+    /// ⌘-click: the character under the mouse (nil: not over text). Returns true when the click was taken (a link was followed); false lets NSTextView have it.
+    var onCommandClick: ((Int) -> Bool)?
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), let handler = onCommandClick,
+           let index = characterIndex(under: convert(event.locationInWindow, from: nil)), handler(index) { return }
+        super.mouseDown(with: event)
+    }
+
+    /// The character whose glyph lies under `point` (view coordinates); nil beyond the text (the end of a line, below the last line).
+    func characterIndex(under point: NSPoint) -> Int? {
+        guard textLayoutManager == nil, let lm = layoutManager, let tc = textContainer, let ts = textStorage, ts.length > 0 else { return nil }
+        let o = textContainerOrigin
+        let local = NSPoint(x: point.x - o.x, y: point.y - o.y)
+        var fraction: CGFloat = 0
+        let glyph = lm.glyphIndex(for: local, in: tc, fractionOfDistanceThroughGlyph: &fraction)
+        guard glyph < lm.numberOfGlyphs else { return nil }
+        let rect = lm.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: tc)
+        guard rect.insetBy(dx: -1, dy: 0).contains(local) else { return nil }
+        return lm.characterIndexForGlyph(at: glyph)
+    }
 
     private var schemeObserver: NSObjectProtocol?
 

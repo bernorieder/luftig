@@ -82,6 +82,9 @@ enum MainMenu {
         edit.addItem(item("Delete", #selector(NSText.delete(_:))))
         edit.addItem(item("Select All", #selector(NSText.selectAll(_:)), "a"))
         edit.addItem(.separator())
+        // the link at the caret (also ⌘-click on a link): a web URL in the browser, a Markdown file in luftig, `#anchor` in this document
+        edit.addItem(item("Open Link", #selector(LuftigEditorActions.luftigOpenLink(_:)), "l", [.command, .option]))
+        edit.addItem(.separator())
 
         let find = NSMenu(title: "Find")
         find.addItem(finder("Find…", .showFindInterface, "f"))

@@ -138,15 +138,20 @@ final class LazyStyler: NSObject, NSTextStorageDelegate {
     }
 
     /// Style the whole document in slices (tests, and "select all + export"-like needs). Not used on the open path.
-    func styleEverything() {
+    func styleEverything() { styleAll(upTo: textView?.textStorage?.length ?? 0) }
+
+    /// Style everything from the start of the document up to `end` (a jump that must land exactly lays out everything above its target, and
+    /// layout of styled text is what the final layout will be: headings are taller than unstyled lines).
+    func styleAll(upTo end: Int) {
         guard let ts = textView?.textStorage else { return }
         var loc = 0
+        let limit = min(end, ts.length)
         let ns = ts.string as NSString
-        while loc < ts.length {
-            var end = min(ts.length, loc + 100_000)
-            if end < ts.length { end = NSMaxRange(ns.lineRange(for: NSRange(location: end, length: 0))) }
-            style(range: NSRange(location: loc, length: end - loc))
-            loc = end
+        while loc < limit {
+            var e = min(limit, loc + 100_000)
+            if e < ts.length { e = NSMaxRange(ns.lineRange(for: NSRange(location: e, length: 0))) }
+            style(range: NSRange(location: loc, length: e - loc))
+            loc = e
         }
     }
 

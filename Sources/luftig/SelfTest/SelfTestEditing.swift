@@ -6,13 +6,123 @@
 //                      or during an IME composition
 
 import AppKit
+import MarkdownKit
 
 extension SelfTestScenarios {
     static let editingScenarios: [SelfTest.Scenario] = [
         .init(name: "edit-lists", summary: "list continuation (pure): Return on bullets / numbers / tasks / quotes, empty items, Tab and Shift-Tab, renumbering", run: { t in try await editLists(t) }),
         .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
         .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
+        .init(name: "edit-links", summary: "⌘-click / Edit > Open Link: the link under a character (inline, image, autolink, bare URL, reference), web / file / anchor targets, a real ⌘-click, a Markdown file opens in luftig at its anchor", run: { t in try await editLinks(t) }),
     ]
+
+    // MARK: edit-links
+
+    @MainActor static func editLinks(_ t: SelfTest.T) async throws {
+        // the pure resolver
+        let styler = MarkdownStyler()
+        func dest(_ marked: String) -> String? {
+            let ns = marked as NSString
+            let r = ns.range(of: "|")
+            let text = ns.replacingCharacters(in: r, with: "") as NSString
+            return LinkFollowing.destination(at: r.location, in: text, runs: styler.lexAll(text))
+        }
+        t.equal(dest("see [the |docs](https://example.org/d \"t\") now"), "https://example.org/d", "the destination of an inline link, from its text")
+        t.equal(dest("see [the docs](https://exa|mple.org/d) now"), "https://example.org/d", "... from inside the destination")
+        t.equal(dest("see |[the docs](https://example.org/d) now"), "https://example.org/d", "... from the opening bracket")
+        t.equal(dest("see [the docs](https://example.org/d|) now"), "https://example.org/d", "... from the closing paren")
+        t.equal(dest("[x](<has space.md>|)"), "has space.md", "angle brackets around a destination are removed")
+        t.equal(dest("[x]( sp|aced )"), "spaced", "spaces around a destination are trimmed")
+        t.equal(dest("![al|t](pic.png)"), "pic.png", "an image's source")
+        t.equal(dest("<https://au|to.link>"), "https://auto.link", "an autolink")
+        t.equal(dest("|<https://auto.link>"), "https://auto.link", "... from its bracket")
+        t.equal(dest("go www.ba|re.com now"), "www.bare.com", "a bare www address")
+        t.equal(dest("go https://bare.example/p|ath?a=1. end"), "https://bare.example/path?a=1", "a bare URL (the trailing period is not part of it)")
+        t.equal(dest("[e|][ref]\n\n[REF]: https://ref.example"), "https://ref.example", "a reference link: the definition, case-insensitively")
+        t.equal(dest("[e][r|ef]\n\n[ref]: <https://ref.example>"), "https://ref.example", "... from the label, angle brackets removed")
+        t.equal(dest("[sho|rtcut]\n\n[shortcut]: /abs/file.md"), "/abs/file.md", "a shortcut reference [label]")
+        t.check(dest("plain |text") == nil && dest("[no|def][gone]") == nil && dest("|") == nil, "no link: nil")
+        t.check(dest("`[not](a-link)|`") == nil, "inside a code span: nil")
+        // targets
+        let base = URL(fileURLWithPath: "/tmp/notes/")
+        t.equal(LinkFollowing.target(for: "https://example.org/x", base: base), .web(URL(string: "https://example.org/x")!), "a web URL")
+        t.equal(LinkFollowing.target(for: "mailto:a@b.c", base: base), .web(URL(string: "mailto:a@b.c")!), "mailto is opened by the system too")
+        t.equal(LinkFollowing.target(for: "www.example.org", base: base), .web(URL(string: "https://www.example.org")!), "www. gets https")
+        t.equal(LinkFollowing.target(for: "#Some-Heading", base: base), .anchor("Some-Heading"), "an anchor in this document")
+        t.equal(LinkFollowing.target(for: "other.md", base: base), .file(URL(fileURLWithPath: "/tmp/notes/other.md"), anchor: nil), "a relative file")
+        t.equal(LinkFollowing.target(for: "../up/o%20k.md#sec", base: base), .file(URL(fileURLWithPath: "/tmp/up/o k.md"), anchor: "sec"), "..: percent-decoded, the anchor split off")
+        t.equal(LinkFollowing.target(for: "/abs/p.txt", base: nil), .file(URL(fileURLWithPath: "/abs/p.txt"), anchor: nil), "an absolute path needs no base")
+        t.check(LinkFollowing.target(for: "rel.md", base: nil) == nil, "a relative path without a base (untitled document): nowhere")
+        t.check(LinkFollowing.target(for: "", base: base) == nil && LinkFollowing.target(for: "#", base: base) == nil, "empty: nowhere")
+        t.equal(LinkFollowing.target(for: "C:\\x", base: base), .file(URL(fileURLWithPath: "/tmp/notes/C:\\x"), anchor: nil), "a one-letter scheme is a path")
+        t.equal(LinkFollowing.slug("Hello, World! Größe & 2.0"), "hello-world-größe--20", "GitHub slugs")
+        let entries = OutlineScanner.headings(in: "# Intro\n\n## Second Part\n\n### Third: one, two\n" as NSString)
+        t.equal(LinkFollowing.entry(for: "second-part", in: entries)?.title, "Second Part", "an anchor finds its heading by slug")
+        t.equal(LinkFollowing.entry(for: "Third:%20one,%20two", in: entries)?.title, "Third: one, two", "... or by its title, percent-decoded")
+        t.check(LinkFollowing.entry(for: "nothing", in: entries) == nil, "no heading: nil")
+        t.check(LinkFollowing.opensAsDocument(URL(fileURLWithPath: "/a/b.md")) && LinkFollowing.opensAsDocument(URL(fileURLWithPath: "/a/README")) && !LinkFollowing.opensAsDocument(URL(fileURLWithPath: "/a/p.png")), "Markdown, text and extension-less files open in luftig, images elsewhere")
+
+        // the editor: ⌘-click and Edit > Open Link, with the openers replaced
+        var opened: [URL] = []
+        var openedDocs: [(URL, String?)] = []
+        let savedExternal = EditorViewController.openExternally, savedDocument = EditorViewController.openDocument
+        EditorViewController.openExternally = { opened.append($0) }
+        EditorViewController.openDocument = { openedDocs.append(($0, $1)) }
+        defer { EditorViewController.openExternally = savedExternal; EditorViewController.openDocument = savedDocument }
+        let other = t.write("# Other\n\n## Target Section\n\ntext\n", to: "links/other.md")
+        _ = t.write("png", to: "links/pic.png")
+        let text = "# Intro\n\nsee [the docs](https://example.org/d) and [other](other.md#target-section) and ![pic](pic.png) and [here](#later) and [gone](missing.md)\n\n" + String(repeating: "filler\n\n", count: 40) + "## Later\n\nend\n"
+        let (doc, host, _) = try await openEditor(t, text: text, name: "links/main.md")
+        defer { t.close(doc) }
+        let tv = host.textView
+        let ns = text as NSString
+        t.equal(host.linkDestination(at: ns.range(of: "the docs").location + 2), "https://example.org/d", "the editor resolves the link under a character")
+        t.check(host.linkDestination(at: 3) == nil, "... and finds none on the heading")
+        host.followLink(at: ns.range(of: "the docs").location)
+        t.equal(opened, [URL(string: "https://example.org/d")!], "a web link is handed to the system")
+        host.followLink(at: ns.range(of: "other").location + 1)
+        t.check(openedDocs.count == 1 && openedDocs.first?.0.standardizedFileURL == other.standardizedFileURL && openedDocs.first?.1 == "target-section", "a Markdown file next to the document opens in luftig, with its anchor: \(openedDocs)")
+        host.followLink(at: ns.range(of: "pic").location + 1)
+        t.equal(opened.last?.lastPathComponent, "pic.png", "an image opens in its own application")
+        let before = tv.visibleRect.minY
+        host.followLink(at: ns.range(of: "here").location + 1)
+        t.check(tv.selectedRange().location == ns.range(of: "## Later").location && tv.visibleRect.minY > before, "an anchor scrolls to the heading in this document and puts the caret on it (caret \(tv.selectedRange().location) vs \(ns.range(of: "## Later").location), scrolled \(before) -> \(tv.visibleRect.minY))")
+        t.check(opened.count == 2 && openedDocs.count == 1, "... without opening anything")
+        t.check(host.followLink(at: ns.range(of: "gone").location + 1) && opened.count == 2 && openedDocs.count == 1, "a missing file: the click is taken (a beep), nothing opens")
+        t.check(!host.followLink(at: 3), "no link: false (the click is an ordinary click)")
+        // Edit > Open Link: enabled on a link, disabled elsewhere
+        let item = NSMenuItem(title: "Open Link", action: #selector(LuftigEditorActions.luftigOpenLink(_:)), keyEquivalent: "")
+        tv.setSelectedRange(NSRange(location: ns.range(of: "the docs").location, length: 0))
+        t.check(host.validateMenuItem(item), "Edit > Open Link is enabled with the caret on a link")
+        t.check(AuditEd.perform(host, #selector(LuftigEditorActions.luftigOpenLink(_:)), grouped: false) && opened.count == 3, "... and opens it")
+        tv.setSelectedRange(NSRange(location: 3, length: 0))
+        t.check(!host.validateMenuItem(item), "... disabled elsewhere")
+        t.check(NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items.contains { $0.title == "Open Link" && $0.keyEquivalent == "l" } == true, "the Edit menu has Open Link (⌥⌘L)")
+        // a real ⌘-click on the link's glyphs, through the text view's mouseDown
+        host.styler.styleVisible()
+        tv.setSelectedRange(NSRange(location: 0, length: 0))
+        let lm = tv.layoutManager!, tc = tv.textContainer!
+        let glyph = lm.glyphIndexForCharacter(at: ns.range(of: "the docs").location + 3)
+        let rect = lm.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: tc)
+        let inView = NSPoint(x: rect.midX + tv.textContainerOrigin.x, y: rect.midY + tv.textContainerOrigin.y)
+        let inWindow = tv.convert(inView, to: nil)
+        guard let window = tv.window else { t.check(false, "a window"); return }
+        let click = NSEvent.mouseEvent(with: .leftMouseDown, location: inWindow, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime,
+                                       windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        t.equal(host.editorTextView.characterIndex(under: inView), ns.range(of: "the docs").location + 3, "the character under the point")
+        tv.mouseDown(with: click)
+        t.equal(opened.count, 4, "⌘-click on the link opens it")
+        t.equal(tv.selectedRange(), NSRange(location: 0, length: 0), "... without moving the selection")
+        let beyond = NSPoint(x: tv.bounds.maxX - 2, y: inView.y)
+        t.check(host.editorTextView.characterIndex(under: beyond) == nil, "right of the line's end: no character")
+        let plainClick = NSEvent.mouseEvent(with: .leftMouseDown, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                            windowNumber: window.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 1)!
+        let up = NSEvent.mouseEvent(with: .leftMouseUp, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                    windowNumber: window.windowNumber, context: nil, eventNumber: 3, clickCount: 1, pressure: 1)!
+        NSApp.postEvent(up, atStart: false)                                     // (NSTextView's mouseDown tracks until the mouse goes up)
+        tv.mouseDown(with: plainClick)
+        t.check(opened.count == 4 && tv.selectedRange().location > 0, "a plain click only moves the caret (\(NSStringFromRange(tv.selectedRange())))")
+    }
 
     // MARK: edit-format-menu
 
