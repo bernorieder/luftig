@@ -193,6 +193,10 @@ extension SelfTestScenarios {
     }
 
     @MainActor static func auditKeys(_ t: SelfTest.T) async throws {
+        // the model inserts "\n" and "\t" for Return and Tab: the plain text view's keys, without list continuation (its own scenario: edit-lists-editor)
+        let continueLists = EditorPreferences.continueLists
+        EditorPreferences.continueLists = false
+        defer { EditorPreferences.continueLists = continueLists }
         let steps = SelfTest.argument("audit-steps").flatMap { Int($0) } ?? 300
         let seed = SelfTest.argument("audit-seed").flatMap { UInt64($0) } ?? 4242
         let cases: [(String, String)] = [

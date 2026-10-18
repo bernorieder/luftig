@@ -1,0 +1,197 @@
+#if LUFTIG_SELFTEST
+// SelfTestEditing.swift - editing helpers: list continuation (ListEditing.swift) and the Format menu's shortcuts.
+//   edit-lists         the pure logic: Return continues bullets, numbers (renumbering the sequence below), tasks and quotes; an empty item is
+//                      outdented or loses its marker; Tab / Shift-Tab nest and un-nest items and renumber the moved item; nothing else changes
+//   edit-lists-editor  the real editor: Return / Tab / Shift-Tab key events, undo as one step, the switch in Settings > General, no effect in a code block
+//                      or during an IME composition
+
+import AppKit
+
+extension SelfTestScenarios {
+    static let editingScenarios: [SelfTest.Scenario] = [
+        .init(name: "edit-lists", summary: "list continuation (pure): Return on bullets / numbers / tasks / quotes, empty items, Tab and Shift-Tab, renumbering", run: { t in try await editLists(t) }),
+        .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
+    ]
+
+    // MARK: edit-lists
+
+    @MainActor static func editLists(_ t: SelfTest.T) async throws {
+        /// `|` marks the caret; returns (text after Return, caret as `|` in it), or nil when Return is left to the text view.
+        func ret(_ marked: String) -> String? {
+            let ns = marked as NSString
+            let r = ns.range(of: "|")
+            let text = ns.replacingCharacters(in: r, with: "") as NSString
+            guard let c = ListContinuation.returnChange(in: text, selection: NSRange(location: r.location, length: 0)) else { return nil }
+            let out = text.replacingCharacters(in: c.range, with: c.replacement) as NSString
+            return out.replacingCharacters(in: NSRange(location: c.selection.location, length: 0), with: "|")
+        }
+        func tab(_ marked: String, outdent: Bool = false) -> String? {
+            let ns = marked as NSString
+            let a = ns.range(of: "⟦"), b = ns.range(of: "⟧")
+            var text = ns, sel: NSRange
+            if a.location != NSNotFound {
+                let s = ns.replacingCharacters(in: b, with: "") as NSString
+                text = s.replacingCharacters(in: a, with: "") as NSString
+                sel = NSRange(location: a.location, length: b.location - a.location - 1)
+            } else {
+                let r = ns.range(of: "|")
+                text = ns.replacingCharacters(in: r, with: "") as NSString
+                sel = NSRange(location: r.location, length: 0)
+            }
+            guard let c = ListContinuation.indentChange(in: text, selection: sel, outdent: outdent) else { return nil }
+            let out = text.replacingCharacters(in: c.range, with: c.replacement) as NSString
+            if c.selection.length == 0 { return out.replacingCharacters(in: NSRange(location: c.selection.location, length: 0), with: "|") }
+            return (out.replacingCharacters(in: NSRange(location: NSMaxRange(c.selection), length: 0), with: "⟧") as NSString).replacingCharacters(in: NSRange(location: c.selection.location, length: 0), with: "⟦")
+        }
+        // prefixes
+        let p = ListContinuation.prefix(of: "  > - [x] done")
+        t.check(p.indent == "  " && p.quotes == "> " && p.marker == "- " && p.task == "[x] " && p.number == nil, "prefix of '  > - [x] done': indent, quote, marker, task: \(p)")
+        let n = ListContinuation.prefix(of: "10)   ten")
+        t.check(n.number == 10 && n.delimiter == ")" && n.marker == "10)   " && n.markerWidth == 6, "a numbered marker keeps its white space: \(n)")
+        t.check(ListContinuation.prefix(of: "-item").isEmpty && ListContinuation.prefix(of: "1.5 things").isEmpty && ListContinuation.prefix(of: "plain").isEmpty, "'-item', '1.5 things', 'plain' are no list lines")
+        t.check(ListContinuation.prefix(of: "-").hasList && ListContinuation.prefix(of: "1.").hasList, "a bare marker at the end of a line is a (empty) list item")
+        t.equal(ListContinuation.width(of: "\t  "), 6, "a tab is 4 columns")
+
+        // Return continues
+        t.equal(ret("- one|"), "- one\n- |", "a bullet continues")
+        t.equal(ret("* one|\n"), "* one\n* |\n", "a star bullet keeps its character")
+        t.equal(ret("- one| two"), "- one\n- | two", "the text after the caret moves to the new item")
+        t.equal(ret("  - nested|"), "  - nested\n  - |", "the indentation is kept")
+        t.equal(ret("1. one|"), "1. one\n2. |", "a number counts up")
+        t.equal(ret("3) three|"), "3) three\n4) |", "the ) delimiter is kept")
+        t.equal(ret("- [ ] task|"), "- [ ] task\n- [ ] |", "a task gets an unchecked box")
+        t.equal(ret("- [x] done|"), "- [x] done\n- [ ] |", "a checked task continues unchecked")
+        t.equal(ret("> quoted|"), "> quoted\n> |", "a quote continues")
+        t.equal(ret("> > deep|"), "> > deep\n> > |", "a nested quote continues at its depth")
+        t.equal(ret("> - in quote|"), "> - in quote\n> - |", "a list in a quote: both prefixes")
+        t.equal(ret("1. one|\n2. two\n3. three\n\n1. other"), "1. one\n2. |\n3. two\n4. three\n\n1. other", "the items in sequence below are renumbered; another list is not")
+        t.equal(ret("1. one|\n1. two\n1. three"), "1. one\n2. |\n1. two\n1. three", "all-ones lists are left alone")
+        t.equal(ret("1. one|\n   - sub\n2. two"), "1. one\n2. |\n   - sub\n2. two", "a nested line breaks the sequence (nothing below it is renumbered)")
+        // Return on an empty item
+        t.equal(ret("- one\n- |"), "- one\n|", "an empty top-level item: the marker goes")
+        t.equal(ret("1. one\n2. |"), "1. one\n|", "an empty numbered item too")
+        t.equal(ret("- one\n  - |"), "- one\n- |", "an empty nested item is outdented first")
+        t.equal(ret("> - |"), "> |", "an empty item in a quote: the marker goes, the quote stays")
+        t.equal(ret("> |"), "|", "an empty quote line: the quote goes")
+        t.equal(ret("> > |"), "> |", "a nested empty quote line: one level less")
+        t.equal(ret("- [ ] |"), "|", "an empty task: gone")
+        // left to the text view
+        t.check(ret("plain|") == nil, "a plain line: nil")
+        t.check(ret("-| one") == nil, "the caret inside the prefix: nil")
+        t.equal(ret("- |one"), "- \n- |one", "the caret at the start of the text: an empty item above, the text in the new one")
+        t.check(ret("|- one") == nil, "the caret at the line start: nil")
+        t.check(ListContinuation.returnChange(in: "- one\n- two" as NSString, selection: NSRange(location: 0, length: 5)) == nil, "a selection: nil")
+        t.check(ret("|") == nil && ListContinuation.returnChange(in: "", selection: NSRange(location: 0, length: 0)) == nil, "empty text")
+        t.check(ret("- one |") != nil, "a caret after trailing spaces continues")
+
+        // Tab / Shift-Tab
+        t.equal(tab("- one\n- two|"), "- one\n  - two|", "Tab nests under the item above by the width of its marker")
+        t.equal(tab("1. one\n2. two|"), "1. one\n   1. two|", "a numbered item nests by 3 and starts at 1")
+        t.equal(tab("1. one\n   1. a\n   2. b\n2. two|"), "1. one\n   1. a\n   2. b\n   3. two|", "a nested numbered item follows the sibling above")
+        t.equal(tab("- one|"), "  - one|", "the first item nests by its own marker's width")
+        t.equal(tab("- |one"), "  - |one", "the caret keeps its character")
+        t.equal(tab("|- one"), "  - |one", "a caret before the marker lands after it")
+        t.equal(tab("- one\n  - two|", outdent: true), "- one\n- two|", "Shift-Tab goes back to the parent's indentation")
+        t.equal(tab("- one\n   - two\n      - three|", outdent: true), "- one\n   - two\n   - three|", "... whatever the parent's indentation is")
+        t.equal(tab("  - two|", outdent: true), "- two|", "no parent: back to the margin")
+        t.equal(tab("- two|", outdent: true) == nil, true, "already at the margin: nil")
+        t.equal(tab("1. one\n   1. two|", outdent: true), "1. one\n2. two|", "an outdented numbered item follows the item above at that depth")
+        t.equal(tab("- one\n⟦- two\n- three⟧"), "- one\n⟦  - two\n  - three⟧", "a selection: every item of it")
+        t.equal(tab("⟦- a\ntext\n- b⟧"), "⟦  - a\ntext\n  - b⟧", "a plain line in the selection is left alone")
+        t.check(tab("plain|") == nil && tab("⟦plain\nlines⟧") == nil, "no list line: nil (the ordinary tab)")
+        t.check(tab("> - quoted|") == nil, "an item inside a quote: nil")
+        t.equal(tab("\t- tabbed|", outdent: true), "- tabbed|", "a tab indentation is removed too")
+        // robustness
+        for s in ["", "-", "- ", "1.", "\n\n", "- a\r\n- b\r\n", "日本語", "- ", "   ", "> ", "1. one\n2. two\n3. three"] {
+            for loc in stride(from: 0, through: (s as NSString).length, by: 1) {
+                _ = ListContinuation.returnChange(in: s as NSString, selection: NSRange(location: loc, length: 0))
+                _ = ListContinuation.indentChange(in: s as NSString, selection: NSRange(location: loc, length: 0), outdent: false)
+                _ = ListContinuation.indentChange(in: s as NSString, selection: NSRange(location: loc, length: 0), outdent: true)
+            }
+        }
+        t.check(true, "every caret position of the odd inputs survives")
+        t.equal(ret("- a\r\n- b|\r\n"), "- a\r\n- b\n- |\r\n", "CRLF text: the new line is LF (what the editor shows)")
+    }
+
+    // MARK: edit-lists-editor
+
+    @MainActor static func editListsEditor(_ t: SelfTest.T) async throws {
+        try await preservingSettings {
+            let text = "# Title\n\n- one\n- two\n\n1. first\n2. second\n\n```\n- not a list\n```\n"
+            let (doc, host, _) = try await openEditor(t, text: text, name: "lists.md")
+            defer { t.close(doc) }
+            let tv = host.textView
+            func str() -> String { tv.string }
+            // Return at the end of "- two"
+            let twoEnd = (text as NSString).range(of: "- two").upperBound
+            tv.setSelectedRange(NSRange(location: twoEnd, length: 0))
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            t.check(str().hasPrefix("# Title\n\n- one\n- two\n- \n"), "Return continues the bullet list: \(str().prefix(30).debugDescription)")
+            t.equal(tv.selectedRange(), NSRange(location: twoEnd + 3, length: 0), "the caret is after the new marker")
+            AuditEd.type(host, "three")
+            t.check(str().contains("- two\n- three\n"), "typed into the new item")
+            AuditEd.pressKey(host, AuditEd.Key.tab)
+            t.check(str().contains("- two\n  - three\n"), "Tab nests the item")
+            AuditEd.pressKey(host, AuditEd.Key.tab, mods: [.shift])
+            t.check(str().contains("- two\n- three\n"), "Shift-Tab un-nests it")
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            t.check(str().contains("- three\n\n\n1. first"), "Return on the empty item removes the marker (an empty line is left, before the blank line the text had): \(str().debugDescription)")
+            await t.spin(5)
+            t.check(doc.isDocumentEdited, "the document is dirty")
+            assertMatchesFreshLex(t, host, "after the list edits the styling is a fresh lex")
+            // undo: the key presses are steps of their own (the test wraps every press in a group)
+            var undos = 0
+            while tv.string != text, undos < 20 { AuditEd.undo(host); undos += 1 }
+            t.check(tv.string == text, "undo brings the original text back (\(undos) steps)")
+            // numbered: Return in the middle of "first", the sequence below is renumbered
+            let mid = (tv.string as NSString).range(of: "1. first").location + 6
+            tv.setSelectedRange(NSRange(location: mid, length: 0))
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            t.check(str().contains("1. fir\n2. st\n3. second\n"), "Return inside a numbered item: the rest moves to a new item, the item below is renumbered: \(str().debugDescription)")
+            AuditEd.undo(host)
+            t.check(tv.string == text, "one undo step for the whole renumbering")
+            // inside the code block nothing happens
+            let code = (tv.string as NSString).range(of: "- not a list").upperBound
+            host.styler.styleEverything()
+            tv.setSelectedRange(NSRange(location: code, length: 0))
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            t.check(str().contains("- not a list\n\n```"), "Return in a code block inserts a plain line break: \(str().suffix(20).debugDescription)")
+            AuditEd.undo(host)
+            // a plain line: an ordinary tab
+            tv.setSelectedRange(NSRange(location: 7, length: 0))
+            AuditEd.pressKey(host, AuditEd.Key.tab)
+            t.check(str().hasPrefix("# Title\t\n"), "Tab on a plain line inserts a tab")
+            AuditEd.undo(host)
+            // the switch
+            EditorPreferences.continueLists = false
+            tv.setSelectedRange(NSRange(location: twoEnd, length: 0))
+            AuditEd.pressKey(host, AuditEd.Key.returnKey)
+            t.check(str().hasPrefix("# Title\n\n- one\n- two\n\n\n1. first"), "Continue lists off: Return is a plain line break: \(str().prefix(30).debugDescription)")
+            AuditEd.undo(host)
+            EditorPreferences.continueLists = true
+            t.check(tv.string == text, "back to the start")
+            // an IME composition: the text view's own Return (the marked text is committed)
+            tv.setSelectedRange(NSRange(location: twoEnd, length: 0))
+            let um = tv.undoManager
+            um?.beginUndoGrouping()
+            tv.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+            t.check(tv.hasMarkedText(), "marked text in place")
+            t.check(!host.textView(tv, doCommandBy: #selector(NSResponder.insertNewline(_:))), "Return during a composition is left to the text view (the composition decides)")
+            tv.unmarkText()
+            um?.endUndoGrouping()
+            AuditEd.undo(host)
+            t.check(tv.string == text, "the composition undone: the original text")
+            // the Settings window shows the switch on General
+            let c = SettingsWindowController.shared
+            c.showScreen(.general)
+            t.check(c.continueListsCheckbox.state == .on && !c.generalScreen.isHidden, "Settings > General: 'Continue lists on Return' is on")
+            c.continueListsCheckbox.state = .off
+            c.continueListsChanged(c.continueListsCheckbox)
+            t.check(!EditorPreferences.continueLists, "the checkbox drives the preference")
+            EditorPreferences.continueLists = true
+            t.check(c.continueListsCheckbox.state == .on, "... and follows it")
+        }
+    }
+}
+#endif

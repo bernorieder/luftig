@@ -225,6 +225,37 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     }
     func undoManager(for view: NSTextView) -> UndoManager? { document?.undoManager }
 
+    /// Return, Tab and Shift-Tab on a list item or quote line (ListEditing.swift; Settings > General > Continue lists on Return). Everything else, and
+    /// these keys on any other line, inside a code block, or during an IME composition, is the text view's own.
+    func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard EditorPreferences.continueLists, textView.isEditable, !textView.hasMarkedText() else { return false }
+        let text = storage.string as NSString
+        let selection = textView.selectedRange()
+        let change: TextChange?
+        let name: String
+        switch commandSelector {
+        case #selector(NSResponder.insertNewline(_:)):
+            guard !caretIsInCodeBlock(selection) else { return false }
+            change = ListContinuation.returnChange(in: text, selection: selection); name = "New List Item"
+        case #selector(NSResponder.insertTab(_:)):
+            guard !caretIsInCodeBlock(selection) else { return false }
+            change = ListContinuation.indentChange(in: text, selection: selection, outdent: false); name = "Indent List Item"
+        case #selector(NSResponder.insertBacktab(_:)):
+            change = ListContinuation.indentChange(in: text, selection: selection, outdent: true); name = "Outdent List Item"
+        default: return false
+        }
+        guard let change else { return false }
+        apply(change, actionName: name)
+        return true
+    }
+
+    /// A code block line (the `.luftigBlock` mark of the styled text; unstyled text counts as prose): a `- ` inside a fence is code, not a list.
+    private func caretIsInCodeBlock(_ selection: NSRange) -> Bool {
+        let at = min(selection.location, max(0, storage.length - 1))
+        guard storage.length > 0, let mark = BlockMark.decode(storage.attribute(.luftigBlock, at: at, effectiveRange: nil)) else { return false }
+        return mark.kind == .code
+    }
+
     // MARK: preferences (fonts, size, line spacing, column, colour scheme): shared by all windows
 
     private func preferencesDidChange() {
@@ -482,23 +513,32 @@ extension EditorViewController {
         view.window?.makeFirstResponder(textView)
     }
 
-    /// A click on the syntax bar: the edit goes through the text view's own change protocol (undoable, marks the document dirty, restyled by the styler).
+    /// A click on the syntax bar (or its menu item / shortcut): the edit goes through the text view's own change protocol (undoable, marks the document
+    /// dirty, restyled by the styler).
     func insert(_ element: SyntaxElement) {
         let tv = textView
         guard tv.isEditable else { return }
         let change = SyntaxInsertion.change(for: element, in: storage.string as NSString, selection: tv.selectedRange())
+        apply(change, actionName: element.name.components(separatedBy: " (").first ?? element.name)
+        view.window?.makeFirstResponder(tv)
+    }
+
+    /// One computed edit (syntax bar, list continuation) through NSTextView's change protocol, as one undo step named `actionName`.
+    func apply(_ change: TextChange, actionName: String) {
+        let tv = textView
+        guard tv.isEditable else { return }
         // outside an event (a test, a script) no undo group is open: NSTextView's change protocol registers undo and insists on one
         let um = tv.undoManager
         let opensGroup = (um?.groupingLevel ?? 1) == 0
         if opensGroup { um?.beginUndoGrouping() }
         defer { if opensGroup { um?.endUndoGrouping() } }
+        tv.breakUndoCoalescing()                                       // typed text before it stays a step of its own
         guard tv.shouldChangeText(in: change.range, replacementString: change.replacement) else { return }
-        um?.setActionName(element.name.components(separatedBy: " (").first ?? element.name)
+        um?.setActionName(actionName)
         storage.replaceCharacters(in: change.range, with: change.replacement)
         tv.didChangeText()
         let sel = NSIntersectionRange(change.selection, NSRange(location: 0, length: storage.length))
         tv.setSelectedRange(sel.length == 0 && change.selection.location <= storage.length ? NSRange(location: change.selection.location, length: 0) : sel)
         tv.scrollRangeToVisible(tv.selectedRange())
-        view.window?.makeFirstResponder(tv)
     }
 }

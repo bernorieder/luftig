@@ -25,10 +25,12 @@ enum EditorPreferences {
     static let paddingKey = "LuftigPaddingPoints"
     /// Settings > General: new documents open as tabs of the front window (NSWindow.tabbingMode .preferred) instead of windows of their own (.disallowed).
     static let openInTabsKey = "LuftigOpenInTabs"
+    /// Settings > General: Return on a list item / quote line continues it; Tab / Shift-Tab nest and un-nest items (ListEditing.swift).
+    static let continueListsKey = "LuftigContinueLists"
     /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
     static let outlineLineHeightKey = "LuftigOutlineLineHeight"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -288,6 +290,12 @@ enum EditorPreferences {
     }
     /// The tabbing mode for the editor windows.
     static var tabbingMode: NSWindow.TabbingMode { openInTabs ? .preferred : .disallowed }
+
+    /// Settings > General > Continue lists on Return. Default on.
+    static var continueLists: Bool {
+        get { flag(forKey: continueListsKey, default: true) }
+        set { setFlag(newValue, forKey: continueListsKey, current: continueLists) }
+    }
 
     /// Settings > Layout > Outline: long headings wrap onto further lines instead of being cut off. Default off.
     static var outlineWraps: Bool {

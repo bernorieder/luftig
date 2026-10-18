@@ -9,6 +9,8 @@
 //   ( General | Text | Layout )                        <- three screens, a segmented control under the preview; the chosen one is remembered
 //   General:
 //   Files           [ ] Open files in tabs
+//   Editing         [x] Continue lists on Return
+//                   Tab and Shift-Tab nest and un-nest list items.
 //   Text:
 //   Color scheme   [swatch luftig (follows system appearance)  v]
 //   Text font       [System (SF Pro)  v]
@@ -145,6 +147,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let paddingNoteLabel = NSTextField(labelWithString: "")
     // the General screen
     let openInTabsCheckbox = NSButton(checkboxWithTitle: "Open files in tabs", target: nil, action: nil)
+    let continueListsCheckbox = NSButton(checkboxWithTitle: "Continue lists on Return", target: nil, action: nil)
+    let continueListsNoteLabel = NSTextField(labelWithString: "")
     /// The screens: General, Text and Layout; the segmented control under the preview switches, the choice is remembered.
     enum Screen: Int, CaseIterable { case general = 0, text = 1, layout = 2
         var title: String { self == .general ? "General" : self == .text ? "Text" : "Layout" }
@@ -313,6 +317,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         openInTabsCheckbox.target = self; openInTabsCheckbox.action = #selector(openInTabsChanged(_:))
         openInTabsCheckbox.setAccessibilityLabel("Open files in tabs")
+        continueListsCheckbox.target = self; continueListsCheckbox.action = #selector(continueListsChanged(_:))
+        continueListsCheckbox.setAccessibilityLabel("Continue lists on Return")
+        secondary(continueListsNoteLabel)
+        fixedLabel(continueListsNoteLabel, width: W.controlColumnWidth, font: continueListsNoteLabel.font)
+        continueListsNoteLabel.stringValue = "Tab and Shift-Tab nest and un-nest list items."
 
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
@@ -349,8 +358,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let paddingColumn = NSStackView(views: [paddingSliderRow, paddingNoteLabel])
         paddingColumn.orientation = .vertical; paddingColumn.alignment = .leading; paddingColumn.spacing = 6
 
+        let continueListsColumn = NSStackView(views: [continueListsCheckbox, continueListsNoteLabel])
+        continueListsColumn.orientation = .vertical; continueListsColumn.alignment = .leading; continueListsColumn.spacing = 6
+
         // the grids share the label column width, so the controls of every screen start at the same x
-        let generalLabels = ["Files:"].map { label($0) }
+        let generalLabels = ["Files:", "Editing:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
@@ -368,6 +380,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         }
         let generalGrid = makeGrid([
             [generalLabels[0], openInTabsCheckbox],
+            [generalLabels[1], continueListsColumn],
         ])
         let grid = makeGrid([
             [textLabels[0], schemePopup],
@@ -626,6 +639,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         outlineSpacingValueLabel.stringValue = String(format: "%.2f ×", Double(spacing))
 
         openInTabsCheckbox.state = EditorPreferences.openInTabs ? .on : .off
+        continueListsCheckbox.state = EditorPreferences.continueLists ? .on : .off
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
         showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
@@ -743,6 +757,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         syncFromPreferences()
     }
     @objc func openInTabsChanged(_ sender: NSButton) { EditorPreferences.openInTabs = sender.state == .on; syncFromPreferences() }
+    @objc func continueListsChanged(_ sender: NSButton) { EditorPreferences.continueLists = sender.state == .on; syncFromPreferences() }
     @objc func showOutlineChanged(_ sender: NSButton) { EditorPreferences.showOutline = sender.state == .on; syncFromPreferences() }
     @objc func showWordCountChanged(_ sender: NSButton) { EditorPreferences.showWordCount = sender.state == .on; syncFromPreferences() }
     @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }
