@@ -56,11 +56,13 @@ Sources/luftig/
                                         container of its own; every control applies live and is saved; observes EditorPreferences.didChange
   SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
                                         files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
-  Padding.swift                         ONE factor (Settings > Layout > Padding, 0 ... 2, default 1; 0 = no padding anywhere) in two layers, rounded to whole points: the WINDOW frame
-                                        (`window`, 12 pt at 1x, on all four sides: EditorViewController.windowPaddingConstraints) and the padding inside each panel - the
-                                        text's insets (ReadableColumnController.minInset / verticalInset) and the extra air on its right (trailingExtra), the outline's margin /
-                                        top inset, the word count's height / margin, the syntax bar's height; NOT padding: the outline's width, the indent per level, fonts, the
-                                        gaps between the bar's elements, the outline's row height (Outline spacing, a slider of its own)
+  Padding.swift                         ONE number of points (Settings > Layout > Padding, 0 ... 50, default 20) that is every gap: the window frame on all four sides
+                                        (EditorViewController.windowPaddingConstraints + bottomPaddingConstraint), the margin above and below the text viewport and the outline
+                                        alike (`textInsetVertical`, verticalInsetConstraints: outside the scrolling, so scrolled text starts exactly where the outline's first
+                                        entry starts; the text container has no vertical inset), the text's side inset (ReadableColumnController.minInset); the word count row
+                                        is its line (16 pt), the syntax bar its symbols (18 pt); NOT padding: the outline's width, the indent per level, fonts, the gaps between
+                                        the bar's symbols, the outline's row height (Outline spacing, a slider of its own). The Settings preview applies the same inset
+                                        (SettingsPreview.applyPadding: its pixels are compared with an editor's)
                                         FIXED layout (plain constraints, fixed column widths and label widths: nothing moves or resizes whatever a value says, invariant 24); the size field shows the
                                         size in use even while it is being edited (pitfall 24); sliders and the stepper report their drags (`tracking`)
   SettingsPreview.swift                 the live preview in that window: the SAME factory, Theme and lexer as an editor (pixel-identical to an editor of the same width: matrix-preview)

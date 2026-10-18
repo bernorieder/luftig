@@ -21,8 +21,8 @@ enum EditorPreferences {
     static let paneFontSizeKey = "LuftigPaneFontSize"
     static let paneOpacityKey = "LuftigPaneOpacity"
     static let outlineWrapsKey = "LuftigOutlineWraps"
-    /// Settings > Layout > Padding: ONE factor for every bit of air in the editor (the text's insets, the panes' margins and heights): what makes it luftig.
-    static let paddingKey = "LuftigPadding"
+    /// Settings > Layout > Padding: ONE number of points for every gap in the editor (window frame, between the panels, inside the text's panel): what makes it luftig.
+    static let paddingKey = "LuftigPaddingPoints"
     /// Settings > General: new documents open as tabs of the front window (NSWindow.tabbingMode .preferred) instead of windows of their own (.disallowed).
     static let openInTabsKey = "LuftigOpenInTabs"
     /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
@@ -247,16 +247,17 @@ enum EditorPreferences {
         }
     }
 
-    static let paddingRange: ClosedRange<CGFloat> = 0.0...2.0
-    /// The padding factor, `paddingRange`, default 1 (the look luftig always had), 0 = no padding at all; every padding in `Padding` is a base value times this.
+    static let paddingRange: ClosedRange<CGFloat> = 0...50
+    static let defaultPadding: CGFloat = 20
+    /// The padding in points, `paddingRange`, default 20; 0 = everything touches. Every gap in `Padding` is this value.
     static var padding: CGFloat {
         get {
-            guard let n = number(forKey: paddingKey), n.isFinite else { return 1 }
-            return min(paddingRange.upperBound, max(paddingRange.lowerBound, CGFloat(n)))
+            guard let n = number(forKey: paddingKey), n.isFinite else { return defaultPadding }
+            return min(paddingRange.upperBound, max(paddingRange.lowerBound, CGFloat(n).rounded()))
         }
         set {
             guard newValue.isFinite else { return }
-            let v = min(paddingRange.upperBound, max(paddingRange.lowerBound, (newValue * 20).rounded() / 20))     // steps of 0.05
+            let v = min(paddingRange.upperBound, max(paddingRange.lowerBound, newValue.rounded()))
             guard v != padding else { return }
             defaults.set(Double(v), forKey: paddingKey)
             post()

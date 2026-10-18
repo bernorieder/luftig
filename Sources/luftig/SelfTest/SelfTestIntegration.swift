@@ -620,12 +620,13 @@ extension SelfTestScenarios {
         t.check(abs(col - 760) < 1.5 && tv.textContainerInset.width > 100, "wide window (\(Int(width)) pt): text column \(Int(col)) pt centred, inset \(Int(tv.textContainerInset.width)) pt")
         t.check(tv.textContainerInset.width >= DecorationMetrics.bandOutset + 1, "the inset leaves room for the band outset")
         w.setContentSize(NSSize(width: 700, height: 800)); w.contentView?.layoutSubtreeIfNeeded()
-        t.check(tv.textContainer!.size.width < 700 && tv.textContainerInset.width == 28, "narrow window: column fills the window with the minimum inset (\(Int(tv.textContainerInset.width)) pt)")
+        t.check(tv.textContainer!.size.width < 700 && tv.textContainerInset.width == host.padding.textInsetHorizontal, "narrow window: column fills the window with the minimum inset (\(Int(tv.textContainerInset.width)) pt = the padding)")
         host.luftigToggleReadableWidth(nil)
         w.setContentSize(NSSize(width: 1400, height: 800)); w.contentView?.layoutSubtreeIfNeeded()
         let area = host.scrollView.contentView.bounds.width                          // (the outline on the left takes its 220 pt from the window first)
         let extra = host.padding.textTrailingExtra                                      // (the right side has `textTrailingExtra` more air than the left: pitfall 34)
-        t.check(tv.textContainerInset.width == 28 && abs(tv.textContainer!.size.width - (area - 56 - extra)) < 1.5 && area > 1100, "Wrap to Readable Width OFF: the text fills the text area of the 1400 pt window (\(Int(tv.textContainer!.size.width)) of \(Int(area)) pt, \(Int(extra)) pt extra on the right)")
+        let inset = host.padding.textInsetHorizontal
+        t.check(tv.textContainerInset.width == inset && abs(tv.textContainer!.size.width - (area - 2 * inset - extra)) < 1.5 && area > 1100, "Wrap to Readable Width OFF: the text fills the text area of the 1400 pt window (\(Int(tv.textContainer!.size.width)) of \(Int(area)) pt, inset \(Int(inset)))")
         host.luftigToggleReadableWidth(nil)
         t.check(EditorPreferences.readableWidth && abs(tv.textContainer!.size.width - 760) < 1.5, "ON again: column back to 760 pt")
         // configuration of the text view

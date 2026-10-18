@@ -51,6 +51,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     var chromeDataGeneration = -1
     var chromeWordTotal = 0
     var windowPaddingConstraints: [NSLayoutConstraint] = []
+    var verticalInsetConstraints: [NSLayoutConstraint] = []
+    var bottomPaddingConstraint: NSLayoutConstraint!
     /// How many times the outline / word count were recomputed (tests).
     var chromeRefreshCount = 0
 
@@ -129,15 +131,21 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         let w = padding.window
         windowPaddingConstraints = [
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: w), root.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: w),
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: w), root.bottomAnchor.constraint(equalTo: stack.bottomAnchor, constant: w),
+            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: w),
         ]
-        NSLayoutConstraint.activate(windowPaddingConstraints + [
+        bottomPaddingConstraint = root.bottomAnchor.constraint(equalTo: stack.bottomAnchor, constant: w)
+        // the vertical padding of the text viewport and of the outline: a margin OUTSIDE the scrolling, the same for both, so that scrolled text starts
+        // exactly where the outline's first entry starts (the text container itself has no vertical inset)
+        let v = padding.textInsetVertical
+        verticalInsetConstraints = [
+            outline.topAnchor.constraint(equalTo: middle.topAnchor, constant: v), middle.bottomAnchor.constraint(equalTo: outline.bottomAnchor, constant: v),
+            scrollView.topAnchor.constraint(equalTo: middle.topAnchor, constant: v), middle.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: v),
+        ]
+        NSLayoutConstraint.activate(windowPaddingConstraints + verticalInsetConstraints + [bottomPaddingConstraint] + [
             banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor), banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             wordCount.leadingAnchor.constraint(equalTo: stack.leadingAnchor), wordCount.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             middle.leadingAnchor.constraint(equalTo: stack.leadingAnchor), middle.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             syntaxBar.leadingAnchor.constraint(equalTo: stack.leadingAnchor), syntaxBar.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
-            outline.topAnchor.constraint(equalTo: middle.topAnchor), outline.bottomAnchor.constraint(equalTo: middle.bottomAnchor),
-            scrollView.topAnchor.constraint(equalTo: middle.topAnchor), scrollView.bottomAnchor.constraint(equalTo: middle.bottomAnchor),
         ])
         view = root
         installChrome()
@@ -325,15 +333,17 @@ extension EditorViewController {
 
     func applyChromeTheme() {
         outline.wrapsHeadings = EditorPreferences.outlineWraps
-        let p = Padding(factor: EditorPreferences.padding)
+        let p = Padding(points: EditorPreferences.padding)
         for c in windowPaddingConstraints { c.constant = p.window }
+        for c in verticalInsetConstraints { c.constant = p.textInsetVertical }
+        bottomPaddingConstraint.constant = p.window
         outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
         outline.lineHeightFactor = EditorPreferences.outlineLineHeight
-        column.minInset = p.textInsetHorizontal; column.verticalInset = p.textInsetVertical; column.trailingExtra = p.textTrailingExtra; column.update()
+        column.minInset = p.textInsetHorizontal; column.verticalInset = 0; column.trailingExtra = p.textTrailingExtra; column.update()
         outline.apply(theme: theme); wordCount.apply(theme: theme); syntaxBar.apply(theme: theme)
     }
     /// The padding in effect (tests).
-    var padding: Padding { Padding(factor: EditorPreferences.padding) }
+    var padding: Padding { Padding(points: EditorPreferences.padding) }
 
     /// The View menu's three switches, shared by every window.
     func applyChromeVisibility() {

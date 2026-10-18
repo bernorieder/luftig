@@ -147,8 +147,8 @@ extension SelfTestScenarios {
                 probe("\(name) off") { box.state = .off; send(box) }
                 probe("\(name) on") { box.state = .on; send(box) }
             }
-            for p in stride(from: 0, through: 200, by: 5) { probe("padding \(p)") { c.paddingSlider.doubleValue = Double(p) / 100; send(c.paddingSlider) } }
-            probe("padding back to 1") { c.paddingSlider.doubleValue = 1; send(c.paddingSlider) }
+            for p in stride(from: 0, through: 50, by: 2) { probe("padding \(p)") { c.paddingSlider.doubleValue = Double(p); send(c.paddingSlider) } }
+            probe("padding back to 20") { c.paddingSlider.doubleValue = 20; send(c.paddingSlider) }
             for v in stride(from: 100, through: 250, by: 10) { probe("outline spacing \(v)") { c.outlineSpacingSlider.doubleValue = Double(v) / 100; send(c.outlineSpacingSlider) } }
             probe("outline spacing back to 1.4") { c.outlineSpacingSlider.doubleValue = 1.4; send(c.outlineSpacingSlider) }
             probe("screen: General") { c.showScreen(.general) }

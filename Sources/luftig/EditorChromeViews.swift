@@ -202,13 +202,9 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     var wrapsHeadings = false {
         didSet { if wrapsHeadings != oldValue { table.reloadData() } }
     }
-    /// Settings > Layout > Padding: the left margin, the air above the first and below the last entry.
+    /// Settings > Layout > Padding: the left margin (the air above and below the list is a margin outside this view, like the text viewport's).
     var padding = Padding.standard {
-        didSet {
-            guard padding != oldValue else { return }
-            scroll.contentInsets = NSEdgeInsets(top: padding.outlineTop, left: 0, bottom: padding.outlineTop, right: 0)
-            table.reloadData()
-        }
+        didSet { if padding != oldValue { table.reloadData() } }
     }
     /// Settings > Layout > Outline spacing: a row's height as a multiple of the font's height (ascent + descent).
     var lineHeightFactor: CGFloat = EditorPreferences.defaultOutlineLineHeight {
@@ -252,8 +248,7 @@ final class OutlineView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.automaticallyAdjustsContentInsets = false            // (else AppKit owns `contentInsets` and resets them)
-        scroll.contentInsets = NSEdgeInsets(top: 20, left: 0, bottom: 20, right: 0)
+        scroll.automaticallyAdjustsContentInsets = false            // (else AppKit owns `contentInsets`; the air above and below is a margin outside, EditorViewController)
         addSubview(scroll)
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: OutlineView.width),

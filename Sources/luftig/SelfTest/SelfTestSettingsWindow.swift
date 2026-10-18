@@ -232,7 +232,7 @@ extension SelfTestScenarios {
             let panel = window.contentView!
             c.limitCheckbox.performClick(nil)
             t.check(!P.readableWidth && !c.widthSlider.isEnabled, "column: unticking 'Limit line length' turns the preference off and disables the slider")
-            for (name, host) in [("A", a), ("B", b)] { t.check(host.textView.textContainerInset.width == 28, "column: unlimited, window \(name) uses the whole width (inset \(Int(host.textView.textContainerInset.width)) pt)") }
+            for (name, host) in [("A", a), ("B", b)] { t.check(host.textView.textContainerInset.width == host.padding.textInsetHorizontal, "column: unlimited, window \(name) uses the whole width (inset \(Int(host.textView.textContainerInset.width)) pt)") }
             a.luftigToggleReadableWidth(nil)
             t.check(P.readableWidth && c.limitCheckbox.state == .on && c.widthSlider.isEnabled, "column: View > Wrap to Readable Width and the checkbox are one switch")
             c.widthSlider.doubleValue = 900

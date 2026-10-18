@@ -21,7 +21,7 @@
 //                   about 85 characters per line
 //   Layout:
 //   Show            [x] Outline  [x] Word count  [x] Syntax bar       (the View menu's switches, the other way to reach them)
-//   Padding         ----o------   1.00 ×                                (ONE factor for all the air: the window's frame, text insets, pane margins and heights)
+//   Padding         ----o------   20 pt                                 (ONE number for every gap: the window's frame, between the panels, around the text)
 //   Font            [Same as text font  v]
 //   Size            [12 pt v]
 //   Opacity         ----o------   100 %
@@ -140,7 +140,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let showOutlineCheckbox = NSButton(checkboxWithTitle: "Outline", target: nil, action: nil)
     let showWordCountCheckbox = NSButton(checkboxWithTitle: "Word count", target: nil, action: nil)
     let showSyntaxBarCheckbox = NSButton(checkboxWithTitle: "Syntax bar", target: nil, action: nil)
-    let paddingSlider = SettingsSlider(value: 1, minValue: Double(EditorPreferences.paddingRange.lowerBound), maxValue: Double(EditorPreferences.paddingRange.upperBound), target: nil, action: nil)
+    let paddingSlider = SettingsSlider(value: Double(EditorPreferences.defaultPadding), minValue: Double(EditorPreferences.paddingRange.lowerBound), maxValue: Double(EditorPreferences.paddingRange.upperBound), target: nil, action: nil)
     let paddingValueLabel = NSTextField(labelWithString: "")
     let paddingNoteLabel = NSTextField(labelWithString: "")
     // the General screen
@@ -309,7 +309,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         fixedLabel(paddingValueLabel, width: W.valueLabelWidth, font: W.valueFont)
         secondary(paddingNoteLabel)
         fixedLabel(paddingNoteLabel, width: W.controlColumnWidth, font: paddingNoteLabel.font)
-        paddingNoteLabel.stringValue = "The frame around the panels and the air inside them, all in proportion."
+        paddingNoteLabel.stringValue = "Every gap: the window's frame, between the panels, around the text."
 
         openInTabsCheckbox.target = self; openInTabsCheckbox.action = #selector(openInTabsChanged(_:))
         openInTabsCheckbox.setAccessibilityLabel("Open files in tabs")
@@ -631,7 +631,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
         let padding = EditorPreferences.padding
         if trackedControl !== paddingSlider { paddingSlider.doubleValue = Double(padding) }
-        paddingValueLabel.stringValue = String(format: "%.2f ×", Double(padding))
+        paddingValueLabel.stringValue = "\(Int(padding)) pt"
     }
 
     /// The size field and its stepper show `size`, whatever has the keyboard focus.

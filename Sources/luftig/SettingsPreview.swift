@@ -50,7 +50,7 @@ final class SettingsPreview {
         storage = stack.storage
         layoutManager = stack.layoutManager
         column = ReadableColumnController(scrollView: stack.scrollView, textView: stack.textView, maxColumnWidth: EditorPreferences.columnWidth)
-        column.trailingExtra = Padding(factor: EditorPreferences.padding).textTrailingExtra
+        applyPadding()
         textView.isEditable = false
         textView.isSelectable = false
         scrollView.borderType = .bezelBorder
@@ -64,7 +64,15 @@ final class SettingsPreview {
 
     /// Rebuild the theme if (and only if) a preference that shapes it changed, and follow the column preferences.
     @discardableResult
+    /// The editor's padding, as the editor applies it (the preview's pixels are compared with an editor's): the text's side inset, no vertical inset of the
+    /// container (the editor's vertical padding is a margin of its viewport), the extra on the right.
+    func applyPadding() {
+        let p = Padding(points: EditorPreferences.padding)
+        column.minInset = p.textInsetHorizontal; column.verticalInset = 0; column.trailingExtra = p.textTrailingExtra; column.update()
+    }
+
     func refresh() -> Bool {
+        applyPadding()
         var rebuilt = false
         let settings = EditorPreferences.themeSettings, scheme = EditorPreferences.colorSchemeID
         if settings != theme.settings || scheme != appliedSchemeID {

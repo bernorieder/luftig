@@ -13,6 +13,7 @@ extension SelfTestScenarios {
         .init(name: "chrome-outline", summary: "the outline scanner: ATX and setext headings, closing #, fences, front matter, indentation, chunked == whole", run: { t in try await chromeOutline(t) }),
         .init(name: "chrome-words", summary: "the word counter: punctuation-only tokens do not count, CJK per character, chunked == whole, ranges", run: { t in try await chromeWords(t) }),
         .init(name: "chrome-syntax", summary: "the syntax bar's edits: wrap / unwrap, link / image, line prefixes toggle, numbering, rule, code block, table", run: { t in try await chromeSyntax(t) }),
+        .init(name: "chrome-geometry", summary: "(probe) where the first text line, the first outline entry and the bar's symbols sit, at a padding: [--padding X]", run: { t in try await chromeGeometry(t) }, inAll: false),
         .init(name: "chrome-editor", summary: "outline, word count and syntax bar in the real editor: preferences and View menu, data of an opened document, clicks, coalesced recomputation, 6 MB in steps, fonts / colours", run: { t in try await chromeEditor(t) }),
     ]
 
@@ -198,6 +199,42 @@ extension SelfTestScenarios {
         }
     }
 
+    // MARK: chrome-geometry
+
+    @MainActor static func chromeGeometry(_ t: SelfTest.T) async throws {
+        try await preservingSettings {
+            if let p = SelfTest.argument("padding").flatMap({ Double($0) }) { EditorPreferences.padding = CGFloat(p) }
+            let (doc, host, _) = try await openEditor(t, text: "# Alpha\n\nbody text\n\n## Beta\n\nmore\n", name: "geometry.md", size: NSSize(width: 1000, height: 600))
+            defer { t.close(doc) }
+            host.view.layoutSubtreeIfNeeded()
+            let tv = host.textView, lm = tv.layoutManager!
+            lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: 10))
+            func top(_ r: NSRect, in v: NSView) -> CGFloat { host.view.bounds.height - host.view.convert(r, from: v).maxY }      // distance from the window's top
+            let line0 = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
+            let used0 = lm.lineFragmentUsedRect(forGlyphAt: 0, effectiveRange: nil).offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
+            let font0 = (tv.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont) ?? tv.font!
+            let glyphTop0 = used0.maxY - (lm.location(forGlyphAt: 0).y) - font0.ascender + used0.minY - used0.minY   // baseline - ascender
+            let baseline0 = line0.minY + lm.location(forGlyphAt: 0).y
+            let p = host.padding
+            out(String(format: "GEOMETRY padding %.0f pt: window frame %.0f, viewport margin %.0f, text inset h %.0f, outline leading %.0f, word count row %.0f, bar %.0f", EditorPreferences.padding, p.window, p.textInsetVertical, p.textInsetHorizontal, p.outlineLeading, p.wordCountHeight, p.barHeight))
+            out(String(format: "GEOMETRY text: scroll view top %.1f; first line fragment top %.1f, baseline %.1f, ascender %.1f -> glyph top %.1f; text left %.1f", top(host.scrollView.bounds, in: host.scrollView), top(NSRect(x: 0, y: line0.minY, width: 1, height: 0), in: tv) - 0, top(NSRect(x: 0, y: baseline0, width: 1, height: 0), in: tv), font0.ascender, top(NSRect(x: 0, y: baseline0, width: 1, height: 0), in: tv) - font0.ascender, host.view.convert(used0, from: tv).minX))
+            _ = glyphTop0
+            if let cell = host.outline.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTextField, let cfont = cell.font {
+                let cellFrame = host.view.convert(cell.bounds, from: cell)
+                let rowFrame = host.view.convert(host.outline.table.rect(ofRow: 0), from: host.outline.table)
+                // the label's text: baseline = cell top + (cell height - font height)/2 + ascender (NSTextField centres single-line text vertically)
+                let fontH = cfont.ascender - cfont.descender
+                let glyphTop = (host.view.bounds.height - cellFrame.maxY) + (cellFrame.height - fontH) / 2
+                out(String(format: "GEOMETRY outline: scroll top %.1f, first row top %.1f (height %.1f), cell top %.1f (height %.1f), glyph top ~%.1f; cell left %.1f", top(host.outline.scroll.bounds, in: host.outline.scroll), host.view.bounds.height - rowFrame.maxY, rowFrame.height, host.view.bounds.height - cellFrame.maxY, cellFrame.height, glyphTop, cellFrame.minX))
+            }
+            let bar = host.view.convert(host.syntaxBar.bounds, from: host.syntaxBar), stack = host.view.convert(host.syntaxBar.stack.bounds, from: host.syntaxBar.stack)
+            let bold = host.syntaxBar.labels[.bold].map { host.view.convert($0.bounds, from: $0) } ?? .zero
+            let link = host.syntaxBar.labels[.link].map { host.view.convert($0.bounds, from: $0) } ?? .zero
+            out(String(format: "GEOMETRY bar: y %.1f ... %.1f (centre %.1f); stack y %.1f ... %.1f (centre %.1f); B label y %.1f ... %.1f; link symbol y %.1f ... %.1f", bar.minY, bar.maxY, bar.midY, stack.minY, stack.maxY, stack.midY, bold.minY, bold.maxY, link.minY, link.maxY))
+            t.check(true, "measured")
+        }
+    }
+
     // MARK: chrome-editor
 
     @MainActor static func chromeEditor(_ t: SelfTest.T) async throws {
@@ -221,8 +258,11 @@ extension SelfTestScenarios {
             let textFrame = inRoot(host.scrollView)
             t.check(inRoot(host.outline).width == OutlineView.width && inRoot(host.outline).minX == host.padding.window, "the outline is on the left inside the window's frame, \(OutlineView.width) pt wide: \(NSStringFromRect(inRoot(host.outline)))")
             t.check(textFrame.minX >= OutlineView.width - 0.5, "the text starts right of the outline: \(NSStringFromRect(textFrame))")
-            t.check(inRoot(host.wordCount).minY >= textFrame.maxY - 0.5 && inRoot(host.wordCount).height == WordCountView.height, "the word count row is above the text: \(NSStringFromRect(inRoot(host.wordCount))) vs \(NSStringFromRect(textFrame))")
-            t.check(inRoot(host.syntaxBar).maxY <= textFrame.minY + 0.5 && inRoot(host.syntaxBar).height == SyntaxBarView.height, "the syntax bar is below the text: \(NSStringFromRect(inRoot(host.syntaxBar)))")
+            t.check(inRoot(host.wordCount).minY >= textFrame.maxY - 0.5 && inRoot(host.wordCount).height == Padding.wordCountContentHeight, "the word count row is above the text: \(NSStringFromRect(inRoot(host.wordCount))) vs \(NSStringFromRect(textFrame))")
+            t.check(inRoot(host.syntaxBar).maxY <= textFrame.minY + 0.5 && inRoot(host.syntaxBar).height == Padding.barContentHeight, "the syntax bar is below the text: \(NSStringFromRect(inRoot(host.syntaxBar)))")
+            t.equal(inRoot(host.outline).maxY, textFrame.maxY, "the outline's top and the text viewport's top are the same (scrolled text starts where the outline starts)")
+            t.equal(inRoot(host.outline).minY, textFrame.minY, "... and their bottoms")
+            t.equal(tv.textContainerInset.height, 0, "the text container has no vertical inset of its own: the air is the viewport's margin")
             // a small document: the data is there at open (no wait); a big one computes after the first screen (below)
             t.check(!host.chromeRefreshPending && host.outline.entries.count == 3, "a small document's outline and count are computed at open, synchronously")
             var waited = 0.0
@@ -260,7 +300,7 @@ extension SelfTestScenarios {
             t.equal(tv.selectedRange().location, gamma, "the caret is on the clicked heading")
             let vis = host.styler.visibleCharacterRange(tv)
             t.check(vis.location <= gamma && NSMaxRange(vis) > gamma, "the heading is visible: \(NSStringFromRange(vis))")
-            t.check(abs(tv.visibleRect.minY - (tv.layoutManager!.lineFragmentRect(forGlyphAt: tv.layoutManager!.glyphIndexForCharacter(at: gamma), effectiveRange: nil).minY + tv.textContainerOrigin.y - 20)) < 1 || tv.visibleRect.minY >= tv.frame.height - tv.visibleRect.height - 1, "the heading line is at the top of the window (or the document end is reached)")
+            t.check(abs(tv.visibleRect.minY - (tv.layoutManager!.lineFragmentRect(forGlyphAt: tv.layoutManager!.glyphIndexForCharacter(at: gamma), effectiveRange: nil).minY + tv.textContainerOrigin.y)) < 1 || tv.visibleRect.minY >= tv.frame.height - tv.visibleRect.height - 1, "the heading line is at the top of the viewport (or the document end is reached)")
             await t.spin(10)
             t.equal(host.outline.currentIndex, 2, "the clicked section is current")
 
@@ -317,50 +357,49 @@ extension SelfTestScenarios {
             EditorPreferences.outlineWraps = false
             await t.spin(10)
             t.check(host.outline.table.rect(ofRow: lastRow).height == single, "off again: single-line rows")
-            // Settings > General > Padding: one factor for the text's insets and the panes' margins and heights
-            t.equal(Padding(factor: 1).textInsetHorizontal, 28, "padding 1: the text's horizontal inset is the 28 pt it always was")
-            t.equal(Padding(factor: 1).textInsetVertical, 20, "padding 1: vertical inset 20 pt")
-            t.equal(Padding(factor: 1).barHeight, 40, "padding 1: the bar is 40 pt")
-            t.equal(Padding(factor: 1).window, 12, "padding 1: a 12 pt frame between the window's edge and the panels")
-            t.equal(inRoot(host.outline).minX, 12, "the outline starts 12 pt from the window's left edge")
-            t.equal(host.view.bounds.height - inRoot(host.wordCount).maxY, 12, "the word count row starts 12 pt below the top edge")
-            t.equal(inRoot(host.syntaxBar).minY, 12, "the syntax bar ends 12 pt above the bottom edge")
+            // Settings > Layout > Padding: ONE number of points for every gap
+            t.equal(Padding(points: 20).window, 20, "padding 20: the window frame is 20 pt")
+            t.equal(Padding(points: 20).textInsetHorizontal, 20, "padding 20: 20 pt between the outline and the text")
+            t.equal(Padding(points: 0).window, 0, "padding 0: no frame")
+            t.equal(Padding(points: 0).barHeight, Padding.barContentHeight, "the bar is always its symbols' height")
+            t.equal(Padding(points: 50).wordCountHeight, Padding.wordCountContentHeight, "the word count row is always its line's height")
+            t.equal(EditorPreferences.padding, 20, "the default is 20 pt")
+            t.equal(inRoot(host.outline).minX, 20, "the outline starts 20 pt from the window's left edge")
+            t.equal(host.view.bounds.height - inRoot(host.wordCount).maxY, 20, "the word count row starts 20 pt below the top edge")
+            t.equal(host.view.bounds.height - inRoot(host.scrollView).maxY, 20 + 16 + 20, "the text viewport starts below the frame, the word count's line and a 20 pt gap")
+            t.equal(inRoot(host.syntaxBar).minY, 20, "the syntax bar is 20 pt above the bottom edge")
+            t.equal(inRoot(host.scrollView).minY - inRoot(host.syntaxBar).maxY, 20, "20 pt between the bar and the text viewport")
+            t.equal(tv.textContainerInset.width, 20, "20 pt between the outline and the text (the window is narrower than the column)")
             let gapBefore = host.syntaxBar.stack.spacing
-            t.equal(Padding(factor: 0).textInsetHorizontal, 0, "padding 0: no inset at all")
-            t.equal(Padding(factor: 0).window, 0, "padding 0: no window frame")
-            t.equal(Padding(factor: 0).barHeight, Padding.barContentHeight, "padding 0: the bar is as tall as its symbols")
-            t.equal(Padding(factor: 0).wordCountHeight, Padding.wordCountContentHeight, "padding 0: the word count row is as tall as its line")
             let rowBefore = host.outline.table.rect(ofRow: 0).height
             let containerBefore = tv.textContainer!.size.width
-            EditorPreferences.padding = 2
+            EditorPreferences.padding = 50
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
-            t.equal(tv.textContainerInset.height, 40, "padding 2: the text's vertical inset doubles")
-            t.equal(host.outline.table.rect(ofRow: 0).height, rowBefore, "padding 2: the outline's row height does NOT change (it has a slider of its own)")
-            t.check(tv.textContainer!.size.width < containerBefore, "padding 2: the text container is narrower (left inset and the right extra both grew: \(Int(containerBefore)) -> \(Int(tv.textContainer!.size.width)) pt)")
-            t.check(abs(Double(tv.textContainerInset.width + tv.textContainer!.size.width + host.padding.textTrailingExtra + tv.textContainerInset.width) - Double(tv.frame.width)) < 1.5, "padding 2: inset + container + inset + extra = the text view's width (the extra air is on the right)")
-            t.equal(inRoot(host.syntaxBar).height, Padding.barContentHeight + 44, "padding 2: the syntax bar is its content plus 44 pt")
-            t.equal(inRoot(host.wordCount).height, Padding.wordCountContentHeight + 12, "padding 2: the word count row is its line plus 12 pt")
-            t.equal(host.outline.scroll.contentInsets.top, 40, "padding 2: the outline's top inset is 40 pt")
-            t.equal(inRoot(host.outline).minX, 24, "padding 2: the window's frame is 24 pt")
-            t.equal(host.syntaxBar.stack.spacing, gapBefore, "padding 2: the gaps between the bar's elements do NOT change")
+            t.equal(host.view.bounds.height - inRoot(host.scrollView).maxY, 50 + 16 + 50, "padding 50: frame 50, the word count's line, gap 50")
+            t.equal(inRoot(host.outline).maxY, inRoot(host.scrollView).maxY, "padding 50: the outline's top and the viewport's top agree")
+            t.equal(inRoot(host.outline).minX, 50, "padding 50: the outline starts at 50")
+            t.equal(inRoot(host.syntaxBar).minY, 50, "padding 50: the bar is 50 pt above the bottom edge")
+            t.equal(host.outline.table.rect(ofRow: 0).height, rowBefore, "padding 50: the outline's row height does NOT change (it has a slider of its own)")
+            t.check(tv.textContainer!.size.width < containerBefore, "padding 50: the text container is narrower (\(Int(containerBefore)) -> \(Int(tv.textContainer!.size.width)) pt)")
+            t.check(abs(Double(tv.textContainerInset.width * 2 + tv.textContainer!.size.width) - Double(tv.frame.width)) < 1.5, "padding 50: inset + container + inset = the text view's width")
+            t.equal(inRoot(host.syntaxBar).height, Padding.barContentHeight, "padding 50: the bar is still its symbols' height")
+            t.equal(host.syntaxBar.stack.spacing, gapBefore, "padding 50: the gaps between the bar's elements do NOT change")
             EditorPreferences.padding = 0
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
-            t.equal(tv.textContainerInset.height, 0, "padding 0: no vertical inset")
-            t.equal(tv.textContainerInset.width, 0, "padding 0: no horizontal inset (readable width is on, but the window is narrower than the column)")
-            t.equal(inRoot(host.syntaxBar).height, Padding.barContentHeight, "padding 0: the bar is \(Int(Padding.barContentHeight)) pt, its content")
+            t.equal(host.view.bounds.height - inRoot(host.scrollView).maxY, Padding.wordCountContentHeight, "padding 0: the viewport starts right under the word count's line")
+            t.equal(tv.textContainerInset.width, 0, "padding 0: no inset between the outline and the text")
             t.equal(inRoot(host.outline).minX, 0, "padding 0: the outline touches the window's edge")
-            t.equal(host.view.bounds.height - inRoot(host.wordCount).maxY, 0, "padding 0: the word count row touches the top edge")
-            t.equal(host.outline.scroll.contentInsets.top, 0, "padding 0: no inset above the outline")
-            EditorPreferences.padding = 1
+            t.equal(inRoot(host.syntaxBar).minY, 0, "padding 0: the bar touches the bottom edge")
+            t.equal(inRoot(host.outline).maxY, inRoot(host.scrollView).maxY, "padding 0: the outline's top and the viewport's top agree")
+            EditorPreferences.padding = 20
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
-            t.equal(tv.textContainerInset.height, 20, "padding 1 again: 20 pt")
-            t.equal(EditorPreferences.padding, 1, "the factor reads back as 1")
-            EditorPreferences.padding = 1.337
-            t.equal(EditorPreferences.padding, 1.35, "the factor is stored in steps of 0.05")
-            EditorPreferences.padding = 1
+            t.equal(host.view.bounds.height - inRoot(host.scrollView).maxY, 56, "padding 20 again: 56 pt above the viewport")
+            EditorPreferences.padding = 33.7
+            t.equal(EditorPreferences.padding, 34, "the padding is stored in whole points")
+            EditorPreferences.padding = 20
             // Settings > Layout > Outline spacing: the row height as a multiple of the font's height
             let fontH = (host.outline.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTextField)?.font.map { $0.ascender - $0.descender } ?? 14
             t.equal(host.outline.table.rect(ofRow: 0).height, ceil(fontH * 1.4), "outline spacing 1.4 (default): row height = 1.4 x the font's height")
@@ -411,7 +450,7 @@ extension SelfTestScenarios {
             host.luftigToggleWordCount(nil); host.luftigToggleSyntaxBar(nil)
             host.view.layoutSubtreeIfNeeded()
             t.check(host.wordCount.isHidden && host.syntaxBar.isHidden, "word count and syntax bar hidden")
-            t.check(abs(inRoot(host.scrollView).height - (host.view.bounds.height - 2 * host.padding.window)) < 1, "with everything hidden the text fills the window inside its frame (\(Int(host.padding.window)) pt)")
+            t.check(abs(inRoot(host.scrollView).height - (host.view.bounds.height - 2 * host.padding.window - 2 * host.padding.textInsetVertical)) < 1, "with everything hidden the text viewport fills the window inside its frame and its own margin")
             let (doc2, host2, _) = try await openEditor(t, text: "# x\n", name: "chrome2.md")
             t.check(host2.outline.isHidden && host2.wordCount.isHidden && host2.syntaxBar.isHidden, "a window opened later follows the stored switches")
             host.luftigToggleOutline(nil)

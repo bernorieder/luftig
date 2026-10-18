@@ -99,7 +99,7 @@ extension SelfTestScenarios {
         defer { Palette.apply(schemeID: ColorSchemes.defaultID) }
         if let fs = SelfTest.argument("font-size"), let v = Double(fs) { EditorPreferences.fontSize = CGFloat(v) }
         if SelfTest.flag("no-readable-width") { EditorPreferences.readableWidth = false }
-        if let p = SelfTest.argument("padding"), let v = Double(p) { EditorPreferences.padding = CGFloat(v) }      // --padding 0.5 ... 2
+        if let p = SelfTest.argument("padding"), let v = Double(p) { EditorPreferences.padding = CGFloat(v) }      // --padding 0 ... 50 (points)
         // the Settings window's other controls (the runner starts from the defaults and a scenario puts back what it changed)
         let savedBody = EditorPreferences.bodyFontFamily, savedCode = EditorPreferences.codeFontFamily
         let savedSpacing = EditorPreferences.lineHeightFactor, savedColumn = EditorPreferences.columnWidth

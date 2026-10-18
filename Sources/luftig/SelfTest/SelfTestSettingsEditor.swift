@@ -114,7 +114,8 @@ extension SelfTestScenarios {
             for (name, host) in hosts {           // (the outline on the left takes its 220 pt first: the text fills the text area, not the window)
                 let area = host.scrollView.contentView.bounds.width
                 let extra = host.padding.textTrailingExtra
-                t.check(host.textView.textContainerInset.width == 28 && abs(host.textView.textContainer!.size.width - (area - 56 - extra)) < 1.5 && area > 1000, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt, \(Int(extra)) pt extra on the right)")
+                let inset = host.padding.textInsetHorizontal
+                t.check(host.textView.textContainerInset.width == inset && abs(host.textView.textContainer!.size.width - (area - 2 * inset - extra)) < 1.5 && area > 1000, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt, inset \(Int(inset)))")
             }
             P.readableWidth = true
             for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1000) < 1.5, "column on again: \(name) back to 1000 pt") }

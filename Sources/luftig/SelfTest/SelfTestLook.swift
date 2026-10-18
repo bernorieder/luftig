@@ -171,8 +171,8 @@ extension SelfTestScenarios {
             // 3. the first line: below the container inset, fully visible
             let lm = tv.layoutManager!
             let first = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
-            t.check(tv.textContainerOrigin.y == 20, "\(label): the text container starts 20 pt below the top of the text view (\(tv.textContainerOrigin.y))")
-            t.check(tv.visibleRect.contains(first) && first.minY >= 20 - 0.5, "\(label): the first line \(lookRect(first)) lies inside the visible rect \(lookRect(tv.visibleRect)), 20 pt below the top edge")
+            t.check(tv.textContainerOrigin.y == 0, "\(label): the text container starts at the top of the text view (\(tv.textContainerOrigin.y)): the vertical padding is a margin of the viewport, outside the scrolling")
+            t.check(tv.visibleRect.contains(first) && first.minY >= -0.5, "\(label): the first line \(lookRect(first)) lies inside the visible rect \(lookRect(tv.visibleRect))")
             // nothing paints over it: the window's pixels over the first lines == the text view's own drawing of the same area (a scroll-edge effect, a pocket or a
             // translucent bar over the top would differ)
             if let shot = LookShot(content) {
@@ -200,9 +200,10 @@ extension SelfTestScenarios {
         // (17 pt) has room beside the text. (A band / quote bar reaches `bandOutset` into the inset; the corner radius of a window without a toolbar is about 16 pt.)
         w.setContentSize(NSSize(width: 360, height: 400))
         content.layoutSubtreeIfNeeded()
-        let narrowInset = tv.textContainerInset.width, overlayScroller = NSScroller.scrollerWidth(for: .regular, scrollerStyle: .overlay)
-        t.check(narrowInset - DecorationMetrics.bandOutset >= 16, "narrowest window (\(Int(content.bounds.width)) pt): bands and quote bars start \(narrowInset - DecorationMetrics.bandOutset) pt from the side edges (>= 16 pt, the window's corner radius)")
-        t.check(narrowInset >= overlayScroller + 4, "narrowest window: the \(overlayScroller) pt overlay scroller has room beside the text (inset \(narrowInset) pt)")
+        // (this scenario runs with the window frame overridden to 0; in use the frame - the padding, 20 pt by default - lies between the edge and the text's inset)
+        let narrowInset = tv.textContainerInset.width, overlayScroller = NSScroller.scrollerWidth(for: .regular, scrollerStyle: .overlay), frame = EditorPreferences.padding
+        t.check(narrowInset + frame - DecorationMetrics.bandOutset >= 16, "narrowest window (\(Int(content.bounds.width)) pt): bands and quote bars start \(narrowInset + frame - DecorationMetrics.bandOutset) pt from the side edges (>= 16 pt, the window's corner radius; frame \(frame) + inset \(narrowInset))")
+        t.check(narrowInset >= overlayScroller, "narrowest window: the \(overlayScroller) pt overlay scroller has room beside the text (inset \(narrowInset) pt)")
         w.setContentSize(NSSize(width: 860, height: 700))
         content.layoutSubtreeIfNeeded()
 
@@ -288,8 +289,8 @@ extension SelfTestScenarios {
                     // (in the content view's coordinates: the scroll view sits in a nested stack; the word count row, when shown, lies between the banner and the text)
                     let sv = host.scrollView
                     let svFrame = content.convert(sv.bounds, from: sv), bannerFrame = content.convert(banner.bounds, from: banner)
-                    let between = host.wordCount.isHidden ? 0 : WordCountView.height
-                    t.check(abs(svFrame.maxY + between - bannerFrame.minY) < 0.5 && svFrame.minY >= -0.5, "\(label): the scroll view starts below the banner (scroll view top y \(svFrame.maxY), banner bottom y \(bannerFrame.minY), \(Int(between)) pt word count row between)")
+                    let between = (host.wordCount.isHidden ? 0 : host.padding.wordCountHeight) + host.padding.textInsetVertical
+                    t.check(abs(svFrame.maxY + between - bannerFrame.minY) < 0.5 && svFrame.minY >= -0.5, "\(label): the scroll view starts below the banner (scroll view top y \(svFrame.maxY), banner bottom y \(bannerFrame.minY), \(Int(between)) pt of word count row and viewport margin between)")
                     // legibility on pixels: every button title on its own fill, and the message on the banner's tint
                     if let shot = LookShot(content) {
                         for b in buttons {

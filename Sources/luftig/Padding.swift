@@ -1,52 +1,45 @@
 import AppKit
 
-/// Every bit of air in the editor, from ONE factor (Settings > Layout > Padding, `EditorPreferences.padding`, 0 ... 2), in two layers: the WINDOW
-/// padding - the frame between the window's edge and the panels, on all four sides - and the padding INSIDE each panel (the text's insets, the
-/// outline's margins, the air of the word count's row and the syntax bar). At 1 the panel values are the ones luftig always had and the window frame
-/// is 12 pt; at 0 there is NO padding at all - the panels touch the window's edge, the text its panel's edge, the bar and the row are as tall as
-/// their content -; everything scales in proportion, rounded to whole points. Structural sizes - the outline's width, the indent per heading level,
-/// the font sizes, the gaps between the syntax bar's elements, the outline's row height (a slider of its own) - are not padding and do not move.
+/// Every bit of air in the editor, from ONE number: the padding in points (Settings > Layout > Padding, `EditorPreferences.padding`, 0 ... 50). The same
+/// value is every gap: between the window's edge and the panels on all four sides, between the outline and the text, between the word count row and the
+/// outline / text below it, between the syntax bar and the text above it, and between the text and the edges of its own panel. At 0 everything touches;
+/// at 50 the editor floats. The panels themselves are their content: the word count row is its line, the bar is its symbols. Structural sizes - the
+/// outline's width, the indent per heading level, the font sizes, the gaps between the bar's symbols, the outline's row height (a slider of its own) -
+/// are not padding and do not move.
 struct Padding: Equatable {
-    let factor: CGFloat
+    let points: CGFloat
 
-    init(factor: CGFloat) { self.factor = factor }
-    static let standard = Padding(factor: 1)
+    init(points: CGFloat) { self.points = max(0, points.rounded()) }
+    static let standard = Padding(points: EditorPreferences.defaultPadding)
 
-    private func scaled(_ base: CGFloat) -> CGFloat { max(0, (base * factor).rounded()) }
-
-    // the window
-    /// The frame between the window's edge and the panels, on every side.
-    var window: CGFloat {
+    #if LUFTIG_SELFTEST
+    /// Self-test only: a scenario about the system's chrome wants the text view at the window's edge (no frame, no viewport margin).
+    nonisolated(unsafe) static var windowOverride: CGFloat?
+    #endif
+    private var gap: CGFloat {
         #if LUFTIG_SELFTEST
         if let o = Padding.windowOverride { return o }
         #endif
-        return scaled(12)
+        return points
     }
-    #if LUFTIG_SELFTEST
-    /// Self-test only: a scenario about the system's chrome wants the text view at the window's edge.
-    nonisolated(unsafe) static var windowOverride: CGFloat?
-    #endif
 
-    // the text
-    /// The least space between the window's edge (or the outline) and the text column (`ReadableColumnController.minInset`). The decoration bands reach
-    /// `DecorationMetrics.bandOutset` into it; with less than that they run to the panel's edge.
-    var textInsetHorizontal: CGFloat { scaled(28) }
-    /// Space above the first and below the last line of the text.
-    var textInsetVertical: CGFloat { scaled(20) }
-    /// Extra air on the RIGHT of the text, on top of the horizontal inset (`ReadableColumnController.trailingExtra`): the text's right edge keeps the same
-    /// distance from the scroller as the outline's entries keep from the window's left edge.
-    var textTrailingExtra: CGFloat { scaled(16) }
-
-    // the outline (left); the height of its rows is a setting of its own (Settings > Layout > Outline spacing), not padding
-    var outlineLeading: CGFloat { scaled(16) }
-    var outlineTop: CGFloat { scaled(20) }
-
-    // the word count (top right): its content (a 12 pt line) plus air
+    /// The frame between the window's edge and the panels, on every side (EditorViewController.windowPaddingConstraints, bottomPaddingConstraint).
+    var window: CGFloat { gap }
+    /// Above and below the text viewport and the outline alike: a margin outside the scrolling (verticalInsetConstraints), so that scrolled text starts
+    /// exactly where the outline's first entry starts; the text container has no vertical inset of its own.
+    var textInsetVertical: CGFloat { gap }
+    /// Between the text and the sides of its panel: on the left that is the gap to the outline (`ReadableColumnController.minInset`). (Not part of the
+    /// self-test's flush override: a scenario about the window's chrome keeps the bands away from the window's corners.)
+    var textInsetHorizontal: CGFloat { points }
+    /// Extra air on the right of the text: none - the window frame right of the scroller is the padding there.
+    var textTrailingExtra: CGFloat { 0 }
+    /// The outline's entries start at the window frame; the indent per level (OutlineView.indentPerLevel) is structure, not padding.
+    var outlineLeading: CGFloat { 0 }
+    /// The word count row is its line; the gap to the window frame on its right is the frame itself.
     static let wordCountContentHeight: CGFloat = 16
-    var wordCountHeight: CGFloat { Padding.wordCountContentHeight + scaled(6) }
-    var wordCountTrailing: CGFloat { scaled(16) }
-
-    // the syntax bar (bottom): its content (the symbols) plus air; the gaps between its elements are fixed (SyntaxBarView.gapInGroup / gapBetweenGroups)
+    var wordCountHeight: CGFloat { Padding.wordCountContentHeight }
+    var wordCountTrailing: CGFloat { 0 }
+    /// The syntax bar is its symbols; the gaps between them are fixed (SyntaxBarView.gapInGroup / gapBetweenGroups).
     static let barContentHeight: CGFloat = 18
-    var barHeight: CGFloat { Padding.barContentHeight + scaled(22) }
+    var barHeight: CGFloat { Padding.barContentHeight }
 }
