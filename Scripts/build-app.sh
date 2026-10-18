@@ -177,6 +177,12 @@ if [ "$SIGN" = 1 ]; then
   codesign --force --deep --sign - --timestamp=none "$APP" 2>&1 | sed 's/^/    /'
 fi
 
+# ---- Launch Services: the built bundle is a build product, not an installed app. Once Launch Services has registered it (the Finder saw it, or
+# `open build/luftig.app`), the Finder's "Open With" lists every copy of the same name with its version after it ("luftig (1.0.0)") to tell them
+# apart. Unregistering the build output keeps the installed copy the only one (a later `open build/luftig.app` registers it again).
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+if [ -x "$LSREGISTER" ]; then "$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true; fi
+
 # ---- verify
 echo "==> verify"
 plutil -lint "$APP/Contents/Info.plist" | sed 's/^/    /'

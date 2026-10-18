@@ -344,7 +344,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         }
         reloadPopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
         secondary(reloadNoteLabel)
-        fixedLabel(reloadNoteLabel, width: W.controlColumnWidth, font: reloadNoteLabel.font)
+        wrappingLabel(reloadNoteLabel, width: W.controlColumnWidth, lines: 2)             // (the longest of its three texts needs two lines)
 
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
@@ -491,7 +491,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         // (the button's FRAME is taller than the rectangle the constraints place - its alignment rect - by the room of its shadow and focus ring)
         let restoreHeight = restoreButton.alignmentRect(forFrame: NSRect(origin: .zero, size: restoreButton.fittingSize)).height
         let switchHeight = ceil(screenControl.fittingSize.height)
-        let tallest = max(grid.fittingSize.height, panesGrid.fittingSize.height)
+        let tallest = max(grid.fittingSize.height, panesGrid.fittingSize.height, generalGrid.fittingSize.height)
         let height = ceil(m + W.previewHeight + 14 + switchHeight + 14 + tallest + 18 + restoreHeight + 18)
         window.setContentSize(NSSize(width: W.defaultContentWidth, height: height))
         window.contentMinSize = NSSize(width: W.minContentWidth, height: height)
@@ -511,6 +511,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         UserDefaults.standard.set(sc.rawValue, forKey: SettingsWindowController.screenKey)
     }
     @objc func screenChanged(_ sender: NSSegmentedControl) { showScreen(Screen(rawValue: sender.selectedSegment) ?? .general) }
+
+    /// A note that wraps onto `lines` lines: a fixed width AND a fixed height (the room of `lines` lines, whatever the text uses), so that a longer text wraps
+    /// instead of being cut off and a shorter one moves nothing.
+    private func wrappingLabel(_ l: NSTextField, width: CGFloat, lines: Int) {
+        l.lineBreakMode = .byWordWrapping
+        l.usesSingleLineMode = false
+        l.maximumNumberOfLines = lines
+        l.preferredMaxLayoutWidth = width
+        l.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        l.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let font = l.font ?? NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        l.widthAnchor.constraint(equalToConstant: width).isActive = true
+        l.heightAnchor.constraint(equalToConstant: CGFloat(lines) * lineHeight + 2).isActive = true
+    }
 
     /// A label that shows values: a fixed width whatever it says (it truncates, it never asks the layout for more), so the text can change without moving anything.
     private func fixedLabel(_ l: NSTextField, width: CGFloat, font: NSFont?) {

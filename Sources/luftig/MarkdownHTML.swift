@@ -36,20 +36,26 @@ enum MarkdownHTML {
         let bodyFamily = (bodyFont.map { "\"\($0)\", " } ?? "") + "-apple-system, BlinkMacSystemFont, \"Helvetica Neue\", Helvetica, Arial, sans-serif"
         let codeFamily = (codeFont.map { "\"\($0)\", " } ?? "") + "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace"
         let layout = pageLayout ? " max-width: 44em; margin: 3em auto; padding: 0 1.5em;" : ""
+        // the rich-text exports: black on white, no dark variant (AppKit's HTML importer applies a dark `prefers-color-scheme` block on a dark system:
+        // the RTF and the PDF came out light grey), quotes in black too
+        let ink = pageLayout ? "#222" : "#000"
+        let dark = pageLayout ? """
+        @media (prefers-color-scheme: dark) { body { color: #dde0ea; background: #1c1d22; } pre { background: #26272e; } code { background: #2c2a2a; }
+          blockquote { background: #23242c; border-color: #5c62a0; color: #b8bccc; } th, td { border-color: #3a3b44; } th { background: #26272e; } hr { border-color: #44454e; } a { color: #74a8ff; } }
+        """ : ""
         let css = """
-        body { font-family: \(bodyFamily); font-size: 16px; line-height: 1.5;\(layout) color: #222; background: #fff; }
+        body { font-family: \(bodyFamily); font-size: 16px; line-height: 1.5;\(layout) color: \(ink); background: #fff; }
         h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.6em 0 0.6em; }
         h1 { font-size: 1.6em; } h2 { font-size: 1.35em; } h3 { font-size: 1.18em; } h4 { font-size: 1.05em; }
         pre, code { font-family: \(codeFamily); font-size: 0.9em; }
         pre { background: #f4f4f6; padding: 0.8em 1em; overflow-x: auto; border-radius: 4px; }
         code { background: #f4f0ee; padding: 0.1em 0.3em; border-radius: 3px; } pre code { background: none; padding: 0; }
-        blockquote { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid #b8bcd4; color: #4a5064; background: #f6f6fb; }
+        blockquote { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid #b8bcd4; color: \(pageLayout ? "#4a5064" : "#000"); background: #f6f6fb; }
         table { border-collapse: collapse; margin: 1em 0; } th, td { border: 1px solid #d8d8de; padding: 0.3em 0.7em; text-align: left; } th { background: #f0f0f4; }
         hr { border: 0; border-top: 1px solid #c8c8d0; margin: 2em 0; }
         a { color: #005cc8; } img { max-width: 100%; }
         ul.task { list-style: none; padding-left: 1.2em; } li.task input { margin-right: 0.4em; }
-        @media (prefers-color-scheme: dark) { body { color: #dde0ea; background: #1c1d22; } pre { background: #26272e; } code { background: #2c2a2a; }
-          blockquote { background: #23242c; border-color: #5c62a0; color: #b8bccc; } th, td { border-color: #3a3b44; } th { background: #26272e; } hr { border-color: #44454e; } a { color: #74a8ff; } }
+        \(dark)
         """
         return "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>\(escape(title))</title>\n<style>\n\(css)\n</style>\n</head>\n<body>\n\(body)</body>\n</html>\n"
     }
