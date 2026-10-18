@@ -142,8 +142,9 @@ extension SelfTestScenarios {
         defer { t.close(doc) }
         // this scenario is about the system's chrome around the TEXT VIEW: the three elements around the text (outline, word count, syntax bar) are hidden for it
         let chromeSaved = (EditorPreferences.showOutline, EditorPreferences.showWordCount, EditorPreferences.showSyntaxBar)
+        Padding.windowOverride = 0                                                   // (and no window frame: the text view at the window's edge)
         EditorPreferences.showOutline = false; EditorPreferences.showWordCount = false; EditorPreferences.showSyntaxBar = false
-        defer { EditorPreferences.showOutline = chromeSaved.0; EditorPreferences.showWordCount = chromeSaved.1; EditorPreferences.showSyntaxBar = chromeSaved.2 }
+        defer { Padding.windowOverride = nil; EditorPreferences.showOutline = chromeSaved.0; EditorPreferences.showWordCount = chromeSaved.1; EditorPreferences.showSyntaxBar = chromeSaved.2 }
         for (appearance, name) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {
             w.appearance = NSAppearance(named: appearance)
             w.setContentSize(NSSize(width: 860, height: 700))

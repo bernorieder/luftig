@@ -166,8 +166,10 @@ applies at once to every open window and is saved (no OK / Apply buttons); the l
 current settings, so fonts, size, spacing, column and colours change in front of you. Under the preview a switch chooses between three screens, remembered:
 **General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window), **Text**
 (everything about the text) and **Layout**, for the three elements around the text (outline, word count, syntax bar): which of them are shown (the
-View menu's switches, the other way to reach them), the **Padding** - one slider for all the air in the editor: the text's insets, the panes' margins
-and heights, all in proportion from tight (0.5 ×) to airy (2 ×), the thing the name is about -, their font ("Same as text font" unless you choose one),
+View menu's switches, the other way to reach them), the **Padding** - one slider for all the air in the editor, in two layers: the frame between the
+window's edge and the panels on all four sides (12 pt at 1 ×), and the air inside each panel (the text's insets, the outline's margins, the word count
+row, the syntax bar's height), all in proportion from tight (0.5 ×) to airy (2 ×), the thing the name is about; the gaps between the bar's elements and
+the outline's row height stay put -, their font ("Same as text font" unless you choose one),
 their size (9 - 20 pt), their opacity (25 - 100 %, less = fainter), whether long headings in the outline wrap onto further lines instead of being
 cut off, and the outline's row height (Outline spacing, 1 - 2.5 × the outline font's height; it is not part of the padding). The padding gives the
 text a little more air on its right than on its left, so that its edge keeps its distance from the scroller.

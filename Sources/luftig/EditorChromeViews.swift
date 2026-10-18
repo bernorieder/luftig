@@ -137,7 +137,7 @@ final class WordCountView: NSView {
 
     private var heightConstraint: NSLayoutConstraint!
     private var trailingConstraint: NSLayoutConstraint!
-    /// Settings > General > Padding: the row's height and the margin on the right.
+    /// Settings > Layout > Padding: the row's height and the margin on the right.
     var padding = Padding.standard {
         didSet { heightConstraint.constant = padding.wordCountHeight; trailingConstraint.constant = -padding.wordCountTrailing }
     }
@@ -375,13 +375,9 @@ final class SyntaxBarView: NSView {
     private(set) var labels: [SyntaxElement: SoftLabel] = [:]
     var onInsert: ((SyntaxElement) -> Void)?
     private var schemeObserver: NSObjectProtocol?
-    /// Settings > General > Padding: the bar's height and the gaps between its elements and groups.
+    /// Settings > Layout > Padding: the bar's height (the gaps between its elements stay).
     var padding = Padding.standard {
-        didSet {
-            heightConstraint.constant = padding.barHeight
-            stack.spacing = padding.barGapBetweenGroups
-            for g in groups { g.spacing = padding.barGapInGroup }
-        }
+        didSet { heightConstraint.constant = padding.barHeight }
     }
 
     /// `theme`: the editor's (the panes' font follows its text font unless the Settings choose another family).

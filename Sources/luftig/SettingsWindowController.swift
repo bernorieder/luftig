@@ -21,7 +21,7 @@
 //                   about 85 characters per line
 //   Layout:
 //   Show            [x] Outline  [x] Word count  [x] Syntax bar       (the View menu's switches, the other way to reach them)
-//   Padding         ----o------   1.00 ×                                (ONE factor for all the air: text insets, pane margins and heights - luftig)
+//   Padding         ----o------   1.00 ×                                (ONE factor for all the air: the window's frame, text insets, pane margins and heights)
 //   Font            [Same as text font  v]
 //   Size            [12 pt v]
 //   Opacity         ----o------   100 %
@@ -309,7 +309,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         fixedLabel(paddingValueLabel, width: W.valueLabelWidth, font: W.valueFont)
         secondary(paddingNoteLabel)
         fixedLabel(paddingNoteLabel, width: W.controlColumnWidth, font: paddingNoteLabel.font)
-        paddingNoteLabel.stringValue = "The air around the text and in the panes, all in proportion."
+        paddingNoteLabel.stringValue = "The frame around the panels and the air inside them, all in proportion."
 
         openInTabsCheckbox.target = self; openInTabsCheckbox.action = #selector(openInTabsChanged(_:))
         openInTabsCheckbox.setAccessibilityLabel("Open files in tabs")

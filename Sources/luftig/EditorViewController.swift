@@ -50,6 +50,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     var chromeGeneration = 0
     var chromeDataGeneration = -1
     var chromeWordTotal = 0
+    var windowPaddingConstraints: [NSLayoutConstraint] = []
     /// How many times the outline / word count were recomputed (tests).
     var chromeRefreshCount = 0
 
@@ -124,9 +125,13 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         banner.isHidden = true
         let root = EditorRootView(frame: NSRect(origin: .zero, size: EditorViewController.initialSize))
         root.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor), stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: root.topAnchor), stack.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+        // the window padding: the frame between the window's edge and the panels (Padding.window), on all four sides
+        let w = padding.window
+        windowPaddingConstraints = [
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: w), root.trailingAnchor.constraint(equalTo: stack.trailingAnchor, constant: w),
+            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: w), root.bottomAnchor.constraint(equalTo: stack.bottomAnchor, constant: w),
+        ]
+        NSLayoutConstraint.activate(windowPaddingConstraints + [
             banner.leadingAnchor.constraint(equalTo: stack.leadingAnchor), banner.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             wordCount.leadingAnchor.constraint(equalTo: stack.leadingAnchor), wordCount.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             middle.leadingAnchor.constraint(equalTo: stack.leadingAnchor), middle.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
@@ -321,6 +326,7 @@ extension EditorViewController {
     func applyChromeTheme() {
         outline.wrapsHeadings = EditorPreferences.outlineWraps
         let p = Padding(factor: EditorPreferences.padding)
+        for c in windowPaddingConstraints { c.constant = p.window }
         outline.padding = p; wordCount.padding = p; syntaxBar.padding = p
         outline.lineHeightFactor = EditorPreferences.outlineLineHeight
         column.minInset = p.textInsetHorizontal; column.verticalInset = p.textInsetVertical; column.trailingExtra = p.textTrailingExtra; column.update()

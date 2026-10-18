@@ -108,16 +108,16 @@ extension SelfTestScenarios {
                 t.check(abs(tv.textContainer!.size.width - 600) < 1.5, "column width: the text column of \(name) is \(Int(tv.textContainer!.size.width)) pt (600 expected)")
                 t.check(abs(tv.textContainerInset.width - ((host.scrollView.contentView.bounds.width - host.padding.textTrailingExtra - 600) / 2).rounded(.down)) < 1.5, "column width: ... centred in the clip view minus the right-hand extra (inset \(Int(tv.textContainerInset.width)) pt, extra \(Int(host.padding.textTrailingExtra)))")
             }
-            P.columnWidth = 1100
-            for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1100) < 1.5, "column width: widened to \(Int(host.textView.textContainer!.size.width)) pt in \(name)") }
+            P.columnWidth = 1000                   // (a 1400 pt window minus the outline, the scroller, the window frame and the insets holds about 1060 pt of column)
+            for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1000) < 1.5, "column width: widened to \(Int(host.textView.textContainer!.size.width)) pt in \(name)") }
             P.readableWidth = false
             for (name, host) in hosts {           // (the outline on the left takes its 220 pt first: the text fills the text area, not the window)
                 let area = host.scrollView.contentView.bounds.width
                 let extra = host.padding.textTrailingExtra
-                t.check(host.textView.textContainerInset.width == 28 && abs(host.textView.textContainer!.size.width - (area - 56 - extra)) < 1.5 && area > 1100, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt, \(Int(extra)) pt extra on the right)")
+                t.check(host.textView.textContainerInset.width == 28 && abs(host.textView.textContainer!.size.width - (area - 56 - extra)) < 1.5 && area > 1000, "column off: \(name) uses the whole text area (\(Int(host.textView.textContainer!.size.width)) of \(Int(area)) pt, \(Int(extra)) pt extra on the right)")
             }
             P.readableWidth = true
-            for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1100) < 1.5, "column on again: \(name) back to 1100 pt") }
+            for (name, host) in hosts { t.check(abs(host.textView.textContainer!.size.width - 1000) < 1.5, "column on again: \(name) back to 1000 pt") }
 
             // ---- a window opened later starts with all of it
             let (docC, c, _) = try await openEditor(t, text: "# Title\n\nbody `code`\n", name: "sa-c.md", size: NSSize(width: 1400, height: 700))
@@ -125,7 +125,7 @@ extension SelfTestScenarios {
             t.equal(t.fontOf(c.textView, at: 12)?.familyName, body, "... its body text is set in \(body)")
             t.equal(c.theme.bodyLineHeight, a.theme.bodyLineHeight, "... with the same line box")
             c.view.window?.contentView?.layoutSubtreeIfNeeded()
-            t.check(abs(c.textView.textContainer!.size.width - 1100) < 1.5, "... and the same column (\(Int(c.textView.textContainer!.size.width)) pt)")
+            t.check(abs(c.textView.textContainer!.size.width - 1000) < 1.5, "... and the same column (\(Int(c.textView.textContainer!.size.width)) pt)")
 
             // ---- nothing is rebuilt that does not need it
             let themeA = a.theme, runsA = a.styler.appliedRunCount
