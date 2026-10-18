@@ -75,3 +75,7 @@ System Settings > Privacy & Security > Open Anyway (or `xattr -dr com.apple.quar
 
 Everything else - every shortcut, every setting in detail, the reload matrix, the look on macOS 26, the limits and how each number was measured - is in
 [docs/MANUAL.md](docs/MANUAL.md); the design and the pitfalls are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## License
+
+MIT, see [LICENSE](LICENSE). The colour schemes keep their authors' names and licences ([docs/color-schemes.md](docs/color-schemes.md)).
