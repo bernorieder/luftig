@@ -390,7 +390,7 @@ final class SyntaxBarView: NSView {
             g.alignment = .centerY
             for e in group {
                 let l = SoftLabel(face: e.face, theme: theme)
-                l.toolTip = e.name
+                l.toolTip = e.name + "  " + e.shortcut.label
                 l.action = { [weak self] in self?.onInsert?(e) }
                 labels[e] = l
                 g.addArrangedSubview(l)

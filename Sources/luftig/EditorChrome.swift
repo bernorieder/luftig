@@ -275,6 +275,46 @@ enum SyntaxElement: CaseIterable {
     }
     /// The heading level this element sets (nil for the others).
     var headingLevel: Int? { self == .heading1 ? 1 : self == .heading2 ? 2 : self == .heading3 ? 3 : nil }
+
+    /// The Format menu: the item's title, its key (a character) and modifiers (MainMenu.swift makes the NSMenuItem; the bar's tooltips show the shortcut).
+    struct Shortcut: Equatable {
+        var key: String
+        var shift = false
+        var option = false
+        /// What the tooltip says: ⌥⇧⌘K.
+        var label: String { (option ? "⌥" : "") + (shift ? "⇧" : "") + "⌘" + key.uppercased() }
+    }
+    var menuTitle: String {
+        switch self {
+        case .paragraph: return "Plain Paragraph"
+        case .bulletList: return "Bulleted List"
+        default: return name
+        }
+    }
+    var shortcut: Shortcut {
+        switch self {
+        case .heading1: return Shortcut(key: "1", shift: true)
+        case .heading2: return Shortcut(key: "2", shift: true)
+        case .heading3: return Shortcut(key: "3", shift: true)
+        case .paragraph: return Shortcut(key: "0", shift: true)
+        case .bold: return Shortcut(key: "b")
+        case .italic: return Shortcut(key: "i")
+        case .strike: return Shortcut(key: "x", shift: true)
+        case .code: return Shortcut(key: "c", shift: true)
+        case .link: return Shortcut(key: "k")
+        case .image: return Shortcut(key: "k", shift: true)
+        case .quote: return Shortcut(key: "q", option: true)
+        case .bulletList: return Shortcut(key: "u", option: true)
+        case .numberedList: return Shortcut(key: "o", option: true)
+        case .task: return Shortcut(key: "x", option: true)
+        case .rule: return Shortcut(key: "-", option: true)
+        case .fence: return Shortcut(key: "c", option: true)
+        case .table: return Shortcut(key: "t", option: true)
+        }
+    }
+    /// The tag of the Format menu's item for this element (and back).
+    var menuTag: Int { SyntaxElement.allCases.firstIndex(of: self)! + 1 }
+    static func element(menuTag: Int) -> SyntaxElement? { menuTag >= 1 && menuTag <= allCases.count ? allCases[menuTag - 1] : nil }
 }
 
 /// One edit: replace `range` of the text with `replacement`, then select `selection` (in the coordinates of the text after the edit).

@@ -247,7 +247,7 @@ extension SelfTestScenarios {
 
     @MainActor static func menu(_ t: SelfTest.T) async throws {
         guard let main = NSApp.mainMenu else { t.check(false, "no main menu"); return }
-        t.equal(main.items.map { $0.title }, ["luftig", "File", "Edit", "View", "Window", "Help"], "top-level menus")
+        t.equal(main.items.map { $0.title }, ["luftig", "File", "Edit", "Format", "View", "Window", "Help"], "top-level menus")
         t.check(NSApp.windowsMenu != nil && NSApp.helpMenu != nil && NSApp.servicesMenu != nil, "windowsMenu / helpMenu / servicesMenu registered")
 
         func find(_ path: [String]) -> NSMenuItem? {

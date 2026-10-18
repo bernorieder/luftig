@@ -20,6 +20,8 @@ import MarkdownKit
     func luftigToggleOutline(_ sender: Any?)
     func luftigToggleWordCount(_ sender: Any?)
     func luftigToggleSyntaxBar(_ sender: Any?)
+    /// Format menu: the item's `tag` names the SyntaxElement (`SyntaxElement.menuTag`); the same edit as a click on the syntax bar.
+    func luftigInsertSyntax(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -341,9 +343,14 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     @objc func luftigToggleOutline(_ sender: Any?) { EditorPreferences.showOutline.toggle() }
     @objc func luftigToggleWordCount(_ sender: Any?) { EditorPreferences.showWordCount.toggle() }
     @objc func luftigToggleSyntaxBar(_ sender: Any?) { EditorPreferences.showSyntaxBar.toggle() }
+    @objc func luftigInsertSyntax(_ sender: Any?) {
+        guard let tag = (sender as? NSMenuItem)?.tag ?? (sender as? NSControl)?.tag, let e = SyntaxElement.element(menuTag: tag) else { return }
+        insert(e)
+    }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(luftigInsertSyntax(_:)): return textView.isEditable && SyntaxElement.element(menuTag: item.tag) != nil
         case #selector(luftigToggleReadableWidth(_:)): item.state = column.isEnabled ? .on : .off
         case #selector(luftigToggleSpellChecking(_:)): item.state = textView.isContinuousSpellCheckingEnabled ? .on : .off
         case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"

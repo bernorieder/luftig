@@ -11,7 +11,51 @@ extension SelfTestScenarios {
     static let editingScenarios: [SelfTest.Scenario] = [
         .init(name: "edit-lists", summary: "list continuation (pure): Return on bullets / numbers / tasks / quotes, empty items, Tab and Shift-Tab, renumbering", run: { t in try await editLists(t) }),
         .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
+        .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
     ]
+
+    // MARK: edit-format-menu
+
+    @MainActor static func editFormatMenu(_ t: SelfTest.T) async throws {
+        guard let main = NSApp.mainMenu, let format = main.items.first(where: { $0.title == "Format" })?.submenu else { t.check(false, "a Format menu exists"); return }
+        let items = format.items.filter { !$0.isSeparatorItem }
+        t.equal(items.count, SyntaxElement.allCases.count, "one item per element of the syntax bar")
+        t.equal(format.items.filter { $0.isSeparatorItem }.count, SyntaxElement.groups.count - 1, "a separator between the bar's groups")
+        t.check(items.allSatisfy { $0.action == #selector(LuftigEditorActions.luftigInsertSyntax(_:)) && $0.target == nil && SyntaxElement.element(menuTag: $0.tag) != nil }, "every item: the insert action through the responder chain, a tag that names its element")
+        let keys = items.map { $0.keyEquivalent + "/" + String($0.keyEquivalentModifierMask.rawValue) }
+        t.check(Set(keys).count == keys.count && items.allSatisfy { !$0.keyEquivalent.isEmpty }, "every item has a shortcut, all different: \(items.map { SyntaxElement.element(menuTag: $0.tag)!.shortcut.label })")
+        t.check(items.contains { $0.title == "Bold" && $0.keyEquivalent == "b" && $0.keyEquivalentModifierMask == [.command] }, "Bold is ⌘B")
+        t.check(items.contains { $0.title == "Italic" && $0.keyEquivalent == "i" && $0.keyEquivalentModifierMask == [.command] }, "Italic is ⌘I")
+        t.check(items.contains { $0.title == "Link" && $0.keyEquivalent == "k" && $0.keyEquivalentModifierMask == [.command] }, "Link is ⌘K")
+        t.check(items.contains { $0.title == "Heading 1" && $0.keyEquivalent == "1" && $0.keyEquivalentModifierMask == [.command, .shift] }, "Heading 1 is ⇧⌘1")
+        t.equal(SyntaxElement.bold.shortcut.label, "⌘B", "the shortcut's label")
+        t.equal(SyntaxElement.image.shortcut.label, "⇧⌘K", "... with shift")
+        t.equal(SyntaxElement.quote.shortcut.label, "⌥⌘Q", "... with option")
+        let (doc, host, _) = try await openEditor(t, text: "say hello world\n", name: "format.md")
+        defer { t.close(doc) }
+        let tv = host.textView
+        t.check(host.syntaxBar.labels[.bold]?.toolTip?.contains("⌘B") == true, "the bar's tooltip names the shortcut: \(host.syntaxBar.labels[.bold]?.toolTip ?? "")")
+        tv.setSelectedRange(NSRange(location: 4, length: 5))
+        t.check(AuditEd.perform(host, #selector(LuftigEditorActions.luftigInsertSyntax(_:)), tag: SyntaxElement.bold.menuTag), "Format > Bold reaches the editor through the responder chain")
+        t.equal(tv.string, "say **hello** world\n", "... and wraps the selection")
+        t.equal(tv.selectedRange(), NSRange(location: 6, length: 5), "the word stays selected")
+        t.check(AuditEd.perform(host, #selector(LuftigEditorActions.luftigInsertSyntax(_:)), tag: SyntaxElement.heading2.menuTag), "Format > Heading 2")
+        t.check(tv.string.hasPrefix("## say **hello**"), "... the line is a heading")
+        AuditEd.undo(host); AuditEd.undo(host)
+        t.equal(tv.string, "say hello world\n", "two undo steps bring the text back")
+        let bold = NSMenuItem(title: "Bold", action: #selector(LuftigEditorActions.luftigInsertSyntax(_:)), keyEquivalent: "")
+        bold.tag = SyntaxElement.bold.menuTag
+        t.check(host.validateMenuItem(bold), "the item is enabled for an editable editor")
+        tv.isEditable = false
+        t.check(!host.validateMenuItem(bold), "... and disabled for a read-only one")
+        tv.isEditable = true
+        let bad = NSMenuItem(title: "x", action: #selector(LuftigEditorActions.luftigInsertSyntax(_:)), keyEquivalent: "")
+        bad.tag = 999
+        t.check(!host.validateMenuItem(bad), "a tag that names no element is disabled")
+        host.luftigInsertSyntax(bad)
+        t.equal(tv.string, "say hello world\n", "... and does nothing")
+        t.check(!SettingsWindowController.shared.responds(to: #selector(LuftigEditorActions.luftigInsertSyntax(_:))), "the Settings window does not answer the Format menu (its items are disabled while it is key)")
+    }
 
     // MARK: edit-lists
 

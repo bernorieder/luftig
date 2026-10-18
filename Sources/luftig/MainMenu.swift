@@ -127,6 +127,22 @@ enum MainMenu {
         edit.addItem(transformsItem)
         add(edit, to: main, title: "Edit")
 
+        // ---- Format: the syntax bar's elements as menu items with shortcuts (EditorViewController.luftigInsertSyntax, the tag names the element)
+        let format = NSMenu(title: "Format")
+        for (g, group) in SyntaxElement.groups.enumerated() {
+            if g > 0 { format.addItem(.separator()) }
+            for e in group {
+                let s = e.shortcut
+                var mods: NSEvent.ModifierFlags = [.command]
+                if s.shift { mods.insert(.shift) }
+                if s.option { mods.insert(.option) }
+                let i = item(e.menuTitle, #selector(LuftigEditorActions.luftigInsertSyntax(_:)), s.key, mods)
+                i.tag = e.menuTag
+                format.addItem(i)
+            }
+        }
+        add(format, to: main, title: "Format")
+
         // ---- View
         let view = NSMenu(title: "View")
         view.addItem(item("Bigger", #selector(LuftigEditorActions.luftigIncreaseFontSize(_:)), "+"))
