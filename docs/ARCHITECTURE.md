@@ -33,7 +33,7 @@ Sources/luftig/
                                         (top-of-window anchor that survives text changes), TextDiff.apply
 
   -- the editor (docs/spike-textkit.md) -------------------------------------------------------------------------------------------
-  EditorWindowController.swift          window (~860 x 1000, tabbing identifier, full screen), hosts the view controller; tabbingMode from Settings > General (never the system's
+  EditorWindowController.swift          window (zoomed to the screen's visible frame when opened, tabbing identifier, full screen), hosts the view controller; tabbingMode from Settings > General (never the system's
                                         "Prefer tabs"); `leaveFullScreenEverywhere` (MarkdownDocument.showWindows calls it: a file opened while another fills the screen opens on the desktop)
   EditorViewController.swift            THE editor: TextKit 1 stack + styler + column + banner; EditorHost conformance; font size; actions
   EditorPreferences.swift               every setting in UserDefaults (font size, text / code family, line spacing, column width, readable-width flag, colour scheme),

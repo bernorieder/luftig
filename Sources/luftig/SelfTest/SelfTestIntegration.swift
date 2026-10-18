@@ -606,6 +606,7 @@ extension SelfTestScenarios {
         guard let w = doc.windowControllers.first?.window else { t.check(false, "no window"); return }
         let defaultSize = EditorWindowController.defaultContentSize()
         t.check(defaultSize.width <= 860 && defaultSize.width >= 700 && defaultSize.height >= 600 && defaultSize.height <= 1000, "default content size ~860 x 1000, fitted to the screen: \(defaultSize)")
+        t.check(EditorWindowController.initialFrame() == (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame, "a new window's frame is the screen's visible frame (zoomed to the desktop, not full screen): \(String(describing: EditorWindowController.initialFrame()))")
         t.equal(w.title, "win.md", "title bar shows the document name")
         t.equal(w.representedURL?.standardizedFileURL.path, file.standardizedFileURL.path, "proxy icon: representedURL is the file")
         t.check(!w.isDocumentEdited, "edited dot is off for a clean document")

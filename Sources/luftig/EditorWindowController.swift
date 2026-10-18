@@ -44,13 +44,16 @@ final class EditorWindowController: NSWindowController {
         preferenceObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.didChange, object: nil, queue: nil) { [weak w] _ in
             w?.tabbingMode = EditorPreferences.tabbingMode
         }
-        shouldCascadeWindows = true
+        shouldCascadeWindows = false                      // every new window fills the desktop (below): nothing to cascade
         #if LUFTIG_SELFTEST
         LaunchProbe.mark("window created, creating EditorViewController")
         #endif
         let editor = EditorViewController()
         w.contentViewController = editor
         w.setContentSize(EditorWindowController.defaultContentSize())
+        // a new window covers the desktop (the screen's visible frame: not the menu bar, not the Dock; not full screen). A window that was resized by hand keeps
+        // its frame through state restoration; a window opened later is zoomed again. Without a screen (headless) the content size above stands.
+        if let frame = EditorWindowController.initialFrame() { w.setFrame(frame, display: false) }
         editor.applySchemeAppearance()          // a dark / light colour scheme forces the window's appearance (the system scheme leaves it alone)
         #if LUFTIG_SELFTEST
         LaunchProbe.mark("EditorWindowController.init end")
@@ -58,7 +61,10 @@ final class EditorWindowController: NSWindowController {
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    /// ~860 x 1000 pt, but never taller than the main screen's usable area.
+    /// The frame of a new window: the visible frame of the main screen (the one with the keyboard focus; the first otherwise), nil without a screen.
+    static func initialFrame() -> NSRect? { (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame }
+
+    /// The content size before the window is zoomed to the desktop: ~860 x 1000 pt, never taller than the main screen's usable area (what a headless process gets).
     static func defaultContentSize() -> NSSize {
         let want = EditorViewController.initialSize
         guard let visible = NSScreen.main?.visibleFrame else { return want }
