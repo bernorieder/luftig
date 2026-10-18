@@ -24,7 +24,8 @@
 //                   ----o------   760 pt
 //                   about 85 characters per line
 //   Layout:
-//   Show            [x] Outline  [x] Word count  [x] Syntax bar       (the View menu's switches, the other way to reach them)
+//   Show            [x] Outline  [x] Syntax bar                       (the View menu's switches, the other way to reach them)
+//                   [x] Word count  [ ] Reading time                  (both in one row at the top right)
 //   Padding         ----o------   20 pt                                 (ONE number for every gap: the window's frame, between the panels, around the text)
 //   Font            [Same as text font  v]
 //   Size            [12 pt v]
@@ -145,6 +146,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let showOutlineCheckbox = NSButton(checkboxWithTitle: "Outline", target: nil, action: nil)
     let showWordCountCheckbox = NSButton(checkboxWithTitle: "Word count", target: nil, action: nil)
     let showSyntaxBarCheckbox = NSButton(checkboxWithTitle: "Syntax bar", target: nil, action: nil)
+    let showReadingTimeCheckbox = NSButton(checkboxWithTitle: "Reading time", target: nil, action: nil)
     let paddingSlider = SettingsSlider(value: Double(EditorPreferences.defaultPadding), minValue: Double(EditorPreferences.paddingRange.lowerBound), maxValue: Double(EditorPreferences.paddingRange.upperBound), target: nil, action: nil)
     let paddingValueLabel = NSTextField(labelWithString: "")
     let paddingNoteLabel = NSTextField(labelWithString: "")
@@ -313,7 +315,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         outlineWrapCheckbox.target = self; outlineWrapCheckbox.action = #selector(outlineWrapChanged(_:))
         outlineWrapCheckbox.setAccessibilityLabel("Wrap long headings in the outline")
 
-        for (box, action, name) in [(showOutlineCheckbox, #selector(showOutlineChanged(_:)), "Show the outline"), (showWordCountCheckbox, #selector(showWordCountChanged(_:)), "Show the word count"), (showSyntaxBarCheckbox, #selector(showSyntaxBarChanged(_:)), "Show the syntax bar")] {
+        for (box, action, name) in [(showOutlineCheckbox, #selector(showOutlineChanged(_:)), "Show the outline"), (showWordCountCheckbox, #selector(showWordCountChanged(_:)), "Show the word count"), (showSyntaxBarCheckbox, #selector(showSyntaxBarChanged(_:)), "Show the syntax bar"), (showReadingTimeCheckbox, #selector(showReadingTimeChanged(_:)), "Show the reading time")] {
             box.target = self; box.action = action; box.setAccessibilityLabel(name)
         }
         paddingSlider.target = self; paddingSlider.action = #selector(paddingSliderChanged(_:))
@@ -372,8 +374,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         opacityRow.orientation = .horizontal; opacityRow.spacing = W.sliderGap
         let outlineSpacingRow = NSStackView(views: [outlineSpacingSlider, outlineSpacingValueLabel])
         outlineSpacingRow.orientation = .horizontal; outlineSpacingRow.spacing = W.sliderGap
-        let showRow = NSStackView(views: [showOutlineCheckbox, showWordCountCheckbox, showSyntaxBarCheckbox])
-        showRow.orientation = .horizontal; showRow.spacing = 14
+        // the four switches, two by two (one row would be wider than the control column): outline and bar, then the word count row's two
+        let showRow1 = NSStackView(views: [showOutlineCheckbox, showSyntaxBarCheckbox])
+        showRow1.orientation = .horizontal; showRow1.spacing = 14
+        let showRow2 = NSStackView(views: [showWordCountCheckbox, showReadingTimeCheckbox])
+        showRow2.orientation = .horizontal; showRow2.spacing = 14
+        let showRow = NSStackView(views: [showRow1, showRow2])
+        showRow.orientation = .vertical; showRow.alignment = .leading; showRow.spacing = 6
         let paddingSliderRow = NSStackView(views: [paddingSlider, paddingValueLabel])
         paddingSliderRow.orientation = .horizontal; paddingSliderRow.spacing = W.sliderGap
         let paddingColumn = NSStackView(views: [paddingSliderRow, paddingNoteLabel])
@@ -722,6 +729,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
         showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
+        showReadingTimeCheckbox.state = EditorPreferences.showReadingTime ? .on : .off
         let padding = EditorPreferences.padding
         if trackedControl !== paddingSlider { paddingSlider.doubleValue = Double(padding) }
         paddingValueLabel.stringValue = "\(Int(padding)) pt"
@@ -852,6 +860,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     @objc func showOutlineChanged(_ sender: NSButton) { EditorPreferences.showOutline = sender.state == .on; syncFromPreferences() }
     @objc func showWordCountChanged(_ sender: NSButton) { EditorPreferences.showWordCount = sender.state == .on; syncFromPreferences() }
     @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }
+    @objc func showReadingTimeChanged(_ sender: NSButton) { EditorPreferences.showReadingTime = sender.state == .on; syncFromPreferences() }
     @objc func paddingSliderChanged(_ sender: NSSlider) {
         EditorPreferences.padding = CGFloat(sender.doubleValue)
         syncFromPreferences()

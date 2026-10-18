@@ -31,11 +31,13 @@ enum MarkdownHTML {
     }
 
     /// A complete HTML page: the body, a title, and a stylesheet that uses the editor's fonts (nil: the system's) and reads well on its own.
-    static func document(body: String, title: String, bodyFont: String?, codeFont: String?) -> String {
+    /// `pageLayout`: the column and margins of a web page (off for the rich-text and PDF exports, whose page is the paper).
+    static func document(body: String, title: String, bodyFont: String?, codeFont: String?, pageLayout: Bool = true) -> String {
         let bodyFamily = (bodyFont.map { "\"\($0)\", " } ?? "") + "-apple-system, BlinkMacSystemFont, \"Helvetica Neue\", Helvetica, Arial, sans-serif"
         let codeFamily = (codeFont.map { "\"\($0)\", " } ?? "") + "ui-monospace, \"SF Mono\", Menlo, Consolas, monospace"
+        let layout = pageLayout ? " max-width: 44em; margin: 3em auto; padding: 0 1.5em;" : ""
         let css = """
-        body { font-family: \(bodyFamily); font-size: 16px; line-height: 1.5; max-width: 44em; margin: 3em auto; padding: 0 1.5em; color: #222; background: #fff; }
+        body { font-family: \(bodyFamily); font-size: 16px; line-height: 1.5;\(layout) color: #222; background: #fff; }
         h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.6em 0 0.6em; }
         h1 { font-size: 1.6em; } h2 { font-size: 1.35em; } h3 { font-size: 1.18em; } h4 { font-size: 1.05em; }
         pre, code { font-family: \(codeFamily); font-size: 0.9em; }

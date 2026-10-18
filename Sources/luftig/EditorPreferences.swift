@@ -37,11 +37,12 @@ enum EditorPreferences {
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
     static let showSyntaxBarKey = "LuftigShowSyntaxBar"
-    /// View > Focus Mode (everything but the paragraph at the caret is dimmed) and Typewriter Mode (the caret's line stays in the middle of the window).
-    static let focusModeKey = "LuftigFocusMode"
+    /// View > Show Reading Time: in the word count's row (the row is shown when either is on).
+    static let showReadingTimeKey = "LuftigShowReadingTime"
+    /// View > Typewriter Mode (the caret's line stays in the middle of the window).
     static let typewriterModeKey = "LuftigTypewriterMode"
-    /// The View menu's switches (not part of the Settings window).
-    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, focusModeKey, typewriterModeKey]
+    /// The View menu's switches (not part of the Settings window's Restore Defaults).
+    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, showReadingTimeKey, typewriterModeKey]
 
     // MARK: one-time migration from the app's previous name
 
@@ -214,10 +215,10 @@ enum EditorPreferences {
         get { flag(forKey: showSyntaxBarKey, default: true) }
         set { setFlag(newValue, forKey: showSyntaxBarKey, current: showSyntaxBar) }
     }
-    /// View > Focus Mode: the paragraph at the caret keeps its colours, everything else fades towards the page. Default off.
-    static var focusMode: Bool {
-        get { flag(forKey: focusModeKey, default: false) }
-        set { setFlag(newValue, forKey: focusModeKey, current: focusMode) }
+    /// View > Show Reading Time: "6 min read" (200 words a minute) next to the word count, or alone. Default off.
+    static var showReadingTime: Bool {
+        get { flag(forKey: showReadingTimeKey, default: false) }
+        set { setFlag(newValue, forKey: showReadingTimeKey, current: showReadingTime) }
     }
     /// View > Typewriter Mode: the line with the caret is kept in the middle of the window. Default off.
     static var typewriterMode: Bool {

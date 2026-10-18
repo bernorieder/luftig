@@ -156,9 +156,10 @@ rebuilds the gallery.
 | Format menu: ⇧⌘1 / ⇧⌘2 / ⇧⌘3 / ⇧⌘0, ⌘B, ⌘I, ⇧⌘X, ⇧⌘C, ⌘K, ⇧⌘K, ⌥⌘Q, ⌥⌘U, ⌥⌘O, ⌥⌘X, ⌥⌘-, ⌥⌘C, ⌥⌘T | Heading 1 / 2 / 3 / plain paragraph, bold, italic, strikethrough, inline code, link, image, quote, bulleted list, numbered list, task, rule, code block, table: the same edits as the syntax bar's elements (whose tooltips name the shortcut) |
 | Return, Tab, ⇧Tab on a list or quote line | Return continues the list (the next bullet, the next number - the items below are renumbered when they were in sequence -, an unchecked task box, the quote's `>`); Return on an empty item outdents it or removes its marker; Tab nests the item under the one above, ⇧Tab un-nests it. Off with Settings > General > Continue lists on Return. Inside a code block the keys are the ordinary keys |
 | ⌘-click on a link, ⌥⌘L | Follow the link under the mouse (or the caret: Edit > Open Link): a web address in the browser, a Markdown or text file in luftig (at its `#anchor`), any other file in its application, `#heading` in this document. Inline links, images, `<autolinks>`, bare `www.` / `https://` addresses and `[text][ref]` references through their definition |
-| ⇧⌘F / ⇧⌘T | View > Focus Mode (everything but the paragraph at the caret fades towards the page; nothing is restyled) / Typewriter Mode (the line with the caret stays in the middle of the window). Remembered, every window follows |
+| ⇧⌘T | View > Typewriter Mode: the line with the caret stays in the middle of the window. Remembered, every window follows |
 | ⌥⇧⌘C / ⌃⇧⌘C | Edit > Copy as HTML (the selection's lines, or everything, as HTML source - also as plain text, so a text editor gets the source) / Copy as Rich Text (the same as RTF, for Mail, Pages, a chat) |
-| ⌥⌘E | File > Export as HTML…: a complete page with a small stylesheet in your fonts, light and dark |
+| ⌥⌘E, File > Export as Rich Text… / as PDF… | Export as HTML: a complete page with a small stylesheet in your fonts, light and dark. Export as Rich Text: the same content as an RTF file; Export as PDF: that rich text paginated on the Page Setup paper |
+| View > Show / Hide Reading Time | "7 min read" (200 words a minute, rounded up) in the word count's row, next to the count or alone; off by default. Settings > Layout has the switch too |
 | ⌃⌘F, ⌘M, ⌘H, ⌘Q | Full screen, Minimize, Hide, Quit |
 | ⌃Tab / ⌃⇧Tab, View > Show Tab Bar | Switch tabs (⌘N opens a tab if "Prefer tabs" is set in System Settings) |
 | ⌘P / ⇧⌘P | Print… / Page Setup… |
@@ -173,8 +174,8 @@ current settings, so fonts, size, spacing, column and colours change in front of
 **General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window. When the file changes
 on disk: reload automatically - the default, see below -, ask first - a banner offers Reload from Disk / Keep My Version for every change and nothing is
 merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
-(everything about the text) and **Layout**, for the three elements around the text (outline, word count, syntax bar): which of them are shown (the
-View menu's switches, the other way to reach them), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
+(everything about the text) and **Layout**, for the elements around the text (outline, syntax bar, word count, reading time): which of them are shown (the
+View menu's switches, the other way to reach them; the reading time shares the word count's row), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
 window's edge and the panels on all four sides, between the outline and the text, between the word count row and the outline and text below it,
 between the syntax bar and the text above it (the bar sits under the text column, centred below the text; the outline runs on past it), and between
 the text and the sides of its own panel; at 0 everything touches, at 50 the editor floats,

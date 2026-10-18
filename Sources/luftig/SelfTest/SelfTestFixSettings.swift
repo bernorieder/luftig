@@ -54,7 +54,7 @@ extension SelfTestScenarios {
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
             ("outlineWrapCheckbox", c.outlineWrapCheckbox), ("screenControl", c.screenControl), ("openInTabsCheckbox", c.openInTabsCheckbox), ("outlineSpacingSlider", c.outlineSpacingSlider), ("outlineSpacingValueLabel", c.outlineSpacingValueLabel),
-            ("showOutlineCheckbox", c.showOutlineCheckbox), ("showWordCountCheckbox", c.showWordCountCheckbox), ("showSyntaxBarCheckbox", c.showSyntaxBarCheckbox),
+            ("showOutlineCheckbox", c.showOutlineCheckbox), ("showWordCountCheckbox", c.showWordCountCheckbox), ("showSyntaxBarCheckbox", c.showSyntaxBarCheckbox), ("showReadingTimeCheckbox", c.showReadingTimeCheckbox),
             ("paddingSlider", c.paddingSlider), ("paddingValueLabel", c.paddingValueLabel), ("paddingNoteLabel", c.paddingNoteLabel),
         ]
         func walk(_ v: NSView) {
@@ -143,7 +143,7 @@ extension SelfTestScenarios {
             probe("outline wrap off") { c.outlineWrapCheckbox.state = .off; send(c.outlineWrapCheckbox) }
             for (i, size) in SettingsWindowController.paneSizes.enumerated() { probe("panes size \(Int(size))") { c.paneSizePopup.selectItem(at: i); send(c.paneSizePopup) } }
             for o in stride(from: 25, through: 100, by: 5) { probe("panes opacity \(o)") { c.paneOpacitySlider.doubleValue = Double(o) / 100; send(c.paneOpacitySlider) } }
-            for (box, name) in [(c.showOutlineCheckbox, "outline"), (c.showWordCountCheckbox, "word count"), (c.showSyntaxBarCheckbox, "syntax bar")] {
+            for (box, name) in [(c.showOutlineCheckbox, "outline"), (c.showWordCountCheckbox, "word count"), (c.showSyntaxBarCheckbox, "syntax bar"), (c.showReadingTimeCheckbox, "reading time")] {
                 probe("\(name) off") { box.state = .off; send(box) }
                 probe("\(name) on") { box.state = .on; send(box) }
             }

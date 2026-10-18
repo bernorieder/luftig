@@ -87,16 +87,6 @@ final class LuftigEditorTextView: NSTextView {
         }
     }
 
-    // MARK: Focus Mode
-
-    /// The characters that keep their colours while Focus Mode is on (the paragraph at the caret; nil: no focus). Everything else is veiled with the page
-    /// colour AFTER its glyphs are drawn (LuftigLayoutManager.drawGlyphs): no attribute changes, so the styled text stays equal to a fresh lex and nothing is
-    /// restyled - and no override of `draw(_:)`, which makes NSTextView invalidate the whole view on every edit (measured: visual-redraw).
-    var focusRange: NSRange? {
-        get { (layoutManager as? LuftigLayoutManager)?.focusRange }
-        set { (layoutManager as? LuftigLayoutManager)?.focusRange = newValue }
-    }
-
     // MARK: jumps
 
     override func scrollRangeToVisible(_ range: NSRange) {

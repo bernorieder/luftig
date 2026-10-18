@@ -11,6 +11,7 @@
 
 import AppKit
 import MarkdownKit
+import UniformTypeIdentifiers
 
 final class MarkdownDocument: NSDocument {
 
@@ -338,7 +339,7 @@ final class MarkdownDocument: NSDocument {
 
     override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
         if item.action == #selector(luftigReloadFromDisk(_:)) { return fileURL != nil }
-        if item.action == #selector(luftigExportHTML(_:)) { return true }
+        if item.action == #selector(luftigExportHTML(_:)) || item.action == #selector(luftigExportRTF(_:)) || item.action == #selector(luftigExportPDF(_:)) { return true }
         return super.validateUserInterfaceItem(item)
     }
 
@@ -409,18 +410,62 @@ final class MarkdownDocument: NSDocument {
         try htmlDocument().write(to: url, atomically: true, encoding: .utf8)
     }
 
-    @objc func luftigExportHTML(_ sender: Any?) {
+    enum ExportError: LocalizedError {
+        case noRichText, pdfFailed
+        var errorDescription: String? { self == .noRichText ? "The document could not be turned into rich text." : "The PDF could not be written." }
+    }
+
+    /// The document as rich text: the HTML page without its web layout, read by AppKit's HTML importer (fonts, emphasis, lists, tables, quotes, code).
+    func richText() -> NSAttributedString? {
+        let text = (host?.currentText ?? pendingText)
+        let body = MarkdownHTML.html(text, runs: MarkdownStyler().lexAll(text))
+        let title = (displayName as NSString?)?.deletingPathExtension ?? "Untitled"
+        let html = MarkdownHTML.document(body: body, title: title, bodyFont: EditorPreferences.bodyFontFamily, codeFont: EditorPreferences.codeFontFamily, pageLayout: false)
+        guard let data = html.data(using: .utf8) else { return nil }
+        return NSAttributedString(html: data, options: [.characterEncoding: String.Encoding.utf8.rawValue], documentAttributes: nil)
+    }
+
+    /// Writes the rich text as RTF.
+    func exportRTF(to url: URL) throws {
+        guard let rich = richText(), let data = rich.rtf(from: NSRange(location: 0, length: rich.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) else { throw ExportError.noRichText }
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// Writes the rich text as a paginated PDF (the page setup's paper and margins, like Print…).
+    func exportPDF(to url: URL) throws {
+        guard let rich = richText() else { throw ExportError.noRichText }
+        let info = (printInfo.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
+        info.jobDisposition = .save
+        info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = url
+        let width = info.paperSize.width - info.leftMargin - info.rightMargin
+        let tv = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 100))
+        tv.isVerticallyResizable = true
+        tv.textContainer?.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        tv.textContainer?.widthTracksTextView = true
+        tv.textStorage?.setAttributedString(rich)
+        tv.sizeToFit()
+        let op = NSPrintOperation(view: tv, printInfo: info)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        guard op.run() else { throw ExportError.pdfFailed }
+    }
+
+    @objc func luftigExportHTML(_ sender: Any?) { runExportPanel(title: "Export as HTML", type: .html, ext: "html") { try $0.exportHTML(to: $1) } }
+    @objc func luftigExportRTF(_ sender: Any?) { runExportPanel(title: "Export as Rich Text", type: .rtf, ext: "rtf") { try $0.exportRTF(to: $1) } }
+    @objc func luftigExportPDF(_ sender: Any?) { runExportPanel(title: "Export as PDF", type: .pdf, ext: "pdf") { try $0.exportPDF(to: $1) } }
+
+    private func runExportPanel(title: String, type: UTType, ext: String, write: @escaping (MarkdownDocument, URL) throws -> Void) {
         let panel = NSSavePanel()
-        panel.title = "Export as HTML"
-        panel.allowedContentTypes = [.html]
+        panel.title = title
+        panel.allowedContentTypes = [type]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         if let dir = fileURL?.deletingLastPathComponent() { panel.directoryURL = dir }
         let stem = (fileURL?.deletingPathExtension().lastPathComponent) ?? ((displayName as NSString?)?.deletingPathExtension ?? "Untitled")
-        panel.nameFieldStringValue = stem + ".html"
+        panel.nameFieldStringValue = stem + "." + ext
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in
             guard let self, r == .OK, let url = panel.url else { return }
-            do { try self.exportHTML(to: url) } catch { self.presentError(error) }
+            do { try write(self, url) } catch { self.presentError(error) }
         }
         if let w = sheetWindow { panel.beginSheetModal(for: w, completionHandler: finish) } else { finish(panel.runModal()) }
     }

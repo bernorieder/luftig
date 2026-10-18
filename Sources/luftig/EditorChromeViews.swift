@@ -178,6 +178,17 @@ final class WordCountView: NSView {
         if let s = selected { return "\(f.string(from: NSNumber(value: s)) ?? "\(s)") of \(all) words" }
         return total == 1 ? "1 word" : "\(all) words"
     }
+
+    /// Minutes of reading at `wordsPerMinute` (200: the usual figure for prose), rounded up; at least 1 for any text at all.
+    static func minutes(forWords n: Int, wordsPerMinute: Int = 200) -> Int { n <= 0 ? 0 : max(1, (n + wordsPerMinute - 1) / wordsPerMinute) }
+
+    /// The row's text: the word count (with the selection's count), the reading time, or both: "1,234 words  ·  7 min read".
+    static func label(total: Int, selected: Int?, words: Bool, readingTime: Bool) -> String {
+        var parts: [String] = []
+        if words { parts.append(label(total: total, selected: selected)) }
+        if readingTime { parts.append("\(minutes(forWords: total)) min read") }
+        return parts.joined(separator: "  ·  ")
+    }
 }
 
 // MARK: - the outline

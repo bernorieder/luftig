@@ -42,8 +42,7 @@ Sources/luftig/
   LuftigEditorFactory.swift             the exact NSTextView / NSScrollView configuration (non-contiguous TextKit 1)
   LuftigEditorTextView.swift            drawBackground hook for the decorations; pre-styles jump targets (scrollRangeToVisible, Cmd-Up/Down); no responsive scrolling
                                         (pitfall 31); the drawInsertionPoint override that keeps full-screen scrolling smooth (pitfall 33); ⌘-click on a link (mouseDown)
-  LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground); Focus Mode's veil over every line but the
-                                        focused paragraph, right after the glyphs (drawGlyphs: no attribute change, no draw(_:) override - pitfall 35)
+  LuftigLayoutManager.swift             draws bands, quote bars, rules, inline-code pills (from the text view's drawBackground)
   Decorations.swift                     .luftigBlock / .luftigInline keys, BlockMark encoding, metrics, band path helpers
   ReadableColumnController.swift        centred column of `EditorPreferences.columnWidth` (480 ... 1400, default 760 pt) via textContainerInset and the text container's WIDTH
                                         (widthTracksTextView is off: the right side gets `trailingExtra` more air than the left, pitfall 34); follows the clip view's frame;
@@ -218,7 +217,7 @@ View > Show / Hide ... -> EditorPreferences.showOutline / showWordCount / showSy
 ```
 Nothing here is ever computed per keystroke; a hidden element costs nothing (no scan while both outline and count are hidden).
 
-### Keys, links, writing modes, HTML (ListEditing.swift, LinkFollowing.swift, MarkdownHTML.swift, the `focus` / `links` / `html` extensions of EditorViewController)
+### Keys, links, Typewriter Mode, HTML (ListEditing.swift, LinkFollowing.swift, MarkdownHTML.swift, the `typewriter` / `links` / `html` extensions of EditorViewController)
 
 ```
 Return / Tab / Shift-Tab  -> textView(_:doCommandBy:) -> ListContinuation.returnChange / indentChange (pure, on the storage's NSString) -> apply(_:actionName:)
@@ -229,14 +228,15 @@ Format menu / ⌘B ...    -> luftigInsertSyntax (the item's tag names the Syntax
     line (styleRuns) -> LinkFollowing.destination -> LinkFollowing.target -> NSWorkspace (web, other files) / NSDocumentController (Markdown, at its anchor)
     / jump(toAnchor:) (this document: the outline's jump). A jump up to 300 K units into the text styles and lays out everything above its target first
     (exactJumpLimit, pitfall 36); beyond, it lands on the estimate.
-View > Focus Mode       -> EditorPreferences.focusMode -> every editor: the paragraph at the caret (focusParagraph: the lines without a blank line between them,
-    200 each way) -> LuftigLayoutManager.focusRange -> drawGlyphs veils every other line fragment with the page colour at 60 % after its glyphs; the
-    selection and text notifications move it (a redisplay of the visible rect only when the paragraph changed).
 View > Typewriter Mode  -> ReadableColumnController.typewriter (vertical inset = half the viewport less half a line) + centerCaretLine on every selection /
     text change: the caret's line fragment (the extra fragment after a trailing line break) to the middle, settling over up to 4 passes (pitfall 27).
-Edit > Copy as HTML / Rich Text, File > Export as HTML… -> MarkdownStyler.lexAll (the whole text: a line's block depends on what is above) ->
-    MarkdownHTML.html(text, runs, range: the selection's lines or everything) -> the pasteboard (.html + .string; Rich Text adds .rtf from
-    NSAttributedString(html:)) / MarkdownHTML.document (stylesheet in the editor's fonts) -> the save panel.
+Edit > Copy as HTML / Rich Text, File > Export as HTML… / Rich Text… / PDF… -> MarkdownStyler.lexAll (the whole text: a line's block depends on what is
+    above) -> MarkdownHTML.html(text, runs, range: the selection's lines or everything) -> the pasteboard (.html + .string; Rich Text adds .rtf from
+    NSAttributedString(html:)) / MarkdownHTML.document (stylesheet in the editor's fonts; without the web page's column for the rich-text exports) ->
+    the save panel; RTF = NSAttributedString.rtf, PDF = that attributed string in an NSTextView of the paper's width through an NSPrintOperation that
+    saves (jobDisposition .save, like matrix-print).
+View > Show Reading Time -> EditorPreferences.showReadingTime -> the word count's row (shown when the count or the time is on): WordCountView.label
+    (words, selection count, "7 min read" at 200 words a minute, rounded up) from the same WordCounter scan.
 Settings > General > When the file changes on disk -> EditorPreferences.reloadBehavior -> MarkdownDocument.externalChangeArrived (the policy's one entry for a
     changed file) and the save gate: automatic (as always), ask (the banner for every change, no merge), never (nothing shown; the other version remembered
     so that a save asks). The invariant stays: luftig never writes over a version it was not told to.
@@ -385,14 +385,14 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads `textContainer.size.width` sees the narrower width,
     which is the point (the bands end there). The Settings preview uses the same controller and extra.
 
-35. **Do not override `draw(_:)` on the NSTextView to paint over the text.** Focus Mode's veil was first drawn from an override of `draw(_:)` that called super
-    and filled the page colour over everything but the focused paragraph. Correct on screen, but `visual-redraw` then trapped: with `draw(_:)` overridden,
-    NSTextView invalidates with `NSRect.infinite` (the whole view) on every edit, and the test's row arithmetic overflowed (the same whole-view invalidation also
-    turned out to happen once per edit on the untouched tree on this macOS build - the test now reads an infinite rect as "every row"; it may be the
-    system, not luftig). The veil moved to `LuftigLayoutManager.drawGlyphs(forGlyphRange:at:)`: after `super` draws the glyphs of a range, every line
-    fragment of it that holds none of the focused characters is filled with the page colour at 60 %. No attribute changes (the styled text stays a fresh
-    lex), no invalidation changes, and the extra line fragment after a trailing line break is only veiled once the last glyph is drawn (before the end is
-    laid out its rect is a guess that veiled the whole viewport).
+35. **Do not override `draw(_:)` on the NSTextView to paint over the text.** A (since removed) Focus Mode veiled everything but the paragraph at the caret;
+    drawn from an override of `draw(_:)` that called super and filled the page colour over the rest, it was correct on screen, but `visual-redraw` then
+    trapped: with `draw(_:)` overridden, NSTextView invalidates with `NSRect.infinite` (the whole view) on every edit, and the test's row arithmetic
+    overflowed (the same whole-view invalidation also turned out to happen once per edit on the untouched tree on this macOS build - the test now reads an
+    infinite rect as "every row"; it may be the system, not luftig). The way that worked, should anything like it come back: paint from
+    `LuftigLayoutManager.drawGlyphs(forGlyphRange:at:)` after `super` has drawn the glyphs of the range, per line fragment, with no attribute changes (the
+    styled text stays a fresh lex) and no invalidation changes; and leave the extra line fragment after a trailing line break alone until the last glyph is
+    drawn (before the end is laid out its rect is a guess that covered the whole viewport).
 
 36. **A jump to a heading lands on an ESTIMATED y.** `ensureLayout(forCharacterRange:)` around the target lays out that range only; with non-contiguous
     layout the y of its line fragments is estimated from the text above that was never laid out (a heading 80 lines down was placed at 192 pt instead of
@@ -473,7 +473,7 @@ Navigation cost, not a keystroke cost: the first jump into the middle of a 10 MB
 
 ## 7. What is not verified
 
-Added by the editing round (lists, Format menu, reload behaviour, links, Focus / Typewriter Mode, scheme import, HTML):
+Added by the editing round (lists, Format menu, reload behaviour, links, Typewriter Mode, scheme import, HTML / RTF / PDF exports, reading time):
 * **A real ⌘-click, a real Return / Tab** reach the same code as the synthesised events the scenarios send through `NSWindow.sendEvent` / the text view's
   `mouseDown`, but no real mouse or keyboard drove them. The Open panel of Import Scheme…, the Save panel of Export as HTML… and the Finder reveal are not
   exercised (`importScheme(from:)` / `exportHTML(to:)` are driven directly).
@@ -483,7 +483,8 @@ Added by the editing round (lists, Format menu, reload behaviour, links, Focus /
 * **Two scenarios fail on this machine on the untouched previous commit as well** (checked by building 3ecc8f7 in a worktree): `visual-redraw` traps on a
   whole-view invalidation per edit (now read as every row, pitfall 35) and `schemes-apply` reports a long-lived window 0.5 pt wider than a fresh one and
   46 MB of growth over 300 switches. Both passed in the full run of the morning on the same build; something in the environment changed. To be rerun.
-* **Focus Mode with a selection that spans paragraphs** keeps both; a selection made with the mouse while the veil is drawn was not looked at on screen.
+* **The RTF and PDF exports in another application**: the RTF is read back by AppKit and checked for the heading, the words and a bold face; the PDF is
+  checked to be a PDF with pages. What Pages, Word or Preview make of them (tables, code blocks, quotes from the HTML importer) was not looked at.
 
 Added by the merge of the fixes round and the look round:
 * **The new look in a real window**: the title bar, the tab bar, full screen and its toolbar / title bar area, the drawing of the new scrollers and of the scroll-edge effect

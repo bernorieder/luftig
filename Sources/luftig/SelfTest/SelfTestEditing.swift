@@ -14,7 +14,7 @@ extension SelfTestScenarios {
         .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
         .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
         .init(name: "edit-links", summary: "⌘-click / Edit > Open Link: the link under a character (inline, image, autolink, bare URL, reference), web / file / anchor targets, a real ⌘-click, a Markdown file opens in luftig at its anchor", run: { t in try await editLinks(t) }),
-        .init(name: "edit-focus", summary: "View > Focus Mode (the paragraph at the caret keeps its colours, the rest is veiled: on pixels, attributes untouched) and Typewriter Mode (the caret's line in the middle, the inset makes room), remembered, every window follows", run: { t in try await editFocus(t) }),
+        .init(name: "edit-typewriter", summary: "View > Typewriter Mode: the caret's line in the middle, the inset makes room, remembered, every window follows", run: { t in try await editTypewriter(t) }),
         .init(name: "edit-html", summary: "Markdown -> HTML from the lexer's runs: headings, emphasis, code, links / images / autolinks / references, lists (nested, numbered, tasks), quotes, tables, rules, breaks; Copy as HTML / Rich Text on a private pasteboard; Export as HTML", run: { t in try await editHTML(t) }),
         .init(name: "html-probe", summary: "(probe) prints the HTML of --input f.md (or a built-in sample)", run: { t in try await htmlProbe(t) }, inAll: false),
     ]
@@ -162,94 +162,46 @@ extension SelfTestScenarios {
         let page2 = t.read(exported)
         t.check(page2.hasPrefix("<!DOCTYPE html>") && page2.contains("<title>html</title>") && page2.contains("<h1>Head</h1>"), "Export as HTML writes a page named after the document with its content")
         t.check(NSApp.mainMenu?.items.first { $0.title == "File" }?.submenu?.items.contains { $0.title == "Export as HTML…" } == true, "File > Export as HTML… exists")
+        // Export as Rich Text / as PDF: from the same HTML, without the web page's column
+        let rtfURL = t.url("export.rtf")
+        try document.exportRTF(to: rtfURL)
+        if let a = NSAttributedString(rtf: t.readData(rtfURL), documentAttributes: nil) {
+            var boldFound = false
+            a.enumerateAttribute(.font, in: NSRange(location: 0, length: a.length)) { v, r, _ in if let f = v as? NSFont, f.fontDescriptor.symbolicTraits.contains(.bold), (a.string as NSString).substring(with: r).contains("bold") { boldFound = true } }
+            t.check(boldFound && a.string.contains("Head") && a.string.contains("some bold text"), "Export as Rich Text writes an RTF with the heading, the words and the bold face: \(a.string.prefix(40).debugDescription)")
+        } else { t.check(false, "Export as Rich Text writes an RTF that AppKit reads back") }
+        let pdfURL = t.url("export.pdf")
+        try document.exportPDF(to: pdfURL)
+        let pdf = t.readData(pdfURL)
+        t.check(pdf.count > 1000 && String(decoding: pdf.prefix(5), as: UTF8.self) == "%PDF-", "Export as PDF writes a PDF (\(pdf.count) bytes)")
+        if let provider = CGDataProvider(data: pdf as CFData), let cg = CGPDFDocument(provider) { t.check(cg.numberOfPages >= 1, "... with \(cg.numberOfPages) page(s)") }
+        for title in ["Export as Rich Text…", "Export as PDF…"] { t.check(NSApp.mainMenu?.items.first { $0.title == "File" }?.submenu?.items.contains { $0.title == title } == true, "File > \(title) exists") }
+        t.check(richTextParagraphsNoWebMargins(document), "the rich text has no web-page column (no 3 em margins or max width in its stylesheet)")
         t.check(NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items.contains { $0.title.hasSuffix("as Rich Text") } == true, "Edit > Copy (All) as Rich Text exists (the title follows the selection once validated)")
     }
 
-    // MARK: edit-focus
+    // MARK: edit-typewriter
 
-    @MainActor static func editFocus(_ t: SelfTest.T) async throws {
+    @MainActor static func editTypewriter(_ t: SelfTest.T) async throws {
         try await preservingSettings {
-            t.check(!EditorPreferences.focusMode && !EditorPreferences.typewriterMode, "both modes off by default")
+            t.check(!EditorPreferences.typewriterMode, "off by default")
             let view = NSApp.mainMenu?.items.first { $0.title == "View" }?.submenu
-            t.check(view?.items.contains { $0.title == "Focus Mode" && $0.keyEquivalent == "f" && $0.keyEquivalentModifierMask == [.command, .shift] } == true, "View > Focus Mode (⇧⌘F)")
             t.check(view?.items.contains { $0.title == "Typewriter Mode" && $0.keyEquivalent == "t" && $0.keyEquivalentModifierMask == [.command, .shift] } == true, "View > Typewriter Mode (⇧⌘T)")
+            t.check(view?.items.contains { $0.title.contains("Focus") } != true, "no Focus Mode any more")
             let paras = (1...30).map { "Paragraph \($0) has a first line\nand a second line of the same paragraph \($0).\n" }.joined(separator: "\n")
             let text = "# Title\n\n" + paras
-            let (doc, host, _) = try await openEditor(t, text: text, name: "focus.md", size: NSSize(width: 700, height: 500))
+            let (doc, host, _) = try await openEditor(t, text: text, name: "typewriter.md", size: NSSize(width: 700, height: 500))
             defer { t.close(doc) }
-            let tv = host.textView, etv = host.editorTextView
+            let tv = host.textView
             let ns = text as NSString
-            // the paragraph of a selection
-            let p5 = ns.range(of: "Paragraph 5")
-            let block5 = host.focusParagraph(for: NSRange(location: p5.location + 3, length: 0))
-            t.check(ns.substring(with: block5).hasPrefix("Paragraph 5 has") && ns.substring(with: block5).hasSuffix("paragraph 5.\n"), "the paragraph at the caret: both lines of it, up to the blank line: \(ns.substring(with: block5).debugDescription)")
-            t.equal(host.focusParagraph(for: NSRange(location: 0, length: 0)), NSRange(location: 0, length: 8), "the heading alone (a blank line follows)")
-            let blank = ns.range(of: "\n\nParagraph 2").location + 1
-            t.equal(host.focusParagraph(for: NSRange(location: blank, length: 0)), NSRange(location: blank, length: 1), "a blank line: only itself")
-            let p6 = ns.range(of: "Paragraph 6")
-            let two = host.focusParagraph(for: NSRange(location: p5.location, length: p6.location + 5 - p5.location))
-            t.check(two.location == block5.location && NSMaxRange(two) > p6.location, "a selection over two paragraphs keeps both")
-            // Focus Mode on: the text view's focus range follows the caret, nothing is restyled
-            tv.setSelectedRange(NSRange(location: p5.location + 3, length: 0))
-            let runsBefore = host.styler.appliedRunCount
-            host.luftigToggleFocusMode(nil)
-            t.check(EditorPreferences.focusMode, "View > Focus Mode switches the preference on")
-            t.equal(etv.focusRange, block5, "the text view focuses the caret's paragraph")
-            let item = NSMenuItem(title: "Focus Mode", action: #selector(LuftigEditorActions.luftigToggleFocusMode(_:)), keyEquivalent: "")
-            _ = host.validateMenuItem(item)
-            t.check(item.state == .on, "the menu item is checked")
-            tv.setSelectedRange(NSRange(location: p6.location + 2, length: 0))
-            t.check(etv.focusRange?.location == p6.location, "the caret in the next paragraph: the focus moves")
-            t.equal(host.styler.appliedRunCount, runsBefore, "no attributes were touched (the veil is drawn over the text)")
-            assertMatchesFreshLex(t, host, "Focus Mode: the styled text still equals a fresh lex")
-            // on pixels: the focused paragraph is darker (light appearance) than a veiled one
-            host.view.window?.appearance = NSAppearance(named: .aqua)
-            host.styler.styleVisible()
-            func darkest(in r: NSRect) -> Double {
-                guard let rep = tv.bitmapImageRepForCachingDisplay(in: tv.visibleRect) else { return 1 }
-                tv.cacheDisplay(in: tv.visibleRect, to: rep)
-                var min = 1.0
-                let scale = CGFloat(rep.pixelsWide) / tv.visibleRect.width
-                let x0 = Int((r.minX - tv.visibleRect.minX) * scale), x1 = Int((r.maxX - tv.visibleRect.minX) * scale)
-                // the rep's rows run bottom-up (measured: the text view is flipped, the cached bitmap is not)
-                let y0 = Int((tv.visibleRect.maxY - r.maxY) * scale), y1 = Int((tv.visibleRect.maxY - r.minY) * scale)
-                var y = max(0, y0)
-                while y < Swift.min(rep.pixelsHigh, y1) {
-                    var x = max(0, x0)
-                    while x < Swift.min(rep.pixelsWide, x1) {
-                        if let c = rep.colorAt(x: x, y: y) { let l = Double(c.usingColorSpace(.sRGB)?.brightnessComponent ?? 1); if l < min { min = l } }
-                        x += 2
-                    }
-                    y += 2
-                }
-                return min
-            }
-            /// The darkest pixel of every 23 pt band of the viewport (one body line each), top to bottom.
-            func bands() -> [Double] {
-                var out: [Double] = []
-                var y: CGFloat = 0
-                while y + 23 <= tv.visibleRect.height { out.append(darkest(in: NSRect(x: 20, y: y, width: 200, height: 23))); y += 23 }
-                return out
-            }
-            let p3 = ns.range(of: "Paragraph 3").location
-            tv.setSelectedRange(NSRange(location: p3 + 2, length: 0))                         // (paragraph 3 is in the viewport of a 500 pt window)
-            var kept = 0, veiled = 0, draws = 0
-            LuftigLayoutManager.veilLog = { _, _, k in if k { kept += 1 } else { veiled += 1 } }
-            LuftigLayoutManager.drawLog = { _, _, _ in draws += 1 }
-            let focused = bands()
-            LuftigLayoutManager.veilLog = nil; LuftigLayoutManager.drawLog = nil
-            t.check(draws > 0 && kept == 2 * draws && veiled > 10, "every glyph draw kept the two lines of the focused paragraph and veiled the others (\(draws) draws, \(kept) kept, \(veiled) veiled)")
-            let dark = focused.filter { $0 < 0.4 }.count, faded = focused.filter { $0 > 0.55 && $0 < 0.9 }.count
-            t.check(dark == 2 && faded >= 8, "pixels: exactly the two lines of the focused paragraph are dark, the other text lines are faded towards the page (\(dark) dark, \(faded) faded of \(focused.count) bands: \(focused.map { String(format: "%.2f", $0) }))")
-            host.luftigToggleFocusMode(nil)
-            t.check(!EditorPreferences.focusMode && etv.focusRange == nil, "off again: no focus range")
-            let plain = bands()
-            t.check(plain.filter { $0 < 0.4 }.count >= 10 && plain.filter { $0 > 0.55 && $0 < 0.9 }.isEmpty, "... and every text line is drawn in full colour again (\(plain.filter { $0 < 0.4 }.count) dark bands)")
             // Typewriter Mode: the inset makes room, the caret's line sits in the middle
             let clip = host.scrollView.contentView
             tv.setSelectedRange(NSRange(location: 0, length: 0))
             host.luftigToggleTypewriterMode(nil)
             t.check(EditorPreferences.typewriterMode, "View > Typewriter Mode switches the preference on")
+            let item = NSMenuItem(title: "Typewriter Mode", action: #selector(LuftigEditorActions.luftigToggleTypewriterMode(_:)), keyEquivalent: "")
+            _ = host.validateMenuItem(item)
+            t.check(item.state == .on, "the menu item is checked")
             let expectedInset = ((clip.bounds.height - host.theme.bodyLineHeight) / 2).rounded(.down)
             t.equal(tv.textContainerInset.height, expectedInset, "the vertical inset is half the viewport less half a line (\(expectedInset) pt)")
             func caretLineMid() -> CGFloat {
@@ -267,14 +219,15 @@ extension SelfTestScenarios {
             let end = (tv.string as NSString).length
             tv.setSelectedRange(NSRange(location: end, length: 0))
             t.check(abs(caretLineMid() - clip.bounds.height / 2) < 2, String(format: "the last line can be in the middle too (%.1f of %.1f)", caretLineMid(), clip.bounds.height))
+            assertMatchesFreshLex(t, host, "Typewriter Mode: the styled text still equals a fresh lex")
             host.luftigToggleTypewriterMode(nil)
             t.check(!EditorPreferences.typewriterMode && tv.textContainerInset.height == 0, "off again: no inset")
-            // a second window follows both switches
-            let (doc2, host2, _) = try await openEditor(t, text: "a\n\nb\n", name: "focus2.md")
-            host.luftigToggleFocusMode(nil); host.luftigToggleTypewriterMode(nil)
-            t.check(host2.editorTextView.focusRange != nil && host2.textView.textContainerInset.height > 0, "a second window follows both switches")
-            host.luftigToggleFocusMode(nil); host.luftigToggleTypewriterMode(nil)
-            t.check(host2.editorTextView.focusRange == nil && host2.textView.textContainerInset.height == 0, "... and back")
+            // a second window follows the switch
+            let (doc2, host2, _) = try await openEditor(t, text: "a\n\nb\n", name: "typewriter2.md")
+            host.luftigToggleTypewriterMode(nil)
+            t.check(host2.textView.textContainerInset.height > 0, "a second window follows the switch")
+            host.luftigToggleTypewriterMode(nil)
+            t.check(host2.textView.textContainerInset.height == 0, "... and back")
             t.close(doc2)
         }
     }
@@ -609,6 +562,16 @@ extension SelfTestScenarios {
             EditorPreferences.continueLists = true
             t.check(c.continueListsCheckbox.state == .on, "... and follows it")
         }
+    }
+}
+#endif
+
+#if LUFTIG_SELFTEST
+extension SelfTestScenarios {
+    /// The HTML behind the rich text has no `max-width` / `margin: 3em auto` (the page is the paper there).
+    @MainActor static func richTextParagraphsNoWebMargins(_ doc: MarkdownDocument) -> Bool {
+        let html = MarkdownHTML.document(body: "<p>x</p>", title: "t", bodyFont: nil, codeFont: nil, pageLayout: false)
+        return !html.contains("max-width: 44em") && !html.contains("margin: 3em") && doc.richText() != nil
     }
 }
 #endif

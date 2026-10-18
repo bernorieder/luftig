@@ -20,12 +20,12 @@ import MarkdownKit
     func luftigToggleOutline(_ sender: Any?)
     func luftigToggleWordCount(_ sender: Any?)
     func luftigToggleSyntaxBar(_ sender: Any?)
+    func luftigToggleReadingTime(_ sender: Any?)
     /// Format menu: the item's `tag` names the SyntaxElement (`SyntaxElement.menuTag`); the same edit as a click on the syntax bar.
     func luftigInsertSyntax(_ sender: Any?)
     /// Edit > Open Link: the link at the caret (the same as a ⌘-click on it).
     func luftigOpenLink(_ sender: Any?)
-    /// View > Focus Mode / Typewriter Mode (the `focus` extension).
-    func luftigToggleFocusMode(_ sender: Any?)
+    /// View > Typewriter Mode (the `typewriter` extension).
     func luftigToggleTypewriterMode(_ sender: Any?)
     /// Edit > Copy as HTML / Copy as Rich Text: the selection (or everything) rendered (MarkdownHTML.swift).
     func luftigCopyAsHTML(_ sender: Any?)
@@ -352,6 +352,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     @objc func luftigToggleOutline(_ sender: Any?) { EditorPreferences.showOutline.toggle() }
     @objc func luftigToggleWordCount(_ sender: Any?) { EditorPreferences.showWordCount.toggle() }
     @objc func luftigToggleSyntaxBar(_ sender: Any?) { EditorPreferences.showSyntaxBar.toggle() }
+    @objc func luftigToggleReadingTime(_ sender: Any?) { EditorPreferences.showReadingTime.toggle() }
     @objc func luftigInsertSyntax(_ sender: Any?) {
         guard let tag = (sender as? NSMenuItem)?.tag ?? (sender as? NSControl)?.tag, let e = SyntaxElement.element(menuTag: tag) else { return }
         insert(e)
@@ -361,7 +362,6 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         switch item.action {
         case #selector(luftigInsertSyntax(_:)): return textView.isEditable && SyntaxElement.element(menuTag: item.tag) != nil
         case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
-        case #selector(luftigToggleFocusMode(_:)): item.state = EditorPreferences.focusMode ? .on : .off
         case #selector(luftigToggleTypewriterMode(_:)): item.state = EditorPreferences.typewriterMode ? .on : .off
         case #selector(luftigCopyAsHTML(_:)), #selector(luftigCopyAsRichText(_:)):
             item.title = (item.action == #selector(luftigCopyAsHTML(_:)) ? "Copy" : "Copy") + (textView.selectedRange().length > 0 ? "" : " All") + (item.action == #selector(luftigCopyAsHTML(_:)) ? " as HTML" : " as Rich Text")
@@ -371,6 +371,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         case #selector(luftigToggleOutline(_:)): item.title = EditorPreferences.showOutline ? "Hide Outline" : "Show Outline"
         case #selector(luftigToggleWordCount(_:)): item.title = EditorPreferences.showWordCount ? "Hide Word Count" : "Show Word Count"
         case #selector(luftigToggleSyntaxBar(_:)): item.title = EditorPreferences.showSyntaxBar ? "Hide Syntax Bar" : "Show Syntax Bar"
+        case #selector(luftigToggleReadingTime(_:)): item.title = EditorPreferences.showReadingTime ? "Hide Reading Time" : "Show Reading Time"
         case #selector(luftigIncreaseFontSize(_:)): return fontSize < EditorPreferences.fontSizeRange.upperBound
         case #selector(luftigDecreaseFontSize(_:)): return fontSize > EditorPreferences.fontSizeRange.lowerBound
         case #selector(luftigResetFontSize(_:)): return fontSize != EditorPreferences.defaultFontSize
@@ -417,11 +418,12 @@ extension EditorViewController {
     /// The padding in effect (tests).
     var padding: Padding { Padding(points: EditorPreferences.padding) }
 
-    /// The View menu's three switches, shared by every window.
+    /// The View menu's switches, shared by every window (the word count's row holds the count, the reading time, or both).
     func applyChromeVisibility() {
-        let o = EditorPreferences.showOutline, w = EditorPreferences.showWordCount, s = EditorPreferences.showSyntaxBar
+        let o = EditorPreferences.showOutline, w = EditorPreferences.showWordCount || EditorPreferences.showReadingTime, s = EditorPreferences.showSyntaxBar
         if outline.isHidden == o { outline.isHidden = !o }
         if wordCount.isHidden == w { wordCount.isHidden = !w }
+        if w { updateChromeSelection() }                      // (which of the two is shown may have changed)
         if syntaxBar.isHidden == s { syntaxBar.isHidden = !s }
         // the bar shown: the viewport ends a gap above it; hidden (NSStackView would detach it, but it is a plain subview here): the margin below the viewport
         syntaxBar.isHidden = !s
@@ -499,8 +501,8 @@ extension EditorViewController {
         guard !wordCount.isHidden else { return }
         let sel = textView.selectedRange()
         var selected: Int?
-        if sel.length > 0, sel.length <= 200_000 { selected = WordCounter.words(in: storage.string as NSString, range: sel) }
-        wordCount.text = WordCountView.label(total: chromeWordTotal, selected: selected)
+        if sel.length > 0, sel.length <= 200_000, EditorPreferences.showWordCount { selected = WordCounter.words(in: storage.string as NSString, range: sel) }
+        wordCount.text = WordCountView.label(total: chromeWordTotal, selected: selected, words: EditorPreferences.showWordCount, readingTime: EditorPreferences.showReadingTime)
     }
 
     /// The outline entry of the section at the top of the window.
@@ -641,16 +643,15 @@ extension EditorViewController {
     }
 }
 
-// MARK: - writing modes: Focus Mode and Typewriter Mode (View menu; EditorPreferences.focusMode / typewriterMode)
+// MARK: - Typewriter Mode (View menu; EditorPreferences.typewriterMode)
 
 extension EditorViewController {
 
-    @objc func luftigToggleFocusMode(_ sender: Any?) { EditorPreferences.focusMode.toggle() }
     @objc func luftigToggleTypewriterMode(_ sender: Any?) { EditorPreferences.typewriterMode.toggle() }
 
-    /// Both switches, from the preferences (every window follows): the text view's focus range and the column's typewriter inset.
+    /// The switch, from the preferences (every window follows): the column's typewriter inset, and the caret's line to the middle.
     func applyWritingModes() {
-        let focus = EditorPreferences.focusMode, typewriter = EditorPreferences.typewriterMode
+        let typewriter = EditorPreferences.typewriterMode
         if column.typewriter != typewriter {
             column.typewriter = typewriter
             column.typewriterLineHeight = theme.bodyLineHeight
@@ -659,62 +660,11 @@ extension EditorViewController {
             column.typewriterLineHeight = theme.bodyLineHeight
             column.update()
         }
-        if !focus, editorTextView.focusRange != nil {
-            editorTextView.focusRange = nil
-            editorTextView.needsDisplay = true
-        }
-        if focus { updateFocusRange(redisplay: true) }
         if typewriter { centerCaretLine() }
     }
 
-    /// The paragraph at the caret: the block of lines without a blank line between them that holds the selection (bounded: 200 lines each way).
-    func focusParagraph(for selection: NSRange) -> NSRange {
-        let text = storage.string as NSString
-        let length = text.length
-        guard length > 0 else { return NSRange(location: 0, length: 0) }
-        func isBlank(_ r: NSRange) -> Bool {
-            var i = r.location
-            let end = NSMaxRange(r)
-            while i < end { let c = text.character(at: i); if c != 0x20 && c != 0x09 && c != 0x0A && c != 0x0D { return false }; i += 1 }
-            return true
-        }
-        let sel = NSIntersectionRange(selection, NSRange(location: 0, length: length))
-        let anchor = min(sel.location, length - 1)
-        var start = text.lineRange(for: NSRange(location: anchor, length: 0)).location
-        var end = NSMaxRange(text.lineRange(for: NSRange(location: min(max(anchor, NSMaxRange(sel) - 1), length - 1), length: 0)))
-        if isBlank(NSRange(location: start, length: end - start)) { return NSRange(location: start, length: end - start) }      // a blank line: only itself
-        var n = 0
-        while start > 0, n < 200 {
-            let prev = text.lineRange(for: NSRange(location: start - 1, length: 0))
-            if isBlank(prev) { break }
-            start = prev.location; n += 1
-        }
-        n = 0
-        while end < length, n < 200 {
-            let next = text.lineRange(for: NSRange(location: end, length: 0))
-            if isBlank(next) || next.length == 0 { break }
-            end = NSMaxRange(next); n += 1
-        }
-        return NSRange(location: start, length: end - start)
-    }
-
-    private func updateFocusRange(redisplay: Bool) {
-        let r = focusParagraph(for: textView.selectedRange())
-        if editorTextView.focusRange != r {
-            editorTextView.focusRange = r
-            if redisplay { editorTextView.setNeedsDisplay(editorTextView.visibleRect) }
-        }
-    }
-
-    func writingModesSelectionChanged() {
-        if EditorPreferences.focusMode { updateFocusRange(redisplay: true) }
-        if EditorPreferences.typewriterMode { centerCaretLine() }
-    }
-
-    func writingModesTextChanged() {
-        if EditorPreferences.focusMode { updateFocusRange(redisplay: true) }
-        if EditorPreferences.typewriterMode { centerCaretLine() }
-    }
+    func writingModesSelectionChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
+    func writingModesTextChanged() { if EditorPreferences.typewriterMode { centerCaretLine() } }
 
     /// The line fragment (container coordinates) that holds the caret at `location`; the extra line after a trailing line break for a caret at the very end.
     func caretLineRect(at location: Int) -> NSRect? {
