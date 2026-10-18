@@ -15,6 +15,8 @@
 //     content changed, document dirty         -> 3-way line merge (base = last synced text); success: applied as ONE undoable
 //                                                edit; overlap: keep the typed text, show a non-modal banner
 //                                                [Reload from Disk] [Keep My Version]; autosave is held back meanwhile
+//     (Settings > General > When the file changes on disk: "Ask first" shows that banner for every change, clean or dirty, and
+//      merges nothing; "Never reload" shows nothing and only asks when the file is about to be overwritten - see externalChangeArrived)
 //     file gone                               -> grace period (move/atomic replace), then banner [Save Again]; autosave held back
 //
 // Invariant: luftig never writes over a disk version it has not either loaded, merged, or been told to overwrite.
@@ -149,11 +151,24 @@ extension MarkdownDocument {
             }
             if syncState == .conflict, conflict?.disk.hash == st.hash { return }      // same disk version we already told the user about
             stats.lastReloadTrigger = reason
-            if !hasRealEdits {
-                silentReload(decoded, st)
-            } else {
-                resolveDirtyChange(decoded, st)
-            }
+            externalChangeArrived(decoded, st)
+        }
+    }
+
+    /// The file holds other text than the editor was synced with: Settings > General > When the file changes on disk decides.
+    ///   automatic  a clean document reloads silently, a dirty one merges (or asks when the edits overlap)
+    ///   ask        the banner asks, clean or dirty: Reload from Disk / Keep My Version (nothing is applied by itself)
+    ///   never      nothing is shown; the state is remembered so that saving over the other version asks first (the invariant above holds)
+    private func externalChangeArrived(_ decoded: DecodedText, _ disk: DiskState) {
+        switch EditorPreferences.reloadBehavior {
+        case .automatic:
+            if !hasRealEdits { silentReload(decoded, disk) } else { resolveDirtyChange(decoded, disk) }
+        case .ask:
+            enterConflict(decoded, disk, banner: true)
+            trace("external change: asking (Settings)")
+        case .never:
+            enterConflict(decoded, disk, banner: false)
+            trace("external change: not reloaded (Settings)")
         }
     }
 
@@ -227,11 +242,16 @@ extension MarkdownDocument {
             trace("merged external change into dirty document (units \(merged.length))")
             return
         }
+        enterConflict(decoded, disk, banner: true)
+        trace("conflict: dirty document and the file both changed")
+    }
+
+    /// The other version is remembered and waits for the user: the banner (if asked for), autosave held back, ⌘S and closing ask with a sheet.
+    private func enterConflict(_ decoded: DecodedText, _ disk: DiskState, banner: Bool) {
         stats.conflicts += 1
         conflict = ExternalConflict(diskText: decoded.text, diskFormat: decoded.format, disk: disk, reason: nil)
         syncState = .conflict
-        showConflictBanner()
-        trace("conflict: dirty document and the file both changed")
+        if banner { showConflictBanner() } else { bannerSerial += 1; host?.hideBanner() }
     }
 
     private func enterUnreadable(_ error: Error, signature: FileSignature) {
@@ -249,7 +269,7 @@ extension MarkdownDocument {
 
     private func showConflictBanner() {
         host?.showBanner(EditorBanner(
-            message: "“\(displayName ?? "file")” was changed on disk, and you have unsaved changes.",
+            message: hasRealEdits ? "“\(displayName ?? "file")” was changed on disk, and you have unsaved changes." : "“\(displayName ?? "file")” was changed on disk.",
             style: .warning,
             buttons: [("Reload from Disk", { [weak self] in self?.reloadFromDisk() }),
                       ("Keep My Version", { [weak self] in self?.keepMyVersion() })]))
@@ -393,8 +413,13 @@ extension MarkdownDocument {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.retryAfterComposition() }
                     return .cancelSilently
                 }
-                if !isDocumentEdited && (undoManager?.groupingLevel ?? 0) == 0 { silentReload(decoded, st); return .proceed }     // (open undo group: see finishCheck)
-                resolveDirtyChange(decoded, st)
+                let behavior = EditorPreferences.reloadBehavior
+                if behavior == .automatic {
+                    if !isDocumentEdited && (undoManager?.groupingLevel ?? 0) == 0 { silentReload(decoded, st); return .proceed }     // (open undo group: see finishCheck)
+                    resolveDirtyChange(decoded, st)
+                } else {
+                    enterConflict(decoded, st, banner: behavior == .ask)        // ask / never: nothing is merged or reloaded by itself
+                }
                 return syncState == .inSync ? .proceed : (isAutosave ? .cancelSilently : .ask)
             }
         } catch {

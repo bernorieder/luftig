@@ -9,6 +9,8 @@
 //   ( General | Text | Layout )                        <- three screens, a segmented control under the preview; the chosen one is remembered
 //   General:
 //   Files           [ ] Open files in tabs
+//   File changes    [Reload automatically v]
+//                   Changes made by other programs appear at once (merged with yours when both edited).
 //   Editing         [x] Continue lists on Return
 //                   Tab and Shift-Tab nest and un-nest list items.
 //   Text:
@@ -149,6 +151,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let openInTabsCheckbox = NSButton(checkboxWithTitle: "Open files in tabs", target: nil, action: nil)
     let continueListsCheckbox = NSButton(checkboxWithTitle: "Continue lists on Return", target: nil, action: nil)
     let continueListsNoteLabel = NSTextField(labelWithString: "")
+    let reloadPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    let reloadNoteLabel = NSTextField(labelWithString: "")
     /// The screens: General, Text and Layout; the segmented control under the preview switches, the choice is remembered.
     enum Screen: Int, CaseIterable { case general = 0, text = 1, layout = 2
         var title: String { self == .general ? "General" : self == .text ? "Text" : "Layout" }
@@ -322,6 +326,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         secondary(continueListsNoteLabel)
         fixedLabel(continueListsNoteLabel, width: W.controlColumnWidth, font: continueListsNoteLabel.font)
         continueListsNoteLabel.stringValue = "Tab and Shift-Tab nest and un-nest list items."
+        reloadPopup.target = self; reloadPopup.action = #selector(reloadBehaviorChanged(_:))
+        reloadPopup.setAccessibilityLabel("When the file changes on disk")
+        for b in EditorPreferences.ReloadBehavior.allCases {
+            let item = NSMenuItem(title: b.title, action: nil, keyEquivalent: "")
+            item.representedObject = b.rawValue
+            reloadPopup.menu?.addItem(item)
+        }
+        reloadPopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        secondary(reloadNoteLabel)
+        fixedLabel(reloadNoteLabel, width: W.controlColumnWidth, font: reloadNoteLabel.font)
 
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
@@ -360,9 +374,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         let continueListsColumn = NSStackView(views: [continueListsCheckbox, continueListsNoteLabel])
         continueListsColumn.orientation = .vertical; continueListsColumn.alignment = .leading; continueListsColumn.spacing = 6
+        let reloadColumn = NSStackView(views: [reloadPopup, reloadNoteLabel])
+        reloadColumn.orientation = .vertical; reloadColumn.alignment = .leading; reloadColumn.spacing = 6
 
         // the grids share the label column width, so the controls of every screen start at the same x
-        let generalLabels = ["Files:", "Editing:"].map { label($0) }
+        let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Font:", "Size:", "Opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
@@ -380,7 +396,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         }
         let generalGrid = makeGrid([
             [generalLabels[0], openInTabsCheckbox],
-            [generalLabels[1], continueListsColumn],
+            [generalLabels[1], reloadColumn],
+            [generalLabels[2], continueListsColumn],
         ])
         let grid = makeGrid([
             [textLabels[0], schemePopup],
@@ -640,6 +657,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         openInTabsCheckbox.state = EditorPreferences.openInTabs ? .on : .off
         continueListsCheckbox.state = EditorPreferences.continueLists ? .on : .off
+        let behavior = EditorPreferences.reloadBehavior
+        if let item = reloadPopup.menu?.items.first(where: { ($0.representedObject as? String) == behavior.rawValue }) { reloadPopup.select(item) }
+        reloadNoteLabel.stringValue = behavior.note
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
         showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
@@ -758,6 +778,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func openInTabsChanged(_ sender: NSButton) { EditorPreferences.openInTabs = sender.state == .on; syncFromPreferences() }
     @objc func continueListsChanged(_ sender: NSButton) { EditorPreferences.continueLists = sender.state == .on; syncFromPreferences() }
+    @objc func reloadBehaviorChanged(_ sender: NSPopUpButton) {
+        if let raw = sender.selectedItem?.representedObject as? String, let b = EditorPreferences.ReloadBehavior(rawValue: raw) { EditorPreferences.reloadBehavior = b }
+        syncFromPreferences()
+    }
     @objc func showOutlineChanged(_ sender: NSButton) { EditorPreferences.showOutline = sender.state == .on; syncFromPreferences() }
     @objc func showWordCountChanged(_ sender: NSButton) { EditorPreferences.showWordCount = sender.state == .on; syncFromPreferences() }
     @objc func showSyntaxBarChanged(_ sender: NSButton) { EditorPreferences.showSyntaxBar = sender.state == .on; syncFromPreferences() }

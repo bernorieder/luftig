@@ -16,6 +16,7 @@ extension SelfTestScenarios {
         .init(name: "save-gate", summary: "autosave/save racing ahead of every watcher; NSDocument's stock 'changed by another application' sheet never appears", run: { t in try await saveGate(t) }),
         .init(name: "autosave-off", summary: "the same policy with autosavesInPlace = false (classic Save): reload, merge, conflict, stock sheet never appears", run: { t in try await autosaveOff(t) }),
         .init(name: "deleted-moved", summary: "rm / mv / rename / recreate while open (clean and dirty); close with unresolved states", run: { t in try await deletedMoved(t) }),
+        .init(name: "reload-behavior", summary: "Settings > General > When the file changes on disk: Ask first (banner, clean or dirty, no merge), Never reload (nothing shown, save asks), the popup", run: { t in try await reloadBehavior(t) }),
     ] + auditDocScenarios      // SelfTestAuditDoc*.swift (the document-layer audit)
 
     private static let paras = (1...10).map { "paragraph \($0) of the document\n" }.joined()
@@ -542,6 +543,127 @@ extension SelfTestScenarios {
             t.check(host.textView.string.hasPrefix("TYPED "), "dirty + deleted + recreated by tool: typed text still there (state \(doc.syncState))")
             t.check(doc.syncState == .conflict, "-> conflict (the new file is a different version): banner \(host.bannerText)")
             t.close(doc)
+        }
+    }
+
+    // MARK: reload behaviour (Settings > General)
+
+    @MainActor static func reloadBehavior(_ t: SelfTest.T) async throws {
+        let theirs = paras.replacingOccurrences(of: "paragraph 3 of the document", with: "paragraph 3 THEIRS")
+        let saved = EditorPreferences.reloadBehavior
+        defer { EditorPreferences.reloadBehavior = saved; UITrap.alertChooser = { _ in 0 } }
+        t.equal(EditorPreferences.reloadBehavior, .automatic, "the default: reload automatically")
+        UserDefaults.standard.set("whatever", forKey: EditorPreferences.reloadBehaviorKey)
+        t.equal(EditorPreferences.reloadBehavior, .automatic, "an unknown stored value reads as the default")
+        UserDefaults.standard.removeObject(forKey: EditorPreferences.reloadBehaviorKey)
+
+        func open(_ name: String) async throws -> (MarkdownDocument, EditorViewController, URL) {
+            UITrap.reset()
+            let file = t.write(paras, to: name)
+            let doc = try await t.open(file)
+            guard let host = doc.host as? EditorViewController else { throw NSError(domain: "t", code: 1) }
+            await t.sleep(200)
+            return (doc, host, file)
+        }
+
+        // ---- Ask first, clean document: the banner, nothing applied
+        EditorPreferences.reloadBehavior = .ask
+        do {
+            let (doc, host, file) = try await open("ask-clean.md")
+            await atomicWrite(t, file, theirs)
+            let ok = await t.waitFor(3000) { doc.syncState == .conflict }
+            t.check(ok, "ask: a change of a clean document enters the asking state")
+            t.equal(host.textView.string, paras, "ask: the editor still shows the old text")
+            t.equal(host.bannerButtonTitles, ["Reload from Disk", "Keep My Version"], "ask: the banner offers Reload / Keep")
+            t.check(host.bannerText.hasSuffix("was changed on disk."), "ask: the banner says the file changed (no unsaved changes mentioned): \(host.bannerText)")
+            t.check(!doc.isDocumentEdited, "ask: the document stays clean")
+            host.pressBannerButton("Reload from Disk")
+            await t.sleep(100)
+            t.equal(host.textView.string, theirs, "ask: Reload from Disk shows the other version")
+            t.check(doc.syncState == .inSync && !host.bannerVisible && !doc.isDocumentEdited, "ask: in sync, banner gone, clean")
+            // a second change: Keep My Version, then typing + autosave overwrite the file (the version was acknowledged)
+            let third = theirs.replacingOccurrences(of: "paragraph 5 of the document", with: "paragraph 5 AGAIN")
+            await atomicWrite(t, file, third)
+            let ok2 = await t.waitFor(3000) { doc.syncState == .conflict }
+            t.check(ok2, "ask: the next change asks again")
+            host.pressBannerButton("Keep My Version")
+            await t.sleep(50)
+            t.equal(host.textView.string, theirs, "ask: Keep My Version leaves the text")
+            t.check(doc.syncState == .inSync && !host.bannerVisible, "ask: in sync (the other version is acknowledged)")
+            t.typeText("MINE ", into: doc, at: NSRange(location: 0, length: 0))
+            await t.sleep(30)                                                        // (NSDocument learns of the edit from the undo manager's notifications)
+            let err = await t.autosave(doc)
+            t.check(err == nil && t.read(file).hasPrefix("MINE "), "ask: after Keep My Version the next save writes my text over the acknowledged version (\(String(describing: err)); file: \(t.read(file).prefix(12).debugDescription))")
+            t.close(doc)
+        }
+        // ---- Ask first, dirty document with NON-overlapping edits: no merge either, the banner
+        do {
+            let (doc, host, file) = try await open("ask-dirty.md")
+            t.typeText("MINE ", into: doc, at: NSRange(location: 0, length: 0))
+            await t.sleep(30)
+            await atomicWrite(t, file, theirs)
+            let ok = await t.waitFor(3000) { doc.syncState == .conflict }
+            t.check(ok, "ask + dirty: the asking state (nothing merged)")
+            t.check(host.textView.string.hasPrefix("MINE ") && !host.textView.string.contains("THEIRS"), "ask + dirty: my text, not merged with theirs")
+            t.check(host.bannerText.contains("unsaved changes"), "ask + dirty: the banner mentions the unsaved changes: \(host.bannerText)")
+            let err = await t.autosave(doc)
+            t.check((err as NSError?)?.code == NSUserCancelledError, "ask + dirty: autosave is held back")
+            t.equal(t.read(file), theirs, "ask + dirty: the file is untouched")
+            host.pressBannerButton("Reload from Disk")
+            await t.sleep(100)
+            t.equal(host.textView.string, theirs, "ask + dirty: Reload from Disk shows the other version (undoable)")
+            t.check(doc.undoManager?.canUndo == true, "... undoable")
+            t.close(doc)
+        }
+        // ---- Never reload: nothing shown, the text stays; saving asks with the sheet
+        EditorPreferences.reloadBehavior = .never
+        do {
+            let (doc, host, file) = try await open("never.md")
+            await atomicWrite(t, file, theirs)
+            let ok = await t.waitFor(3000) { doc.syncState == .conflict }
+            t.check(ok, "never: the change is noted (so that a save asks)")
+            await t.sleep(200)
+            t.check(!host.bannerVisible, "never: no banner")
+            t.equal(host.textView.string, paras, "never: the old text stays")
+            t.check(!doc.isDocumentEdited && UITrap.alerts.isEmpty, "never: clean, no alert")
+            t.typeText("MINE ", into: doc, at: NSRange(location: 0, length: 0))
+            await t.sleep(30)
+            let err = await t.autosave(doc)
+            t.check((err as NSError?)?.code == NSUserCancelledError && t.read(file) == theirs, "never: autosave does not overwrite the other version (held back silently: \(String(describing: err)))")
+            t.check(!host.bannerVisible, "never: still no banner")
+            UITrap.alertChooser = { a in a.buttons.firstIndex(of: "Overwrite File") ?? 0 }
+            UITrap.reset()
+            doc.save(nil)
+            let saved = await t.waitFor(3000) { t.read(file).hasPrefix("MINE ") }
+            t.check(saved, "never: ⌘S asks (the overwrite sheet) and Overwrite File writes my text")
+            t.equal(UITrap.alerts.count, 1, "never: exactly one sheet: \(UITrap.alerts.first?.buttons ?? [])")
+            await t.sleep(200)
+            t.check(doc.syncState == .inSync && !doc.isDocumentEdited, "never: in sync and clean after the save")
+            t.close(doc)
+        }
+        // ---- automatic again: the silent reload as before
+        EditorPreferences.reloadBehavior = .automatic
+        do {
+            let (doc, host, file) = try await open("auto.md")
+            await atomicWrite(t, file, theirs)
+            let ok = await t.waitFor(3000) { host.textView.string == theirs }
+            t.check(ok && doc.syncState == .inSync && !host.bannerVisible, "automatic: the silent reload")
+            t.close(doc)
+        }
+        // ---- the Settings popup
+        try await preservingSettings {
+            let c = SettingsWindowController.shared
+            c.showScreen(.general)
+            t.equal(c.reloadPopup.selectedItem?.representedObject as? String, "automatic", "Settings > General shows 'Reload automatically'")
+            t.check(c.reloadNoteLabel.stringValue == EditorPreferences.ReloadBehavior.automatic.note, "... with its note")
+            c.reloadPopup.selectItem(at: 1)
+            c.reloadBehaviorChanged(c.reloadPopup)
+            t.equal(EditorPreferences.reloadBehavior, .ask, "the popup drives the preference")
+            t.check(c.reloadNoteLabel.stringValue == EditorPreferences.ReloadBehavior.ask.note, "the note follows")
+            EditorPreferences.reloadBehavior = .never
+            t.equal(c.reloadPopup.selectedItem?.representedObject as? String, "never", "... and the popup follows the preference")
+            EditorPreferences.restoreDefaults()
+            t.equal(EditorPreferences.reloadBehavior, .automatic, "Restore Defaults: automatic again")
         }
     }
 }

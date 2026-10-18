@@ -27,10 +27,12 @@ enum EditorPreferences {
     static let openInTabsKey = "LuftigOpenInTabs"
     /// Settings > General: Return on a list item / quote line continues it; Tab / Shift-Tab nest and un-nest items (ListEditing.swift).
     static let continueListsKey = "LuftigContinueLists"
+    /// Settings > General: what happens when another program changes the open file (MarkdownDocument+ExternalChanges.swift).
+    static let reloadBehaviorKey = "LuftigReloadBehavior"
     /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
     static let outlineLineHeightKey = "LuftigOutlineLineHeight"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey, reloadBehaviorKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -295,6 +297,39 @@ enum EditorPreferences {
     static var continueLists: Bool {
         get { flag(forKey: continueListsKey, default: true) }
         set { setFlag(newValue, forKey: continueListsKey, current: continueLists) }
+    }
+
+    /// Settings > General > When the file changes on disk.
+    enum ReloadBehavior: String, CaseIterable {
+        /// A clean document reloads silently, a dirty one merges (the look luftig always had).
+        case automatic
+        /// A banner offers Reload from Disk / Keep My Version; nothing is applied by itself.
+        case ask
+        /// The change is not shown; saving over it asks first (the overwrite sheet).
+        case never
+        var title: String {
+            switch self {
+            case .automatic: return "Reload automatically"
+            case .ask: return "Ask first"
+            case .never: return "Never reload"
+            }
+        }
+        var note: String {
+            switch self {
+            case .automatic: return "Changes made by other programs appear at once (merged with yours when both edited)."
+            case .ask: return "A banner offers to reload or to keep your version."
+            case .never: return "The file is left alone; saving over a changed file asks first."
+            }
+        }
+    }
+    /// What happens when another program changes the open file. Default: reload automatically; an unknown stored value reads as the default.
+    static var reloadBehavior: ReloadBehavior {
+        get { (defaults.object(forKey: reloadBehaviorKey) as? String).flatMap { ReloadBehavior(rawValue: $0) } ?? .automatic }
+        set {
+            guard newValue != reloadBehavior else { return }
+            defaults.set(newValue.rawValue, forKey: reloadBehaviorKey)
+            post()
+        }
     }
 
     /// Settings > Layout > Outline: long headings wrap onto further lines instead of being cut off. Default off.
