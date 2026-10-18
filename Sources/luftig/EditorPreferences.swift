@@ -247,8 +247,8 @@ enum EditorPreferences {
         }
     }
 
-    static let paddingRange: ClosedRange<CGFloat> = 0.5...2.0
-    /// The padding factor, `paddingRange`, default 1 (the look luftig always had); every padding in `Padding` is a base value times this.
+    static let paddingRange: ClosedRange<CGFloat> = 0.0...2.0
+    /// The padding factor, `paddingRange`, default 1 (the look luftig always had), 0 = no padding at all; every padding in `Padding` is a base value times this.
     static var padding: CGFloat {
         get {
             guard let n = number(forKey: paddingKey), n.isFinite else { return 1 }

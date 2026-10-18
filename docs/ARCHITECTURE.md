@@ -56,7 +56,7 @@ Sources/luftig/
                                         container of its own; every control applies live and is saved; observes EditorPreferences.didChange
   SingleInstance.swift                  one running luftig: a second process of the bundle id (a second copy of the bundle, `open -n`) takes the 'odoc' Apple event itself, hands the
                                         files to the instance running longest (NSWorkspace.open withApplicationAt:), activates it and quits before it shows anything
-  Padding.swift                         ONE factor (Settings > Layout > Padding, 0.5 ... 2, default 1) in two layers, rounded to whole points with floors: the WINDOW frame
+  Padding.swift                         ONE factor (Settings > Layout > Padding, 0 ... 2, default 1; 0 = no padding anywhere) in two layers, rounded to whole points: the WINDOW frame
                                         (`window`, 12 pt at 1x, on all four sides: EditorViewController.windowPaddingConstraints) and the padding inside each panel - the
                                         text's insets (ReadableColumnController.minInset / verticalInset) and the extra air on its right (trailingExtra), the outline's margin /
                                         top inset, the word count's height / margin, the syntax bar's height; NOT padding: the outline's width, the indent per level, fonts, the

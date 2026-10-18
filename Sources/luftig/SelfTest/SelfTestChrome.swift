@@ -326,7 +326,10 @@ extension SelfTestScenarios {
             t.equal(host.view.bounds.height - inRoot(host.wordCount).maxY, 12, "the word count row starts 12 pt below the top edge")
             t.equal(inRoot(host.syntaxBar).minY, 12, "the syntax bar ends 12 pt above the bottom edge")
             let gapBefore = host.syntaxBar.stack.spacing
-            t.check(Padding(factor: 0.5).textInsetHorizontal >= DecorationMetrics.bandOutset + 4, "padding 0.5: the horizontal inset keeps room for the bands")
+            t.equal(Padding(factor: 0).textInsetHorizontal, 0, "padding 0: no inset at all")
+            t.equal(Padding(factor: 0).window, 0, "padding 0: no window frame")
+            t.equal(Padding(factor: 0).barHeight, Padding.barContentHeight, "padding 0: the bar is as tall as its symbols")
+            t.equal(Padding(factor: 0).wordCountHeight, Padding.wordCountContentHeight, "padding 0: the word count row is as tall as its line")
             let rowBefore = host.outline.table.rect(ofRow: 0).height
             let containerBefore = tv.textContainer!.size.width
             EditorPreferences.padding = 2
@@ -336,16 +339,20 @@ extension SelfTestScenarios {
             t.equal(host.outline.table.rect(ofRow: 0).height, rowBefore, "padding 2: the outline's row height does NOT change (it has a slider of its own)")
             t.check(tv.textContainer!.size.width < containerBefore, "padding 2: the text container is narrower (left inset and the right extra both grew: \(Int(containerBefore)) -> \(Int(tv.textContainer!.size.width)) pt)")
             t.check(abs(Double(tv.textContainerInset.width + tv.textContainer!.size.width + host.padding.textTrailingExtra + tv.textContainerInset.width) - Double(tv.frame.width)) < 1.5, "padding 2: inset + container + inset + extra = the text view's width (the extra air is on the right)")
-            t.equal(inRoot(host.syntaxBar).height, 80, "padding 2: the syntax bar is 80 pt tall")
-            t.equal(inRoot(host.wordCount).height, 44, "padding 2: the word count row is 44 pt")
+            t.equal(inRoot(host.syntaxBar).height, Padding.barContentHeight + 44, "padding 2: the syntax bar is its content plus 44 pt")
+            t.equal(inRoot(host.wordCount).height, Padding.wordCountContentHeight + 12, "padding 2: the word count row is its line plus 12 pt")
             t.equal(host.outline.scroll.contentInsets.top, 40, "padding 2: the outline's top inset is 40 pt")
             t.equal(inRoot(host.outline).minX, 24, "padding 2: the window's frame is 24 pt")
             t.equal(host.syntaxBar.stack.spacing, gapBefore, "padding 2: the gaps between the bar's elements do NOT change")
-            EditorPreferences.padding = 0.5
+            EditorPreferences.padding = 0
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
-            t.equal(tv.textContainerInset.height, 10, "padding 0.5: vertical inset 10 pt")
-            t.equal(inRoot(host.syntaxBar).height, 24, "padding 0.5: the bar keeps its minimum of 24 pt")
+            t.equal(tv.textContainerInset.height, 0, "padding 0: no vertical inset")
+            t.equal(tv.textContainerInset.width, 0, "padding 0: no horizontal inset (readable width is on, but the window is narrower than the column)")
+            t.equal(inRoot(host.syntaxBar).height, Padding.barContentHeight, "padding 0: the bar is \(Int(Padding.barContentHeight)) pt, its content")
+            t.equal(inRoot(host.outline).minX, 0, "padding 0: the outline touches the window's edge")
+            t.equal(host.view.bounds.height - inRoot(host.wordCount).maxY, 0, "padding 0: the word count row touches the top edge")
+            t.equal(host.outline.scroll.contentInsets.top, 0, "padding 0: no inset above the outline")
             EditorPreferences.padding = 1
             await t.spin(10)
             host.view.layoutSubtreeIfNeeded()
