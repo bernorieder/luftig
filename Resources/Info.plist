@@ -1,54 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  luftig Info.plist - copied verbatim into luftig.app/Contents/Info.plist by Scripts/build-app.sh.
-
-  * CFBundleIdentifier is a placeholder (reverse-DNS, "local" = not a registered domain). CHANGE IT to your own
-    (e.g. com.yourname.luftig) before you distribute or notarise the app. It keys UserDefaults, the Open Recent
-    list, saved window state, Launch Services records and TCC (privacy) grants.
-  * NSDocumentClass is MODULE-QUALIFIED: the SwiftPM module (target name) is "luftig", so the class is
-    "luftig.MarkdownDocument". Xcode's $(PRODUCT_MODULE_NAME) is not expanded by the shell build script.
-  * No usage-description keys, no entitlements, no iCloud/ubiquity keys: nothing here can trigger a permission
-    prompt by itself.
--->
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleExecutable</key>
-	<string>luftig</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.bernorieder.luftig</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>luftig</string>
 	<key>CFBundleDisplayName</key>
 	<string>luftig</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.productivity</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © luftig contributors</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
-	<!-- NSDocument disables both while a document has unsaved changes or an autosave is pending -->
-	<key>NSSupportsAutomaticTermination</key>
-	<true/>
-	<key>NSSupportsSuddenTermination</key>
-	<true/>
-
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -66,17 +23,6 @@
 			<string>luftig.MarkdownDocument</string>
 		</dict>
 		<dict>
-			<!-- Rarer Markdown extensions that macOS does not tag as Markdown. Declared by EXTENSION only, on purpose: an exported
-			     type claiming them would change how every app sees those files and took the default away from other editors.
-			     Rank None, not Alternate: MEASURED, with equal ranks Launch Services breaks the tie in favour of the app that was
-			     run most recently, which made luftig the default for ".mkd" over the user's editor. None = never chosen by default;
-			     luftig still opens these files (File > Open, Open With > Other..., Get Info > Change All). -->
-			<key>CFBundleTypeName</key>
-			<string>Markdown Document (other extensions)</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>LSHandlerRank</key>
-			<string>None</string>
 			<key>CFBundleTypeExtensions</key>
 			<array>
 				<string>mkd</string>
@@ -86,6 +32,12 @@
 				<string>mdtxt</string>
 				<string>mdtext</string>
 			</array>
+			<key>CFBundleTypeName</key>
+			<string>Markdown Document (other extensions)</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
 			<key>NSDocumentClass</key>
 			<string>luftig.MarkdownDocument</string>
 		</dict>
@@ -104,29 +56,47 @@
 			<string>luftig.MarkdownDocument</string>
 		</dict>
 	</array>
-
-	<!--
-	  Markdown is declared as an IMPORTED type: this macOS already exports net.daringfireball.markdown (for .md and
-	  .markdown only), older systems may not. MEASURED on macOS 27: an imported declaration does NOT add extension tags to a
-	  type the system already exports - ".mkd" stayed an anonymous "dyn." type and luftig could not open it (the launch
-	  even blocked on an invisible error alert). The other extensions are therefore listed in the second document type above
-	  by extension. NEVER export a type of our own for them: an exported type changes how EVERY app sees those files; it made
-	  luftig (and its self-test build) the default for ".mkd" and took it from the user's editor. All document types are rank
-	  Alternate for the same reason: luftig appears in "Open With" and can be chosen in Get Info > Open with > Change All, but
-	  it never becomes anybody's default by itself. The first document type (Markdown) is the type of new documents:
-	  the Save panel proposes "Untitled.md".
-	-->
+	<key>CFBundleExecutable</key>
+	<string>luftig</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.bernorieder.luftig</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>luftig</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.1</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © luftig contributors</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<true/>
+	<key>NSSupportsSuddenTermination</key>
+	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>net.daringfireball.markdown</string>
-			<key>UTTypeDescription</key>
-			<string>Markdown Document</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.plain-text</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>Markdown Document</string>
+			<key>UTTypeIdentifier</key>
+			<string>net.daringfireball.markdown</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
