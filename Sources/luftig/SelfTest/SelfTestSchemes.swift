@@ -543,6 +543,7 @@ extension SelfTestScenarios {
 extension SelfTestScenarios {
     static let schemesImportScenarios: [SelfTest.Scenario] = [
         .init(name: "schemes-import", summary: "colour schemes from Base16 YAML files: both spellings parsed, the roles, light / dark, the import into Application Support, the list, the Settings popup, legibility, removal", run: { t in try await schemesImport(t) }),
+        .init(name: "schemes-custom", summary: "Settings > Colors: a custom scheme from seven colours - the starting points, the YAML round trip, the draft the editors show live, Save / Save as New / Revert / Delete, the legibility note, the contrast tables", run: { t in try await schemesCustom(t) }),
     ]
 
     static let base16DefaultDark = """
@@ -689,6 +690,163 @@ extension SelfTestScenarios {
             t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "... and the preference that named it reads as the default")
             EditorPreferences.colorSchemeID = "imported-default-light"
             t.equal(Palette.scheme.appearance, SchemeAppearance.light, "the light imported scheme forces the light appearance")
+        }
+    }
+}
+// MARK: - schemes-custom (CustomScheme: Settings > Colors)
+
+extension SelfTestScenarios {
+    @MainActor static func schemesCustom(_ t: SelfTest.T) async throws {
+        let savedScheme = EditorPreferences.colorSchemeID
+        defer {
+            ColorSchemes.draft = nil
+            EditorPreferences.colorSchemeID = savedScheme
+            Palette.apply(schemeID: EditorPreferences.colorSchemeID); ContrastWatcher.shared.override = nil
+            SchemeImport.directoryOverride = nil; ColorSchemes.reloadImported()
+        }
+        let dir = t.url("schemes-custom")
+        try? FileManager.default.removeItem(at: dir)
+        SchemeImport.directoryOverride = dir
+        ColorSchemes.reloadImported()
+        typealias R = CustomScheme.Role
+
+        // ---- starting points: a built-in theme's seven colours; the default scheme's palette (its light and its dark colours, as the palette has them)
+        let sol = SchemeSpec.all.first { $0.id == "solarized-dark" }!
+        let fromSol = CustomScheme.from(schemeID: "solarized-dark")
+        t.check(fromSol.name == sol.name && fromSol[.page] == sol.bg && fromSol[.text] == sol.fg && fromSol[.markers] == sol.comment && fromSol[.headings] == sol.heading
+                && fromSol[.accent] == sol.accent && fromSol[.links] == sol.link && fromSol[.code] == sol.literal, "from a built-in theme: its page, text, comment, heading, accent, link and inline-code colours")
+        Palette.apply(schemeID: ColorSchemes.defaultID)
+        for (dark, expected) in [(false, CustomScheme.luftigLight), (true, CustomScheme.luftigDark)] {
+            let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+            let palette: [(R, NSColor)] = [(.page, Palette.background), (.text, Palette.text), (.markers, Palette.marker), (.headings, Palette.heading), (.accent, Palette.accent), (.links, Palette.link), (.code, Palette.copper)]
+            // (the text colour is the system label colour, translucent: the custom scheme takes the swatch's opaque equivalent, not compared)
+            for (role, colour) in palette where role != .text {
+                let got = hex(rgba(colour, appearance)), want = String(format: "#%06x", expected[role])
+                t.equal(got, want, "the default scheme's \(dark ? "dark" : "light") \(role.title.lowercased()) colour is what a custom scheme starts from")
+            }
+        }
+        t.check(CustomScheme.from(schemeID: "no-such-scheme").name == "luftig", "an unknown id starts from the default scheme")
+
+        // ---- the YAML round trip: the file reads back through SchemeImport with the same roles, under the family Custom
+        var mine = CustomScheme(name: "My \"Scheme\"", colors: [0x202430, 0xE6E8EE, 0x7A8090, 0x8AB4F8, 0xC58AF9, 0x6BD3FF, 0xFFB86C])
+        t.equal(CustomScheme.cleanName(mine.name), "My Scheme", "quotes leave the name")
+        t.equal(CustomScheme.cleanName("  "), "Custom", "an empty name becomes Custom")
+        let yaml = mine.yaml()
+        guard let back = SchemeImport.spec(fromYAML: yaml, id: "x") else { t.check(false, "the written YAML parses as a Base16 scheme"); return }
+        t.check(back.family == CustomScheme.family && back.name == "My Scheme" && back.dark, "... family Custom (the luftig: custom line), the name, dark from the page")
+        t.check(back.bg == mine[.page] && back.fg == mine[.text] && back.comment == mine[.markers] && back.heading == mine[.headings] && back.accent == mine[.accent]
+                && back.link == mine[.links] && back.literal == mine[.code] && back.info == mine[.headings] && back.caret == mine[.text] && back.warn == CustomScheme.warn, "... the seven roles, the info banner (headings), the caret (text), the amber warning banner")
+        if case .opaque(let s) = back.selection { t.equal(s, mine.selectionHex, "... the selection: the accent at 30 % over the page") } else { t.check(false, "the selection is opaque base02") }
+        let spec = mine.spec(id: "x")
+        t.check(spec.bg == back.bg && spec.fg == back.fg && spec.comment == back.comment && spec.heading == back.heading && spec.accent == back.accent && spec.link == back.link
+                && spec.literal == back.literal && spec.warn == back.warn && spec.info == back.info && spec.caret == back.caret, "the draft's spec and the file's are the same colours")
+        t.check(yaml.contains("system: \"base16\"") && yaml.contains("  base0F: \"#7a8090\"") && yaml.contains("  base0A: \"#e8b33c\""), "the file is a Base16 scheme: 16 slots, the markers in base0F too, amber in base0A")
+        t.check(SchemeImport.spec(fromYAML: base16DefaultDark, id: "x")?.family == SchemeImport.family, "a file without the luftig line is Imported")
+
+        // ---- files: save, the id and the file name, the list, unique names, delete
+        mine.name = "My Scheme"
+        let id = try mine.save()
+        t.equal(id, "imported-custom-my-scheme", "the saved scheme's id (custom-<slug>.yaml)")
+        t.check(FileManager.default.fileExists(atPath: dir.appendingPathComponent("custom-my-scheme.yaml").path), "the file in the schemes folder")
+        t.check(ColorSchemes.all.contains { $0.id == id && $0.family == "Custom" && $0.appearance == .dark } && CustomScheme.isCustom(id) && !CustomScheme.isCustom("solarized-dark"), "listed under Custom, dark; isCustom")
+        t.equal(CustomScheme.uniqueName("My Scheme"), "My Scheme 2", "a taken name gets a number")
+        t.equal(CustomScheme.uniqueName("Solarized Dark"), "Solarized Dark 2", "... a built-in theme's name too")
+        t.equal(CustomScheme.uniqueName("Fresh"), "Fresh", "a free name stays")
+        var renamed = mine; renamed.name = "My Scheme B"
+        let id2 = try renamed.save(replacing: id)
+        t.check(id2 == "imported-custom-my-scheme-b" && !FileManager.default.fileExists(atPath: dir.appendingPathComponent("custom-my-scheme.yaml").path) && ColorSchemes.imported.count == 1, "saving under another name replacing the old one: a rename")
+        EditorPreferences.colorSchemeID = id2
+        t.equal(Palette.scheme.id, id2, "the preference takes a custom scheme")
+        t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#202430", "... the page is the chosen colour")
+        for hc in [false, true] {
+            ContrastWatcher.shared.override = hc
+            let r = contrastOfCurrentScheme(t, label: "custom \(hc ? "+ Increase contrast" : "normal")", appearance: NSAppearance(named: .darkAqua)!, variant: hc ? .darkHC : .dark)
+            t.check(r.failures == 0, "the custom scheme \(hc ? "+ Increase contrast" : "normal"): every text / surface pair legible (\(r.pairs) pairs, tightest \(r.tightest))")
+        }
+        ContrastWatcher.shared.override = nil
+        try CustomScheme.delete(id: id2)
+        t.check(ColorSchemes.imported.isEmpty && EditorPreferences.colorSchemeID == ColorSchemes.defaultID, "delete removes the file; the preference reads as the default")
+
+        // ---- the Settings window: the draft, Save, Save as New, Revert, Delete, the note
+        try await preservingSettings {
+            SettingsWindowController.headless = true
+            let c = SettingsWindowController.shared
+            c.present()
+            c.showScreen(.colors)
+            t.equal(c.screen, .colors, "the Colors screen")
+            t.check(c.screenControl.segmentCount == 4 && c.screenControl.label(forSegment: 3) == "Colors", "the fourth segment")
+            // from the default scheme: the wells show its light colours, nothing is dirty, the editors show the default
+            t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "set-up: the default scheme")
+            t.equal(c.customNameField.stringValue, "luftig", "the name field: the chosen scheme's name")
+            t.check(!c.revertSchemeButton.isEnabled && !c.deleteSchemeButton.isEnabled, "Revert and Delete disabled: nothing changed, not a custom scheme")
+            t.check(c.legibilityNoteLabel.stringValue.hasSuffix("Nothing was adjusted here."), "the note: the default scheme adjusts nothing: \(c.legibilityNoteLabel.stringValue.suffix(40))")
+            // a colour changed: the editors show the draft, the preference does not change, Revert is enabled
+            let pageWell = c.colorWells[R.page.rawValue]
+            pageWell.color = CustomScheme.color(0x101418)
+            c.colorWellChanged(pageWell)
+            t.equal(Palette.scheme.id, CustomScheme.draftID, "a changed well: the editors show the draft")
+            t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#101418", "... with the new page colour")
+            t.equal(Palette.scheme.appearance, SchemeAppearance.dark, "... dark now: the page is dark")
+            t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "... the preference is unchanged (the draft is never stored)")
+            t.check(c.draftDirty && c.revertSchemeButton.isEnabled, "... Revert enabled")
+            t.check(!ColorSchemes.all.contains { $0.id == CustomScheme.draftID }, "the draft is not in the list")
+            // light grey markers on the dark page would be unreadable: the note names them
+            let markersWell = c.colorWells[R.markers.rawValue]
+            markersWell.color = CustomScheme.color(0x303438)
+            c.colorWellChanged(markersWell)
+            t.check(c.legibilityNoteLabel.stringValue.contains("Adjusted here: markers"), "the note names the adjusted colour: \(c.legibilityNoteLabel.stringValue.suffix(40))")
+            // Revert: the draft is dropped, the editors show the chosen scheme
+            c.revertScheme(nil)
+            t.check(Palette.scheme.id == ColorSchemes.defaultID && !c.draftDirty && CustomScheme.hex(pageWell.color) == CustomScheme.from(schemeID: ColorSchemes.defaultID)[.page], "Revert: the default scheme again, the wells show its colours (for the current appearance)")
+            // Save from the default: a new custom scheme, chosen, the draft now edits it. (Every well set: the default's starting colours follow the appearance of
+            // the machine, and a light page with the dark palette's light text would be no light scheme.)
+            for (i, well) in c.colorWells.enumerated() { well.color = CustomScheme.color(CustomScheme.luftigLight.colors[i]); c.colorWellChanged(well) }
+            pageWell.color = CustomScheme.color(0xFFF8F0)
+            c.colorWellChanged(pageWell)
+            c.customNameField.stringValue = "Warm"
+            c.customNameChanged(c.customNameField)
+            t.check(c.saveDraft(asNew: false), "Save")
+            t.equal(EditorPreferences.colorSchemeID, "imported-custom-warm", "... the saved scheme is chosen")
+            t.check(Palette.scheme.id == "imported-custom-warm" && ColorSchemes.draft == nil, "... the editors show it (no draft)")
+            t.equal(hex(rgba(Palette.background, NSAppearance(named: .aqua)!)), "#fff8f0", "... with the saved page colour")
+            t.check(c.deleteSchemeButton.isEnabled && !c.revertSchemeButton.isEnabled && c.draftSource == "imported-custom-warm", "... Delete enabled, Revert not; the draft edits it")
+            let titles = c.schemePopup.menu?.items.map { $0.title } ?? []
+            t.check(titles.contains("Custom") && titles.contains("Warm") && c.schemePopup.selectedItem?.representedObject as? String == "imported-custom-warm", "the popup: a Custom section with it, selected")
+            // Save again with a change: the same scheme, rewritten
+            let headingsWell = c.colorWells[R.headings.rawValue]
+            headingsWell.color = CustomScheme.color(0x803000)
+            c.colorWellChanged(headingsWell)
+            t.check(c.saveDraft(asNew: false) && ColorSchemes.imported.count == 1 && EditorPreferences.colorSchemeID == "imported-custom-warm", "Save with a change: the same scheme (still one)")
+            t.equal(ColorSchemes.imported.first?.heading, 0x803000, "... with the new heading colour in its file")
+            // Save as New: a copy under a free name, chosen
+            t.check(c.saveDraft(asNew: true) && ColorSchemes.imported.count == 2 && EditorPreferences.colorSchemeID == "imported-custom-warm-2", "Save as New: a copy, Warm 2, chosen")
+            t.equal(c.customNameField.stringValue, "Warm 2", "... the name field shows it")
+            // choosing another scheme drops a dirty draft
+            pageWell.color = CustomScheme.color(0x000000)
+            c.colorWellChanged(pageWell)
+            t.equal(Palette.scheme.id, CustomScheme.draftID, "set-up: a dirty draft")
+            EditorPreferences.colorSchemeID = "imported-custom-warm"
+            t.check(Palette.scheme.id == "imported-custom-warm" && !c.draftDirty && ColorSchemes.draft == nil && c.customNameField.stringValue == "Warm", "choosing another scheme drops the draft; the wells show the chosen one")
+            // closing the window drops a dirty draft too
+            pageWell.color = CustomScheme.color(0x000000)
+            c.colorWellChanged(pageWell)
+            c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+            t.check(Palette.scheme.id == "imported-custom-warm" && !c.draftDirty, "closing the window drops the draft")
+            // Restore Defaults while a draft is shown: the draft stays what the editors show
+            pageWell.color = CustomScheme.color(0x000000)
+            c.colorWellChanged(pageWell)
+            c.restoreDefaults(nil)
+            t.check(EditorPreferences.colorSchemeID == ColorSchemes.defaultID && !c.draftDirty, "Restore Defaults chooses the default: the draft is dropped (a new choice)")
+            // Delete: the scheme's file goes, the default is chosen
+            EditorPreferences.colorSchemeID = "imported-custom-warm-2"
+            t.equal(c.draftSource, "imported-custom-warm-2", "set-up: editing Warm 2")
+            c.deleteScheme(nil)
+            t.check(ColorSchemes.imported.count == 1 && !FileManager.default.fileExists(atPath: dir.appendingPathComponent("custom-warm-2.yaml").path) && EditorPreferences.colorSchemeID == ColorSchemes.defaultID, "Delete: the file is gone, the default is chosen")
+            t.check(!c.deleteSchemeButton.isEnabled, "... Delete disabled again")
+            // the remaining custom scheme passes the contrast tables (light)
+            EditorPreferences.colorSchemeID = "imported-custom-warm"
+            let r = contrastOfCurrentScheme(t, label: "custom light", appearance: NSAppearance(named: .aqua)!, variant: .light)
+            t.check(r.failures == 0, "the light custom scheme: every text / surface pair legible (\(r.pairs) pairs, tightest \(r.tightest))")
         }
     }
 }

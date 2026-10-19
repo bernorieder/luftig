@@ -86,6 +86,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     static let popupWidth: CGFloat = 300
     static let sliderWidth: CGFloat = 250
     static let sliderGap: CGFloat = 10
+    static let colorWellWidth: CGFloat = 44
     static let minContentWidth: CGFloat = 560
     static let defaultContentWidth: CGFloat = 700
     private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
@@ -156,15 +157,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let continueListsNoteLabel = NSTextField(labelWithString: "")
     let reloadPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     let reloadNoteLabel = NSTextField(labelWithString: "")
-    /// The screens: General, Text and Layout; the segmented control under the preview switches, the choice is remembered.
-    enum Screen: Int, CaseIterable { case general = 0, text = 1, layout = 2
-        var title: String { self == .general ? "General" : self == .text ? "Text" : "Layout" }
+    // the Colors screen: a custom scheme from seven colours (ColorSchemesCustom.swift), edited as a draft the editors show live
+    let customNameField = NSTextField(string: "")
+    let colorWells: [NSColorWell] = CustomScheme.Role.allCases.map { _ in NSColorWell(style: .minimal) }
+    let legibilityNoteLabel = NSTextField(labelWithString: "")
+    let saveSchemeButton = NSButton(title: "Save", target: nil, action: nil)
+    let saveAsNewSchemeButton = NSButton(title: "Save as New", target: nil, action: nil)
+    let revertSchemeButton = NSButton(title: "Revert", target: nil, action: nil)
+    let deleteSchemeButton = NSButton(title: "Delete…", target: nil, action: nil)
+    /// The draft: what the wells and the name field show. Loaded from the chosen scheme (`draftLoadedFrom`); `draftSource` is the custom scheme Save overwrites
+    /// (nil: Save makes a new one); `draftDirty` once a colour or the name was changed (the editors then show the draft, `ColorSchemes.draft`).
+    private(set) var draft = CustomScheme.luftigLight
+    private(set) var draftLoadedFrom: String?
+    private(set) var draftSource: String?
+    private(set) var draftDirty = false
+    /// The screens: General, Text, Layout and Colors; the segmented control under the preview switches, the choice is remembered.
+    enum Screen: Int, CaseIterable { case general = 0, text = 1, layout = 2, colors = 3
+        var title: String { self == .general ? "General" : self == .text ? "Text" : self == .layout ? "Layout" : "Colors" }
     }
     static let screenKey = "LuftigSettingsScreen"
     let screenControl = NSSegmentedControl(labels: Screen.allCases.map { $0.title }, trackingMode: .selectOne, target: nil, action: nil)
     let generalScreen = NSView()
     let textScreen = NSView()
     let layoutScreen = NSView()
+    let colorsScreen = NSView()
     private(set) var screen: Screen = .general
 
     /// The families the two font popups offer (the code font: monospaced ones only).
@@ -347,6 +363,36 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         secondary(reloadNoteLabel)
         wrappingLabel(reloadNoteLabel, width: W.controlColumnWidth, lines: 2)             // (the longest of its three texts needs two lines)
 
+        // -- the Colors screen
+        customNameField.target = self; customNameField.action = #selector(customNameChanged(_:))
+        (customNameField.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true
+        customNameField.placeholderString = "Name"
+        customNameField.widthAnchor.constraint(equalToConstant: W.popupWidth).isActive = true
+        customNameField.setAccessibilityLabel("Scheme name")
+        let noteLabels: [NSTextField] = CustomScheme.Role.allCases.map { NSTextField(labelWithString: $0.note) }
+        var colorRows: [NSStackView] = []
+        for (i, well) in colorWells.enumerated() {
+            let role = CustomScheme.Role.allCases[i]
+            well.target = self; well.action = #selector(colorWellChanged(_:))
+            well.isContinuous = true
+            well.tag = i
+            well.setAccessibilityLabel("\(role.title) colour")
+            secondary(noteLabels[i])
+            fixedLabel(noteLabels[i], width: W.controlColumnWidth - W.colorWellWidth - 10, font: noteLabels[i].font)
+            well.widthAnchor.constraint(equalToConstant: W.colorWellWidth).isActive = true
+            let row = NSStackView(views: [well, noteLabels[i]])
+            row.orientation = .horizontal; row.alignment = .centerY; row.spacing = 10
+            colorRows.append(row)
+        }
+        for (button, action, name) in [(saveSchemeButton, #selector(saveScheme(_:)), "Save the scheme"), (saveAsNewSchemeButton, #selector(saveSchemeAsNew(_:)), "Save the scheme as a new one"),
+                                       (revertSchemeButton, #selector(revertScheme(_:)), "Revert the scheme"), (deleteSchemeButton, #selector(deleteScheme(_:)), "Delete the scheme")] {
+            button.target = self; button.action = action; button.bezelStyle = .rounded; button.setAccessibilityLabel(name)
+        }
+        let schemeButtonsRow = NSStackView(views: [saveSchemeButton, saveAsNewSchemeButton, revertSchemeButton, deleteSchemeButton])
+        schemeButtonsRow.orientation = .horizontal; schemeButtonsRow.spacing = 6
+        secondary(legibilityNoteLabel)
+        wrappingLabel(legibilityNoteLabel, width: W.controlColumnWidth, lines: 3)
+
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
         screenControl.setAccessibilityLabel("Settings screen")
@@ -396,7 +442,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
         let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
-        let labelWidth = ceil((generalLabels + textLabels + panesLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
+        let colorsLabels = (["Name:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + ["", "Legibility:"]).map { label($0) }
+        let labelWidth = ceil((generalLabels + textLabels + panesLabels + colorsLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
             grid.translatesAutoresizingMaskIntoConstraints = false
@@ -431,17 +478,23 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [panesLabels[5], outlineWrapCheckbox],
             [panesLabels[6], outlineSpacingRow],
         ])
+        let colorsGrid = makeGrid([[colorsLabels[0], customNameField]] + colorRows.enumerated().map { [colorsLabels[$0.offset + 1], $0.element] }
+                                  + [[colorsLabels[8], schemeButtonsRow], [colorsLabels[9], legibilityNoteLabel]])
+        colorsGrid.rowSpacing = 8                                                                              // ten rows: tighter than the other screens
+        colorsGrid.rowAlignment = .none
+        for i in 0..<colorsGrid.numberOfRows { colorsGrid.row(at: i).yPlacement = .center }
 
         let previewView = preview.scrollView
         previewView.translatesAutoresizingMaskIntoConstraints = false
 
         let content = SettingsContentView(frame: NSRect(x: 0, y: 0, width: W.defaultContentWidth, height: 700))
-        for screenView in [generalScreen, textScreen, layoutScreen] { screenView.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(screenView) }
+        for screenView in [generalScreen, textScreen, layoutScreen, colorsScreen] { screenView.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(screenView) }
         content.addSubview(previewView)
         content.addSubview(screenControl)
         generalScreen.addSubview(generalGrid)
         textScreen.addSubview(grid)
         layoutScreen.addSubview(panesGrid)
+        colorsScreen.addSubview(colorsGrid)
         content.addSubview(restoreButton)
         let m = W.margin
         NSLayoutConstraint.activate([
@@ -459,6 +512,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             layoutScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), layoutScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             generalScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
             generalScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), generalScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            colorsScreen.topAnchor.constraint(equalTo: screenControl.bottomAnchor, constant: 14),
+            colorsScreen.leadingAnchor.constraint(equalTo: content.leadingAnchor), colorsScreen.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            colorsGrid.topAnchor.constraint(equalTo: colorsScreen.topAnchor),
+            colorsGrid.centerXAnchor.constraint(equalTo: colorsScreen.centerXAnchor),
+            colorsGrid.leadingAnchor.constraint(greaterThanOrEqualTo: colorsScreen.leadingAnchor, constant: m),
+            colorsGrid.trailingAnchor.constraint(lessThanOrEqualTo: colorsScreen.trailingAnchor, constant: -m),
+            colorsGrid.bottomAnchor.constraint(equalTo: colorsScreen.bottomAnchor),
             generalGrid.topAnchor.constraint(equalTo: generalScreen.topAnchor),
             generalGrid.centerXAnchor.constraint(equalTo: generalScreen.centerXAnchor),
             generalGrid.leadingAnchor.constraint(greaterThanOrEqualTo: generalScreen.leadingAnchor, constant: m),
@@ -480,6 +540,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             restoreButton.topAnchor.constraint(greaterThanOrEqualTo: textScreen.bottomAnchor, constant: 18),
             restoreButton.topAnchor.constraint(greaterThanOrEqualTo: generalScreen.bottomAnchor, constant: 18),
             restoreButton.topAnchor.constraint(greaterThanOrEqualTo: layoutScreen.bottomAnchor, constant: 18),
+            restoreButton.topAnchor.constraint(greaterThanOrEqualTo: colorsScreen.bottomAnchor, constant: 18),
             restoreButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -m),
             restoreButton.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
         ])
@@ -492,7 +553,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         // (the button's FRAME is taller than the rectangle the constraints place - its alignment rect - by the room of its shadow and focus ring)
         let restoreHeight = restoreButton.alignmentRect(forFrame: NSRect(origin: .zero, size: restoreButton.fittingSize)).height
         let switchHeight = ceil(screenControl.fittingSize.height)
-        let tallest = max(grid.fittingSize.height, panesGrid.fittingSize.height, generalGrid.fittingSize.height)
+        let tallest = max(grid.fittingSize.height, panesGrid.fittingSize.height, generalGrid.fittingSize.height, colorsGrid.fittingSize.height)
         let height = ceil(m + W.previewHeight + 14 + switchHeight + 14 + tallest + 18 + restoreHeight + 18)
         window.setContentSize(NSSize(width: W.defaultContentWidth, height: height))
         window.contentMinSize = NSSize(width: W.minContentWidth, height: height)
@@ -508,6 +569,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         generalScreen.isHidden = sc != .general
         textScreen.isHidden = sc != .text
         layoutScreen.isHidden = sc != .layout
+        colorsScreen.isHidden = sc != .colors
         screenControl.selectedSegment = sc.rawValue
         UserDefaults.standard.set(sc.rawValue, forKey: SettingsWindowController.screenKey)
     }
@@ -522,10 +584,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         l.preferredMaxLayoutWidth = width
         l.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         l.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let font = l.font ?? NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
-        let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        // the height the field itself asks for `lines` lines (a formula from the font's metrics was 1 pt short per line: a third line was dropped)
+        let saved = l.stringValue
+        l.stringValue = Array(repeating: "Xg", count: lines).joined(separator: "\n")
+        let height = ceil(l.intrinsicContentSize.height)
+        l.stringValue = saved
         l.widthAnchor.constraint(equalToConstant: width).isActive = true
-        l.heightAnchor.constraint(equalToConstant: CGFloat(lines) * lineHeight + 2).isActive = true
+        l.heightAnchor.constraint(equalToConstant: height).isActive = true
     }
 
     /// A label that shows values: a fixed width whatever it says (it truncates, it never asks the layout for more), so the text can change without moving anything.
@@ -750,6 +815,140 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let padding = EditorPreferences.padding
         if trackedControl !== paddingSlider { paddingSlider.doubleValue = Double(padding) }
         paddingValueLabel.stringValue = "\(Int(padding)) pt"
+
+        syncColorsScreen()
+    }
+
+    // MARK: the Colors screen (the draft)
+
+    /// The draft follows the chosen scheme: a new choice drops the draft (the wells show the new scheme's colours); otherwise the draft stays, and stays what
+    /// the editors show (something may have applied the chosen scheme over it: Restore Defaults, the window opening again).
+    private func syncColorsScreen() {
+        let current = EditorPreferences.colorSchemeID
+        if draftLoadedFrom != current { loadDraft(from: current) }
+        else if ColorSchemes.draft != nil, Palette.scheme.id != CustomScheme.draftID { EditorPreferences.schemeDraftChanged() }
+        showDraft()
+    }
+
+    /// The draft from the scheme `id`: its colours and name, nothing changed yet. An applied draft is dropped: the editors show `id` again.
+    private func loadDraft(from id: String) {
+        draft = CustomScheme.from(schemeID: id)
+        draftLoadedFrom = id
+        draftSource = CustomScheme.isCustom(id) ? id : nil
+        draftDirty = false
+        if ColorSchemes.draft != nil {
+            ColorSchemes.draft = nil
+            if Palette.scheme.id == CustomScheme.draftID { EditorPreferences.schemeDraftChanged() }
+        }
+    }
+
+    /// The wells, the name, the buttons and the legibility note show the draft (and what the legibility step did to the colours in use).
+    private func showDraft() {
+        if customNameField.currentEditor() == nil { customNameField.stringValue = draft.name }
+        for (i, well) in colorWells.enumerated() where CustomScheme.hex(well.color) != draft.colors[i] { well.color = CustomScheme.color(draft.colors[i]) }
+        revertSchemeButton.isEnabled = draftDirty
+        deleteSchemeButton.isEnabled = draftSource != nil
+        let shown = ColorSchemes.colors(for: ColorSchemes.scheme(withID: EditorPreferences.activeSchemeID))
+        let adjusted = CustomScheme.adjustedRoles(of: shown)
+        legibilityNoteLabel.stringValue = SettingsWindowController.legibilityNote
+            + (adjusted.isEmpty ? " Nothing was adjusted here." : " Adjusted here: " + adjusted.map { $0.title.lowercased() }.joined(separator: ", ") + ".")
+    }
+    static let legibilityNote = "A colour that would be hard to read on the page or on a band (code, quote, table) is lightened or darkened just enough, as in every built-in scheme."
+
+    @objc func colorWellChanged(_ sender: NSColorWell) {
+        guard let role = CustomScheme.Role(rawValue: sender.tag) else { return }
+        let v = CustomScheme.hex(sender.color)
+        guard v != draft[role] else { return }
+        draft[role] = v
+        draftDirty = true
+        // coalesced: the colour panel sends a change for every pixel of a drag, and applying a draft rebuilds every window
+        #if LUFTIG_SELFTEST
+        if SettingsWindowController.headless { applyDraft(); return }
+        #endif
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(applyDraft), object: nil)
+        perform(#selector(applyDraft), with: nil, afterDelay: 0.02, inModes: [.common])
+    }
+    @objc func customNameChanged(_ sender: NSTextField) {
+        let n = CustomScheme.cleanName(sender.stringValue)
+        guard n != draft.name else { return }
+        draft.name = n
+        draftDirty = true
+        showDraft()
+    }
+    /// The editors show the draft.
+    @objc func applyDraft() {
+        ColorSchemes.draft = draft.spec(id: CustomScheme.draftID)
+        EditorPreferences.schemeDraftChanged()
+        showDraft()
+    }
+
+    @objc func saveScheme(_ sender: Any?) { saveDraft(asNew: false) }
+    @objc func saveSchemeAsNew(_ sender: Any?) { saveDraft(asNew: true) }
+    @objc func revertScheme(_ sender: Any?) {
+        loadDraft(from: EditorPreferences.colorSchemeID)
+        showDraft()
+    }
+
+    /// Save: the draft overwrites the custom scheme it came from, or - from a built-in or imported scheme - becomes a new one under a free name. Save as New: always a new
+    /// one under a free name ("Name 2" when the name is taken). The saved scheme is the chosen one afterwards. False (with an alert) when the file cannot be written.
+    @discardableResult
+    func saveDraft(asNew: Bool) -> Bool {
+        if customNameField.currentEditor() != nil { draft.name = CustomScheme.cleanName(customNameField.stringValue) }
+        var s = draft
+        let replacing = asNew ? nil : draftSource
+        if replacing == nil { s.name = CustomScheme.uniqueName(s.name) }
+        do {
+            let id = try s.save(replacing: replacing)
+            ColorSchemes.draft = nil
+            draftDirty = false
+            draftLoadedFrom = nil                                                   // the sync loads the draft afresh, from the file
+            populateSchemePopup()
+            EditorPreferences.colorSchemeID = id
+            EditorPreferences.colorSchemesReloaded()                                // (the same id saved with other colours: the colours in use are the file's now)
+            syncFromPreferences()
+            return true
+        } catch {
+            let alert = NSAlert(error: error)
+            #if LUFTIG_SELFTEST
+            lastImportError = error
+            if SettingsWindowController.headless { return false }
+            #endif
+            if let w = window, w.isVisible { alert.beginSheetModal(for: w) } else { alert.runModal() }
+            return false
+        }
+    }
+
+    /// Delete…: the custom scheme the draft came from, after a confirmation; the default scheme is used afterwards.
+    @objc func deleteScheme(_ sender: Any?) {
+        guard let id = draftSource else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete the colour scheme “\(draft.name)”?"
+        alert.informativeText = "Its file is removed from the schemes folder. The default scheme is used afterwards."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in if r == .alertFirstButtonReturn { self?.deleteScheme(id: id) } }
+        #if LUFTIG_SELFTEST
+        if SettingsWindowController.headless { finish(.alertFirstButtonReturn); return }
+        #endif
+        if let w = window, w.isVisible { alert.beginSheetModal(for: w, completionHandler: finish) } else { finish(alert.runModal()) }
+    }
+    func deleteScheme(id: String) {
+        try? CustomScheme.delete(id: id)
+        ColorSchemes.draft = nil
+        draftDirty = false
+        draftLoadedFrom = nil
+        populateSchemePopup()
+        EditorPreferences.colorSchemeID = ColorSchemes.defaultID
+        EditorPreferences.colorSchemesReloaded()
+        syncFromPreferences()
+    }
+
+    /// Closing the window drops a draft that was not saved: the editors show the chosen scheme again.
+    func windowWillClose(_ notification: Notification) {
+        guard ColorSchemes.draft != nil else { return }
+        loadDraft(from: EditorPreferences.colorSchemeID)
+        showDraft()
     }
 
     /// The size field and its stepper show `size`, whatever has the keyboard focus.

@@ -64,8 +64,17 @@ enum ColorSchemes {
         cachedAll = nil
     }
 
-    /// The scheme with this id; an unknown id (a preference written by a newer version, a typo) gives the default.
-    static func scheme(withID id: String) -> ColorScheme { all.first { $0.id == id } ?? all[0] }
+    /// The scheme with this id; an unknown id (a preference written by a newer version, a typo) gives the default. The draft of Settings > Colors
+    /// (`CustomScheme.draftID`) resolves while there is one; it is not in `all` (never listed, never stored).
+    static func scheme(withID id: String) -> ColorScheme {
+        if id == CustomScheme.draftID, let d = draft { return d.scheme }
+        return all.first { $0.id == id } ?? all[0]
+    }
+
+    /// The scheme being edited in Settings > Colors (nil: none). Setting it drops the colours built for the previous draft.
+    nonisolated(unsafe) static var draft: SchemeSpec? {
+        didSet { resolvedCache.removeValue(forKey: CustomScheme.draftID) }
+    }
 
     // MARK: resolved colours
 
@@ -79,6 +88,7 @@ enum ColorSchemes {
         if let c = resolvedCache[scheme.id] { return c }
         let c: SchemeColors
         if scheme.id == defaultID { return defaultColors }
+        else if scheme.id == CustomScheme.draftID, let d = draft { c = SchemeBuilder.build(d, info: scheme) }
         else if let spec = SchemeSpec.all.first(where: { $0.id == scheme.id }) ?? imported.first(where: { $0.id == scheme.id }) { c = SchemeBuilder.build(spec, info: scheme) }
         else { c = colors(for: all[0]) }
         resolvedCache[scheme.id] = c

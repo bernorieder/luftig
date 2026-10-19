@@ -447,7 +447,16 @@ enum EditorPreferences {
     /// The imported schemes were read again (an import, the Settings window opening): the scheme in use is applied afresh - it may have been rebuilt
     /// from a changed file, or its file may be gone (the default then) - and every window follows. The setter alone would not do it: the id is unchanged.
     static func colorSchemesReloaded() {
-        Palette.apply(schemeID: colorSchemeID)
+        Palette.apply(schemeID: activeSchemeID)
+        post()
+    }
+
+    /// The scheme the editors show: the draft of Settings > Colors while there is one (never stored), else the chosen scheme.
+    static var activeSchemeID: String { ColorSchemes.draft != nil ? CustomScheme.draftID : colorSchemeID }
+
+    /// Settings > Colors changed or dropped the draft: the editors follow (the palette switches, every window rebuilds).
+    static func schemeDraftChanged() {
+        Palette.apply(schemeID: activeSchemeID)
         post()
     }
 

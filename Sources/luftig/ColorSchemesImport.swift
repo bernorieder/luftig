@@ -105,7 +105,9 @@ enum SchemeImport {
         let bg = c[0x00]!
         let dark: Bool
         if let v = kv["variant"]?.lowercased(), v == "dark" || v == "light" { dark = v == "dark" } else { dark = ColorMath.luminance(ColorMath.rgb(hex: bg)) < 0.5 }
-        return SchemeSpec(id: id, name: name, family: family, dark: dark,
+        // a scheme made in Settings > Colors (ColorSchemesCustom.swift) carries `luftig: custom`: listed under "Custom", not "Imported"
+        let fam = kv[CustomScheme.yamlKey]?.lowercased() == CustomScheme.yamlValue ? CustomScheme.family : family
+        return SchemeSpec(id: id, name: name, family: fam, dark: dark,
                           bg: bg, fg: c[0x05]!, comment: c[0x03]!, heading: c[0x0D]!, accent: c[0x0E]!, link: c[0x0C]!, literal: c[0x0B]!,
                           warn: c[0x0A]!, info: c[0x0D]!, caret: c[0x05]!, selection: .opaque(c[0x02]!))
     }

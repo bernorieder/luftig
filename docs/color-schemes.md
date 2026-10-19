@@ -601,6 +601,20 @@ built-in theme (section 3 and 4: the same tints, surfaces and legibility step), 
 Base16 default dark scheme against them. Imported schemes are listed under the family "Imported" with ids `imported-<file name>`; a re-import of a file of the same name
 replaces the scheme; to remove one, delete its file ("Show Imported Schemes in Finder") - a preference that names a scheme whose file is gone reads as the default.
 
+### Your own scheme (Settings > Colors)
+
+`ColorSchemesCustom.swift`: `CustomScheme` holds seven colours (page, text, markers, headings, accent, links, inline code) and a name, and becomes a `SchemeSpec` with the same
+roles as an import (page -> bg, text -> fg and caret, markers -> comment, headings -> heading and the info banner, accent, link, inline code -> literal; the warning banner a fixed amber
+`#e8b33c`; the selection the accent at 30 % over the page; light or dark from the page's luminance). It is written as a Base16 YAML file into the imported schemes' folder
+(`custom-<slug>.yaml`, the seven colours spread over the 16 slots so that `SchemeImport` reads it back with the same roles, plus the line `luftig: custom`, which lists it under
+the family "Custom" instead of "Imported"), so a custom scheme is an imported scheme afterwards: id `imported-custom-<slug>`, built by the same code, the same contrast tables.
+While the Colors screen edits, the editors show a DRAFT: `ColorSchemes.draft` is a spec under the id `custom-draft`, which `scheme(withID:)` and `colors(for:)` resolve but
+`all` never lists and `EditorPreferences.colorSchemeID` never accepts (it is applied with `EditorPreferences.schemeDraftChanged()`, not stored). Save writes the file and
+chooses the saved scheme; Save as New writes a copy under a free name (`CustomScheme.uniqueName`: "Name 2" when the name is taken by any scheme); Revert, closing the window
+and choosing another scheme drop the draft; Delete removes the file and chooses the default. The note under the pickers names the roles the legibility step moved, read
+from `SchemeColors.report` (the rows whose colour in use differs from the authentic one). `schemes-custom` checks all of it: the starting colours (a built-in theme's; the
+default scheme's light and dark palettes), the YAML round trip, the draft, the four buttons, the note, and a saved scheme against the contrast tables.
+
 ## 8. Not verified
 
 * The look in a real key window (the active selection is simulated in the offscreen renders, as before) and with the real "Increase contrast" switch (the self-test overrides the

@@ -175,7 +175,7 @@ Not included on purpose: snippets, a preview pane, a toolbar.
 
 **luftig > Settings…** (⌘,) opens one small window, a singleton: choosing it again raises the same window, ⌘W closes it, its position is remembered. Every control
 applies at once to every open window and is saved (no OK / Apply buttons); the live preview at the top is styled by the real theme and lexer with the
-current settings, so fonts, size, spacing, column and colours change in front of you. Under the preview a switch chooses between three screens, remembered:
+current settings, so fonts, size, spacing, column and colours change in front of you. Under the preview a switch chooses between four screens, remembered:
 **General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window. When the file changes
 on disk: reload automatically - the default, see below -, ask first - a banner offers Reload from Disk / Keep My Version for every change and nothing is
 merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
@@ -187,7 +187,8 @@ bar and the text above it (the bar sits under the text column, centred below the
 and the gaps above the text viewport and the outline are always the same, so scrolled text starts level with the outline's first entry; the thing
 the name is about (the gaps between the bar's symbols and the outline's row height stay put) -, their font ("Same as text font" unless you choose one),
 their size (9 - 20 pt), their opacity (25 - 100 %, less = fainter), whether long headings in the outline wrap onto further lines instead of being
-cut off, and the outline's row height (Outline spacing, 1 - 2.5 × the outline font's height; it is not part of the padding). 
+cut off, and the outline's row height (Outline spacing, 1 - 2.5 × the outline font's height; it is not part of the padding), and **Colors**, a scheme of your own
+(see "Your own scheme" under Color schemes below).
 
 Two things about windows: opening a file takes every other document out of full screen first, so the new one opens on the desktop and not inside
 another file's full-screen Space (where macOS used to put it as a tab or as a second full-screen window); and there is only ever one luftig running:
@@ -195,7 +196,7 @@ a second copy that gets launched (a build next to the installed one, `open -n`) 
 
 | Setting | What it does |
 |---|---|
-| Color scheme | The luftig default (follows the system appearance) or a scheme from a well-known editor theme, grouped by family, each with a colour swatch. A scheme that is always light or always dark also sets the window's appearance (title bar, scrollers, find bar). **Import Scheme…** at the end of the list takes a [Base16](https://github.com/tinted-theming/schemes) YAML file (hundreds of editor themes come in that format, both the classic `scheme:` / `base00:` spelling and the newer `palette:` one): the file is copied into `~/Library/Application Support/local.luftig.luftig/Color Schemes/`, the scheme appears under "Imported" and gets the same legibility treatment as the built-in ones (page base00, text base05, markers base03, headings base0D, accent base0E, links base0C, inline code base0B, selection base02; light or dark from the file's variant or the page's luminance). To remove one, delete its file ("Show Imported Schemes in Finder") |
+| Color scheme | The luftig default (follows the system appearance) or a scheme from a well-known editor theme, grouped by family, each with a colour swatch. A scheme that is always light or always dark also sets the window's appearance (title bar, scrollers, find bar). **Import Scheme…** at the end of the list takes a [Base16](https://github.com/tinted-theming/schemes) YAML file (hundreds of editor themes come in that format, both the classic `scheme:` / `base00:` spelling and the newer `palette:` one): the file is copied into `~/Library/Application Support/com.bernorieder.luftig/Color Schemes/`, the scheme appears under "Imported" and gets the same legibility treatment as the built-in ones (page base00, text base05, markers base03, headings base0D, accent base0E, links base0C, inline code base0B, selection base02; light or dark from the file's variant or the page's luminance). To remove one, delete its file ("Show Imported Schemes in Finder") |
 | Text font | Any installed family (each name shown in its own typeface); the default is the system font (SF Pro). Bold, italic and semibold come from the family's own faces; a family that lacks them gets a slanted (`.obliqueness`) or stroked (`.strokeWidth`) version of the regular face |
 | Code font | Monospaced families only (inline code, code blocks, tables, front matter); the default is the system monospaced font (SF Mono). A tab in code is 4 columns of this font |
 | Size | 9 to 40 pt: stepper and field. The same value as ⌘+ ⌘− ⌘0; headings (1.6 / 1.35 / 1.18 / 1.05 times) and code (0.9 times) keep their ratios |
@@ -236,6 +237,22 @@ The palettes are the authors' own (hex values only, no code), read from their si
 | Tokyo Night | dark | enkia, values of folke's tokyonight.nvim (Apache-2.0) |
 
 ![All colour schemes](screenshots/schemes/contact-sheet.png)
+
+#### Your own scheme (Settings > Colors)
+
+The **Colors** screen makes a scheme from seven colours: the page, the text (also code blocks and the insertion point), the syntax markers (quotes, link destinations and
+comments are mixed from them), the headings (and footnote labels and the info banner), the accent (list markers, checked tasks, the quote bar, the selection tint), links and
+inline code. The pickers start from the scheme in use - a built-in theme, an imported file or one of your own - so a small variation of a theme is a matter of changing one
+colour. Every change shows at once in every window (and in the preview above), but it is a draft: nothing is saved and the chosen scheme is unchanged until **Save** - which
+overwrites the custom scheme the draft came from, or makes a new one when it came from a built-in or imported scheme - or **Save as New**, which always makes a new one under a
+free name ("Warm 2" when "Warm" exists). **Revert** drops the draft, and so does closing the window or choosing another scheme in the popup; **Delete…** removes the custom
+scheme in use. The name field names the scheme (quotes are dropped; an empty name becomes "Custom").
+
+Light or dark follows the page colour's lightness: a dark page makes a dark scheme, and the window's appearance follows. The scheme is built exactly like every other one, so a
+colour that would be hard to read on the page or on a band (code, quote, table) is lightened or darkened just enough; the note at the bottom of the screen names the colours this
+happened to, so a picked colour that looks a little different in the text is explained. A custom scheme is a Base16 YAML file in the same folder as the imported ones
+(`custom-<name>.yaml`, with the line `luftig: custom`; "Show Imported Schemes in Finder" opens the folder), listed under the family "Custom", valid for other programs that read
+Base16 schemes, and importable again on another machine.
 
 The Settings window under a forced scheme: a dark scheme on a light system, and the window follows it.
 
