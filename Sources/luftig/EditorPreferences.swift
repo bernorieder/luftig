@@ -444,6 +444,13 @@ enum EditorPreferences {
 
     // MARK: all at once
 
+    /// The imported schemes were read again (an import, the Settings window opening): the scheme in use is applied afresh - it may have been rebuilt
+    /// from a changed file, or its file may be gone (the default then) - and every window follows. The setter alone would not do it: the id is unchanged.
+    static func colorSchemesReloaded() {
+        Palette.apply(schemeID: colorSchemeID)
+        post()
+    }
+
     /// Settings > Restore Defaults: every preference of the Settings window back to its default, ONE notification.
     static func restoreDefaults() {
         for key in allKeys { defaults.removeObject(forKey: key) }

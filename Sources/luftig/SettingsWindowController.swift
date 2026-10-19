@@ -201,9 +201,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         #if LUFTIG_SELFTEST
         presentCount += 1
         #endif
-        // scheme files may have been added or removed by hand since the window was built
+        // scheme files may have been added or removed by hand since the window was built (the scheme in use among them: applied afresh, or the default)
         ColorSchemes.reloadImported()
         populateSchemePopup()
+        EditorPreferences.colorSchemesReloaded()
         syncFromPreferences()
         #if LUFTIG_SELFTEST
         if SettingsWindowController.headless { _ = window; return }
@@ -616,6 +617,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             let id = try SchemeImport.importFile(url)
             populateSchemePopup()
             EditorPreferences.colorSchemeID = id
+            EditorPreferences.colorSchemesReloaded()           // (the scheme in use imported again with other colours: the id is the same, the colours are not)
             syncFromPreferences()
             return true
         } catch {

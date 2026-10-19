@@ -665,6 +665,23 @@ extension SelfTestScenarios {
             t.check(c.importScheme(from: changed), "importing a changed file of the same name")
             t.equal(ColorSchemes.all.filter { $0.family == "Imported" }.count, 2, "... replaces the scheme (still two)")
             t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#202020", "... with the new colours in use")
+            // the scheme IN USE imported again from a file with other colours (the same id): the colours in use change at once (found in use: they did not)
+            EditorPreferences.colorSchemeID = "imported-default-light"
+            t.equal(Palette.scheme.id, "imported-default-light", "set-up: the light scheme is in use")
+            let lighter = t.write(base16DefaultLight.replacingOccurrences(of: "base00: \"#f8f8f8\"", with: "base00: \"#f0f0f0\""), to: "schemes-src/default-light.yaml")
+            t.check(c.importScheme(from: lighter), "importing the scheme in use again")
+            t.equal(hex(rgba(Palette.background, NSAppearance(named: .aqua)!)), "#f0f0f0", "... the editors show its new page colour at once")
+            // two different schemes downloaded under the SAME file name are two schemes (the file is stored under the scheme's name)
+            let other = t.write(base16DefaultDark.replacingOccurrences(of: "scheme: \"Default Dark\"", with: "scheme: \"Night Owl\""), to: "schemes-src/download.yaml")
+            t.check(c.importScheme(from: other) && EditorPreferences.colorSchemeID == "imported-night-owl", "a download.yaml with the scheme Night Owl: id imported-night-owl")
+            let other2 = t.write(base16DefaultLight.replacingOccurrences(of: "name: \"Default Light\"", with: "name: \"Day Owl\""), to: "schemes-src/download.yaml")
+            t.check(c.importScheme(from: other2) && EditorPreferences.colorSchemeID == "imported-day-owl", "another download.yaml with the scheme Day Owl: id imported-day-owl")
+            t.check(ColorSchemes.all.contains { $0.id == "imported-night-owl" } && FileManager.default.fileExists(atPath: dir.appendingPathComponent("night-owl.yaml").path), "... Night Owl is still there, stored as night-owl.yaml")
+            // the file of the scheme in use deleted by hand, then the Settings window opened: the default is applied
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent("day-owl.yaml"))
+            c.present()
+            t.equal(Palette.scheme.id, ColorSchemes.defaultID, "the scheme in use deleted by hand: opening the Settings applies the default")
+            EditorPreferences.colorSchemeID = "imported-default-dark"
             // removed by hand: gone at the next look, the preference reads as the default
             try? FileManager.default.removeItem(at: dir.appendingPathComponent("default-dark.yaml"))
             ColorSchemes.reloadImported()

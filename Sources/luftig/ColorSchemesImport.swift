@@ -38,9 +38,15 @@ enum SchemeImport {
 
     // MARK: files
 
-    /// Every scheme file in the folder, by file name; files that are not Base16 schemes are skipped.
+    /// Every scheme file in the folder, by file name; files that are not Base16 schemes are skipped. Files imported under the placeholder bundle
+    /// identifier of the first builds (local.luftig.luftig) are taken over once, when the new folder does not exist yet.
     static func load() -> [SchemeSpec] {
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return [] }
+        let fm = FileManager.default
+        if directoryOverride == nil, !fm.fileExists(atPath: directory.path) {
+            let old = directory.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(EditorPreferences.placeholderDomain).appendingPathComponent("Color Schemes")
+            if fm.fileExists(atPath: old.path) { try? fm.createDirectory(at: directory.deletingLastPathComponent(), withIntermediateDirectories: true); try? fm.copyItem(at: old, to: directory) }
+        }
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else { return [] }
         var out: [SchemeSpec] = []
         for name in names.sorted() where fileExtensions.contains((name as NSString).pathExtension.lowercased()) {
             let url = directory.appendingPathComponent(name)
@@ -69,15 +75,17 @@ enum SchemeImport {
     @discardableResult
     static func importFile(_ url: URL) throws -> String {
         let text = try String(contentsOf: url, encoding: .utf8)
-        let schemeID = id(forFile: url)
-        guard spec(fromYAML: text, id: schemeID) != nil else { throw ImportError.notAScheme }
+        guard let parsed = spec(fromYAML: text, id: id(forFile: url)) else { throw ImportError.notAScheme }
+        // the file is stored under the SCHEME's name, not the download's: two schemes downloaded as "scheme.yaml" are two schemes, and the id
+        // (from the stored name) tells them apart; the same scheme imported again replaces itself
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
-        let target = directory.appendingPathComponent(url.lastPathComponent)
+        let stem = String(id(forFile: URL(fileURLWithPath: parsed.name + ".yaml")).dropFirst(idPrefix.count))
+        let target = directory.appendingPathComponent(stem + ".yaml")
         if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
         try text.write(to: target, atomically: true, encoding: .utf8)
         ColorSchemes.reloadImported()
-        return schemeID
+        return id(forFile: target)
     }
 
     // MARK: parsing
