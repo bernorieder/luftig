@@ -10,8 +10,8 @@
 #   xcrun notarytool store-credentials luftig --apple-id <apple id> --team-id <team id>      (NOTARY_PROFILE below),
 # and `gh` logged in. The tree must be clean and on main; the tag v<version> must not exist yet.
 #
-# What comes out: build.noindex/release/luftig-<version>.dmg (signed, notarized, stapled; the app inside is too), and a GitHub release
-# "luftig <version>" with the DMG attached and the DMG's SHA-256 in the notes (the Homebrew cask needs it).
+# What comes out: build.noindex/release/luftig-<version>.dmg (signed, notarized, stapled; the app inside is too), a GitHub release
+# "luftig <version>" with the DMG attached and the DMG's SHA-256 in the notes, and the Homebrew tap's cask (../homebrew-luftig) bumped and pushed.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -100,3 +100,13 @@ NOTES="$OUT/notes.md"
 } > "$NOTES"
 gh release create "$TAG" "$DMG" --title "luftig $VERSION" --notes-file "$NOTES"
 echo "==> done: $(gh release view "$TAG" --json url --jq .url)"
+
+# ---- the Homebrew tap (bernorieder/homebrew-luftig, checked out next to this repository): the cask's version and checksum, committed and pushed
+TAP="${LUFTIG_TAP_DIR:-$ROOT/../homebrew-luftig}"
+if [ -f "$TAP/Casks/luftig.rb" ]; then
+  echo "==> homebrew tap"
+  sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" "$TAP/Casks/luftig.rb"
+  (cd "$TAP" && git add Casks/luftig.rb && git commit -q -m "luftig $VERSION" && git push -q origin main && echo "    cask updated to $VERSION")
+else
+  echo "    (no tap checkout at $TAP: update Casks/luftig.rb in bernorieder/homebrew-luftig by hand: version $VERSION, sha256 $SHA)"
+fi
