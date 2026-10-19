@@ -319,7 +319,8 @@ extension SelfTestScenarios {
             c.present(); c.showScreen(.text)                 // (the Text screen, whatever an earlier scenario left showing)
             guard let w = c.window, let content = w.contentView else { t.check(false, "no settings window"); return }
             t.note("Settings window: title bar \(lookTitleBarHeight(w)) pt, content \(lookRect(content.frame))")
-            let controls: [(String, NSView)] = [("scheme pop-up", c.schemePopup), ("text font pop-up", c.bodyFontPopup), ("code font pop-up", c.codeFontPopup), ("size field", c.sizeField), ("size stepper", c.sizeStepper),
+            // (the scheme pop-up is on the Colors screen, hidden behind this one at the same place: not among the Text screen's controls)
+            let controls: [(String, NSView)] = [("text font pop-up", c.bodyFontPopup), ("code font pop-up", c.codeFontPopup), ("size field", c.sizeField), ("size stepper", c.sizeStepper),
                                                 ("spacing slider", c.spacingSlider), ("spacing value", c.spacingValueLabel), ("automatic checkbox", c.spacingAutomaticCheckbox), ("limit checkbox", c.limitCheckbox),
                                                 ("width slider", c.widthSlider), ("width value", c.widthValueLabel), ("width note", c.widthNoteLabel), ("restore button", c.restoreButton)]
             for (appearance, aname) in [(NSAppearance.Name.aqua, "light"), (NSAppearance.Name.darkAqua, "dark")] {

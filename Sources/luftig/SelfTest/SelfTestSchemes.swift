@@ -775,10 +775,17 @@ extension SelfTestScenarios {
             c.showScreen(.colors)
             t.equal(c.screen, .colors, "the Colors screen")
             t.check(c.screenControl.segmentCount == 4 && c.screenControl.label(forSegment: 3) == "Colors", "the fourth segment")
-            // from the default scheme: the wells show its light colours, nothing is dirty, the editors show the default
+            // from the default scheme: the wells show its colours, nothing is dirty, the editors show the default
             t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "set-up: the default scheme")
-            t.equal(c.customNameField.stringValue, "luftig", "the name field: the chosen scheme's name")
-            t.check(!c.revertSchemeButton.isEnabled && !c.deleteSchemeButton.isEnabled, "Revert and Delete disabled: nothing changed, not a custom scheme")
+            t.equal(c.draft.name, "luftig", "the draft: the chosen scheme's name")
+            t.check(c.schemePopup.superview != nil && c.schemePopup.isDescendant(of: c.colorsScreen), "the scheme popup is on the Colors screen")
+            t.check(!c.revertSchemeButton.isEnabled && !c.deleteSchemeButton.isEnabled && !c.saveSchemeButton.isEnabled, "Revert, Delete and Save disabled: nothing changed, not a custom scheme (only Save as New…)")
+            // an open editor restyles with the draft: every colour, not only the page (the page is read from the palette at draw time; the text colours live in the theme)
+            let (doc, editor, _) = try await openEditor(t, text: "# Heading\n\nText with `code` and a [link](https://x).\n", name: "custom-live.md")
+            defer { doc.close() }
+            EditorViewController.visibilityOverride = true
+            defer { EditorViewController.visibilityOverride = nil }
+            let rebuildsBefore = editor.themeRebuildCount
             t.check(c.legibilityNoteLabel.stringValue.hasSuffix("Nothing was adjusted here."), "the note: the default scheme adjusts nothing: \(c.legibilityNoteLabel.stringValue.suffix(40))")
             // a colour changed: the editors show the draft, the preference does not change, Revert is enabled
             let pageWell = c.colorWells[R.page.rawValue]
@@ -789,6 +796,14 @@ extension SelfTestScenarios {
             t.equal(Palette.scheme.appearance, SchemeAppearance.dark, "... dark now: the page is dark")
             t.equal(EditorPreferences.colorSchemeID, ColorSchemes.defaultID, "... the preference is unchanged (the draft is never stored)")
             t.check(c.draftDirty && c.revertSchemeButton.isEnabled, "... Revert enabled")
+            t.equal(editor.themeRebuildCount, rebuildsBefore + 1, "... the open editor rebuilt its theme once (the draft's colours, under the unchanged id)")
+            let headingsWell0 = c.colorWells[R.headings.rawValue]
+            headingsWell0.color = CustomScheme.color(0xFF8800)
+            c.colorWellChanged(headingsWell0)
+            t.equal(editor.themeRebuildCount, rebuildsBefore + 2, "a heading colour: rebuilt again")
+            if let colour = editor.textView.textStorage?.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor {
+                t.equal(hex(rgba(colour, NSAppearance(named: .darkAqua)!)), String(format: "#%06x", CustomScheme.hex(Palette.heading)), "... the heading in the text has the draft's heading colour (as the legibility step left it)")
+            } else { t.check(false, "the heading has a foreground colour") }
             t.check(!ColorSchemes.all.contains { $0.id == CustomScheme.draftID }, "the draft is not in the list")
             // light grey markers on the dark page would be unreadable: the note names them
             let markersWell = c.colorWells[R.markers.rawValue]
@@ -798,35 +813,39 @@ extension SelfTestScenarios {
             // Revert: the draft is dropped, the editors show the chosen scheme
             c.revertScheme(nil)
             t.check(Palette.scheme.id == ColorSchemes.defaultID && !c.draftDirty && CustomScheme.hex(pageWell.color) == CustomScheme.from(schemeID: ColorSchemes.defaultID)[.page], "Revert: the default scheme again, the wells show its colours (for the current appearance)")
-            // Save from the default: a new custom scheme, chosen, the draft now edits it. (Every well set: the default's starting colours follow the appearance of
-            // the machine, and a light page with the dark palette's light text would be no light scheme.)
+            // Save as New from the default: a new custom scheme under the given name, chosen, the draft now edits it. (Every well set: the default's starting
+            // colours follow the appearance of the machine, and a light page with the dark palette's light text would be no light scheme.)
             for (i, well) in c.colorWells.enumerated() { well.color = CustomScheme.color(CustomScheme.luftigLight.colors[i]); c.colorWellChanged(well) }
             pageWell.color = CustomScheme.color(0xFFF8F0)
             c.colorWellChanged(pageWell)
-            c.customNameField.stringValue = "Warm"
-            c.customNameChanged(c.customNameField)
-            t.check(c.saveDraft(asNew: false), "Save")
+            t.check(!c.saveDraft(), "Save does nothing for a scheme that is not custom")
+            t.check(c.saveDraftAsNew(named: "Warm"), "Save as New… with a name")
             t.equal(EditorPreferences.colorSchemeID, "imported-custom-warm", "... the saved scheme is chosen")
             t.check(Palette.scheme.id == "imported-custom-warm" && ColorSchemes.draft == nil, "... the editors show it (no draft)")
             t.equal(hex(rgba(Palette.background, NSAppearance(named: .aqua)!)), "#fff8f0", "... with the saved page colour")
-            t.check(c.deleteSchemeButton.isEnabled && !c.revertSchemeButton.isEnabled && c.draftSource == "imported-custom-warm", "... Delete enabled, Revert not; the draft edits it")
+            t.check(c.saveSchemeButton.isEnabled && c.deleteSchemeButton.isEnabled && !c.revertSchemeButton.isEnabled && c.draftSource == "imported-custom-warm", "... Save and Delete enabled, Revert not; the draft edits it")
+            t.equal(c.draft.name, "Warm", "... the draft carries its name")
             let titles = c.schemePopup.menu?.items.map { $0.title } ?? []
             t.check(titles.contains("Custom") && titles.contains("Warm") && c.schemePopup.selectedItem?.representedObject as? String == "imported-custom-warm", "the popup: a Custom section with it, selected")
             // Save again with a change: the same scheme, rewritten
             let headingsWell = c.colorWells[R.headings.rawValue]
             headingsWell.color = CustomScheme.color(0x803000)
             c.colorWellChanged(headingsWell)
-            t.check(c.saveDraft(asNew: false) && ColorSchemes.imported.count == 1 && EditorPreferences.colorSchemeID == "imported-custom-warm", "Save with a change: the same scheme (still one)")
+            t.check(c.saveDraft() && ColorSchemes.imported.count == 1 && EditorPreferences.colorSchemeID == "imported-custom-warm", "Save with a change: the same scheme (still one)")
             t.equal(ColorSchemes.imported.first?.heading, 0x803000, "... with the new heading colour in its file")
-            // Save as New: a copy under a free name, chosen
-            t.check(c.saveDraft(asNew: true) && ColorSchemes.imported.count == 2 && EditorPreferences.colorSchemeID == "imported-custom-warm-2", "Save as New: a copy, Warm 2, chosen")
-            t.equal(c.customNameField.stringValue, "Warm 2", "... the name field shows it")
+            // Save as New with a taken name: a copy under a free one, chosen
+            t.check(c.saveDraftAsNew(named: "Warm") && ColorSchemes.imported.count == 2 && EditorPreferences.colorSchemeID == "imported-custom-warm-2", "Save as New… with a taken name: a copy, Warm 2, chosen")
+            t.equal(c.draft.name, "Warm 2", "... the draft carries it")
+            t.check(c.saveDraftAsNew(named: "  ") && EditorPreferences.colorSchemeID == "imported-custom-custom", "Save as New… with an empty name: Custom")
+            c.deleteScheme(nil)
+            t.equal(ColorSchemes.imported.count, 2, "... (deleted again)")
+            EditorPreferences.colorSchemeID = "imported-custom-warm-2"
             // choosing another scheme drops a dirty draft
             pageWell.color = CustomScheme.color(0x000000)
             c.colorWellChanged(pageWell)
             t.equal(Palette.scheme.id, CustomScheme.draftID, "set-up: a dirty draft")
             EditorPreferences.colorSchemeID = "imported-custom-warm"
-            t.check(Palette.scheme.id == "imported-custom-warm" && !c.draftDirty && ColorSchemes.draft == nil && c.customNameField.stringValue == "Warm", "choosing another scheme drops the draft; the wells show the chosen one")
+            t.check(Palette.scheme.id == "imported-custom-warm" && !c.draftDirty && ColorSchemes.draft == nil && c.draft.name == "Warm", "choosing another scheme drops the draft; the wells show the chosen one")
             // closing the window drops a dirty draft too
             pageWell.color = CustomScheme.color(0x000000)
             c.colorWellChanged(pageWell)

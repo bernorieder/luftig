@@ -34,9 +34,9 @@ luftig > Settings… (⌘,) is one small window with a live preview and four scr
 | Screen | What is there |
 |---|---|
 | General | Open files in tabs. When the file changes on disk: reload automatically, ask first, never reload. Continue lists on Return |
-| Text | Colour scheme (and Import Scheme…), text font, code font, size, line spacing (or automatic), column width |
+| Text | Text font, code font, size, line spacing (or automatic), column width |
 | Layout | Which elements are shown (outline, syntax bar, word count, reading time), the padding (one number for every gap), the panes' font, size and opacity, outline wrapping and spacing |
-| Colors | A scheme of your own: seven colour pickers, starting from the scheme in use, shown live in every window; Save, Save as New, Revert, Delete; a note names the colours the legibility step adjusted |
+| Colors | The colour scheme (and Import Scheme…), and a scheme of your own: seven colour pickers starting from the scheme in use, shown live in every window; Save as New… asks for a name, Save overwrites a custom scheme, Revert, Delete; a note names the colours the legibility step adjusted |
 
 ## Install
 

@@ -90,9 +90,10 @@ Sources/luftig/
   ColorSchemesImport.swift              schemes from Base16 / Base24 YAML files in ~/Library/Application Support/<bundle id>/Color Schemes (both spellings of the format;
                                         the 16 slots mapped onto the roles; light / dark from the variant or the page's luminance), listed under the family "Imported",
                                         built like every theme; ColorSchemes.all reads the folder once and again after an import or when the Settings window opens
-  ColorSchemesCustom.swift              CustomScheme: the user's own scheme from seven colours (Settings > Colors), stored as a Base16 YAML file in the same folder with the
-                                        line `luftig: custom` (listed under "Custom"); the draft the editors show live (ColorSchemes.draft, id custom-draft, never stored),
-                                        Save / Save as New (a free name) / Delete, the roles the legibility step moved (from SchemeColors.report)
+  ColorSchemesCustom.swift              CustomScheme: the user's own scheme from seven colours (Settings > Colors, which also holds the scheme popup), stored as a Base16 YAML
+                                        file in the same folder with the line `luftig: custom` (listed under "Custom"); the draft the editors show live (ColorSchemes.draft,
+                                        id custom-draft, never stored; editors rebuild on Palette.serial, not on the scheme id), Save (custom schemes only) / Save as New…
+                                        (asks for a name, made free) / Delete, the roles the legibility step moved (from SchemeColors.report)
   SettingsFontFactory.swift             ThemeSettings (what a Theme is built from), FontFactory (faces of any installed family via NSFontManager, cached) and FontFace
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation

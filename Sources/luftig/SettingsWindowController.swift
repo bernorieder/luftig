@@ -157,16 +157,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let continueListsNoteLabel = NSTextField(labelWithString: "")
     let reloadPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     let reloadNoteLabel = NSTextField(labelWithString: "")
-    // the Colors screen: a custom scheme from seven colours (ColorSchemesCustom.swift), edited as a draft the editors show live
-    let customNameField = NSTextField(string: "")
+    // the Colors screen: the scheme popup and a custom scheme from seven colours (ColorSchemesCustom.swift), edited as a draft the editors show live
     let colorWells: [NSColorWell] = CustomScheme.Role.allCases.map { _ in NSColorWell(style: .minimal) }
     let legibilityNoteLabel = NSTextField(labelWithString: "")
     let saveSchemeButton = NSButton(title: "Save", target: nil, action: nil)
-    let saveAsNewSchemeButton = NSButton(title: "Save as New", target: nil, action: nil)
+    let saveAsNewSchemeButton = NSButton(title: "Save as New…", target: nil, action: nil)
     let revertSchemeButton = NSButton(title: "Revert", target: nil, action: nil)
     let deleteSchemeButton = NSButton(title: "Delete…", target: nil, action: nil)
-    /// The draft: what the wells and the name field show. Loaded from the chosen scheme (`draftLoadedFrom`); `draftSource` is the custom scheme Save overwrites
-    /// (nil: Save makes a new one); `draftDirty` once a colour or the name was changed (the editors then show the draft, `ColorSchemes.draft`).
+    /// The draft: what the wells show. Loaded from the chosen scheme (`draftLoadedFrom`); `draftSource` is the custom scheme Save overwrites (nil: not a custom
+    /// scheme, Save is disabled, Save as New makes one); `draftDirty` once a colour was changed (the editors then show the draft, `ColorSchemes.draft`).
     private(set) var draft = CustomScheme.luftigLight
     private(set) var draftLoadedFrom: String?
     private(set) var draftSource: String?
@@ -364,11 +363,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         wrappingLabel(reloadNoteLabel, width: W.controlColumnWidth, lines: 2)             // (the longest of its three texts needs two lines)
 
         // -- the Colors screen
-        customNameField.target = self; customNameField.action = #selector(customNameChanged(_:))
-        (customNameField.cell as? NSTextFieldCell)?.sendsActionOnEndEditing = true
-        customNameField.placeholderString = "Name"
-        customNameField.widthAnchor.constraint(equalToConstant: W.popupWidth).isActive = true
-        customNameField.setAccessibilityLabel("Scheme name")
         let noteLabels: [NSTextField] = CustomScheme.Role.allCases.map { NSTextField(labelWithString: $0.note) }
         var colorRows: [NSStackView] = []
         for (i, well) in colorWells.enumerated() {
@@ -440,9 +434,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         // the grids share the label column width, so the controls of every screen start at the same x
         let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
-        let textLabels = ["Color scheme:", "Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
+        let textLabels = ["Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
-        let colorsLabels = (["Name:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + ["", "Legibility:"]).map { label($0) }
+        let colorsLabels = (["Color scheme:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + ["", "Legibility:"]).map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels + colorsLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
@@ -462,12 +456,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [generalLabels[2], continueListsColumn],
         ])
         let grid = makeGrid([
-            [textLabels[0], schemePopup],
-            [textLabels[1], bodyFontPopup],
-            [textLabels[2], codeFontPopup],
-            [textLabels[3], sizeRow],
-            [textLabels[4], spacingRow],
-            [textLabels[5], widthColumn],
+            [textLabels[0], bodyFontPopup],
+            [textLabels[1], codeFontPopup],
+            [textLabels[2], sizeRow],
+            [textLabels[3], spacingRow],
+            [textLabels[4], widthColumn],
         ])
         let panesGrid = makeGrid([
             [panesLabels[0], showRow],
@@ -478,7 +471,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [panesLabels[5], outlineWrapCheckbox],
             [panesLabels[6], outlineSpacingRow],
         ])
-        let colorsGrid = makeGrid([[colorsLabels[0], customNameField]] + colorRows.enumerated().map { [colorsLabels[$0.offset + 1], $0.element] }
+        let colorsGrid = makeGrid([[colorsLabels[0], schemePopup]] + colorRows.enumerated().map { [colorsLabels[$0.offset + 1], $0.element] }
                                   + [[colorsLabels[8], schemeButtonsRow], [colorsLabels[9], legibilityNoteLabel]])
         colorsGrid.rowSpacing = 8                                                                              // ten rows: tighter than the other screens
         colorsGrid.rowAlignment = .none
@@ -844,9 +837,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
     /// The wells, the name, the buttons and the legibility note show the draft (and what the legibility step did to the colours in use).
     private func showDraft() {
-        if customNameField.currentEditor() == nil { customNameField.stringValue = draft.name }
         for (i, well) in colorWells.enumerated() where CustomScheme.hex(well.color) != draft.colors[i] { well.color = CustomScheme.color(draft.colors[i]) }
         revertSchemeButton.isEnabled = draftDirty
+        saveSchemeButton.isEnabled = draftSource != nil                       // only a custom scheme is overwritten; a built-in or imported one is saved as a new one
         deleteSchemeButton.isEnabled = draftSource != nil
         let shown = ColorSchemes.colors(for: ColorSchemes.scheme(withID: EditorPreferences.activeSchemeID))
         let adjusted = CustomScheme.adjustedRoles(of: shown)
@@ -868,13 +861,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(applyDraft), object: nil)
         perform(#selector(applyDraft), with: nil, afterDelay: 0.02, inModes: [.common])
     }
-    @objc func customNameChanged(_ sender: NSTextField) {
-        let n = CustomScheme.cleanName(sender.stringValue)
-        guard n != draft.name else { return }
-        draft.name = n
-        draftDirty = true
-        showDraft()
-    }
     /// The editors show the draft.
     @objc func applyDraft() {
         ColorSchemes.draft = draft.spec(id: CustomScheme.draftID)
@@ -882,21 +868,50 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         showDraft()
     }
 
-    @objc func saveScheme(_ sender: Any?) { saveDraft(asNew: false) }
-    @objc func saveSchemeAsNew(_ sender: Any?) { saveDraft(asNew: true) }
+    @objc func saveScheme(_ sender: Any?) { saveDraft() }
     @objc func revertScheme(_ sender: Any?) {
         loadDraft(from: EditorPreferences.colorSchemeID)
         showDraft()
     }
 
-    /// Save: the draft overwrites the custom scheme it came from, or - from a built-in or imported scheme - becomes a new one under a free name. Save as New: always a new
-    /// one under a free name ("Name 2" when the name is taken). The saved scheme is the chosen one afterwards. False (with an alert) when the file cannot be written.
+    /// Save as New…: asks for a name (proposed: the draft's, made free), then saves a new custom scheme under it.
+    @objc func saveSchemeAsNew(_ sender: Any?) {
+        #if LUFTIG_SELFTEST
+        if SettingsWindowController.headless { saveDraftAsNew(named: draft.name); return }
+        #endif
+        let alert = NSAlert()
+        alert.messageText = "Save as New Scheme"
+        alert.informativeText = "The name of the new colour scheme:"
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = CustomScheme.uniqueName(draft.name)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in
+            guard let self else { return }
+            if r == .alertFirstButtonReturn { self.saveDraftAsNew(named: field.stringValue) }
+        }
+        if let w = window, w.isVisible { alert.beginSheetModal(for: w, completionHandler: finish) } else { finish(alert.runModal()) }
+    }
+
+    /// Save: the draft overwrites the custom scheme it came from (only then: the button is disabled for a built-in or imported scheme). False (with an
+    /// alert) when the file cannot be written.
     @discardableResult
-    func saveDraft(asNew: Bool) -> Bool {
-        if customNameField.currentEditor() != nil { draft.name = CustomScheme.cleanName(customNameField.stringValue) }
+    func saveDraft() -> Bool {
+        guard let source = draftSource else { return false }
+        return write(draft, replacing: source)
+    }
+
+    /// Save as New: a new custom scheme with the draft's colours under `name` (made free: "Name 2" when the name is taken), chosen afterwards.
+    @discardableResult
+    func saveDraftAsNew(named name: String) -> Bool {
         var s = draft
-        let replacing = asNew ? nil : draftSource
-        if replacing == nil { s.name = CustomScheme.uniqueName(s.name) }
+        s.name = CustomScheme.uniqueName(name)
+        return write(s, replacing: nil)
+    }
+
+    private func write(_ s: CustomScheme, replacing: String?) -> Bool {
         do {
             let id = try s.save(replacing: replacing)
             ColorSchemes.draft = nil

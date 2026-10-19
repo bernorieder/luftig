@@ -14,7 +14,8 @@ import AppKit
 // draft and the saved scheme are the same colours).
 //
 // Settings > Colors edits a DRAFT (`ColorSchemes.draft`): the editors show it live under the id `custom-draft`, which is never stored in the preferences;
-// Save writes the file and selects the saved scheme, Save as New writes a copy under a free name, Revert drops the draft, closing the window drops it too.
+// Save (a custom scheme only) writes the file and selects the saved scheme, Save as New… asks for a name and writes a copy under it (made free), Revert drops the
+// draft, closing the window drops it too.
 
 struct CustomScheme: Equatable {
     enum Role: Int, CaseIterable {

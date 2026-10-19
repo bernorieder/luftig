@@ -74,15 +74,16 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
 
     private(set) var theme: Theme
     private(set) var fontSize: CGFloat
-    /// The colour scheme the editor was last styled with (a change rebuilds the theme: its cached attribute dictionaries hold the colours).
-    private var appliedSchemeID: String
+    /// The palette (`Palette.serial`: the built colours of a scheme) the editor was last styled with; another one rebuilds the theme (its cached attribute
+    /// dictionaries hold the colours). The serial, not the scheme id: the draft of Settings > Colors changes colours under one id, and so does a re-import.
+    private var appliedPaletteSerial: Int
     /// True while this editor's window carries an appearance that the colour scheme forced (a dark scheme on a light system and vice versa).
     private var schemeForcedAppearance = false
 
     override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
         let settings = EditorPreferences.themeSettings
         fontSize = settings.baseSize
-        appliedSchemeID = EditorPreferences.colorSchemeID
+        appliedPaletteSerial = Palette.serial
         theme = Theme(settings: settings)
         syntaxBar = SyntaxBarView(theme: theme)
         #if LUFTIG_SELFTEST
@@ -274,8 +275,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         // wait. The drag ends with one more broadcast (`EditorPreferences.endAdjusting`) that finds this editor out of date and brings it up to date.
         if EditorPreferences.isAdjusting && isHiddenFromUser { return }
         let settings = EditorPreferences.themeSettings
-        let scheme = EditorPreferences.colorSchemeID
-        if settings != theme.settings || scheme != appliedSchemeID { rebuildTheme(settings: settings, schemeID: scheme) }
+        let serial = Palette.serial
+        if settings != theme.settings || serial != appliedPaletteSerial { rebuildTheme(settings: settings, paletteSerial: serial) }
         column.maxColumnWidth = EditorPreferences.columnWidth
         column.isEnabled = EditorPreferences.readableWidth
         applyChromeVisibility()
@@ -302,14 +303,14 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
 
     /// New settings (size, fonts, line spacing, colour scheme): new Theme (new attribute caches), base attributes over the whole text (so NOT yet
     /// styled text changes too), restyle what is visible, keep the line at the top of the window where it was.
-    private func rebuildTheme(settings: ThemeSettings, schemeID: String) {
+    private func rebuildTheme(settings: ThemeSettings, paletteSerial: Int) {
         themeRebuildCount += 1
         fontSize = settings.baseSize
         let anchor = ViewportAnchor.capture(in: textView)
         theme = Theme(settings: settings)
         provider.theme = theme
-        if schemeID != appliedSchemeID {
-            appliedSchemeID = schemeID
+        if paletteSerial != appliedPaletteSerial {
+            appliedPaletteSerial = paletteSerial
             applySchemeColors()
         }
         if storage.length == 0 {

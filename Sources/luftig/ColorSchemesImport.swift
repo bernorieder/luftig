@@ -1,7 +1,7 @@
 import AppKit
 
 // ColorSchemesImport.swift - colour schemes from files: Base16 (and Base24) YAML, the format hundreds of editor themes are published in
-// (https://github.com/tinted-theming/schemes). Settings > Text > Color scheme > Import Scheme… copies the file into
+// (https://github.com/tinted-theming/schemes). Settings > Colors > Color scheme > Import Scheme… copies the file into
 // ~/Library/Application Support/<bundle id>/Color Schemes/ and the scheme appears in the list under the family "Imported", built like every
 // built-in theme (ColorSchemesBuild.swift: the same roles, tints and legibility step). To remove one, delete its file there (the popup has
 // "Show Imported Schemes in Finder"); a scheme whose file is gone reads as the default.

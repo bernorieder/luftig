@@ -179,7 +179,7 @@ current settings, so fonts, size, spacing, column and colours change in front of
 **General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window. When the file changes
 on disk: reload automatically - the default, see below -, ask first - a banner offers Reload from Disk / Keep My Version for every change and nothing is
 merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
-(everything about the text) and **Layout**, for the elements around the text (outline, syntax bar, word count, reading time): which of them are shown (the
+(the fonts, size, spacing and column) and **Layout**, for the elements around the text (outline, syntax bar, word count, reading time): which of them are shown (the
 View menu's switches, the other way to reach them; the reading time shares the word count's row), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
 window's edge and the panels on the left and the right, between the outline and the text, and between the text and the sides of its own panel; the
 vertical gaps are half of it - the frame at the top and the bottom, between the word count row and the outline and text below it, between the syntax
@@ -187,7 +187,7 @@ bar and the text above it (the bar sits under the text column, centred below the
 and the gaps above the text viewport and the outline are always the same, so scrolled text starts level with the outline's first entry; the thing
 the name is about (the gaps between the bar's symbols and the outline's row height stay put) -, their font ("Same as text font" unless you choose one),
 their size (9 - 20 pt), their opacity (25 - 100 %, less = fainter), whether long headings in the outline wrap onto further lines instead of being
-cut off, and the outline's row height (Outline spacing, 1 - 2.5 × the outline font's height; it is not part of the padding), and **Colors**, a scheme of your own
+cut off, and the outline's row height (Outline spacing, 1 - 2.5 × the outline font's height; it is not part of the padding), and **Colors**, the colour scheme and a scheme of your own
 (see "Your own scheme" under Color schemes below).
 
 Two things about windows: opening a file takes every other document out of full screen first, so the new one opens on the desktop and not inside
@@ -240,13 +240,13 @@ The palettes are the authors' own (hex values only, no code), read from their si
 
 #### Your own scheme (Settings > Colors)
 
-The **Colors** screen makes a scheme from seven colours: the page, the text (also code blocks and the insertion point), the syntax markers (quotes, link destinations and
+The **Colors** screen holds the colour scheme popup and makes a scheme from seven colours: the page, the text (also code blocks and the insertion point), the syntax markers (quotes, link destinations and
 comments are mixed from them), the headings (and footnote labels and the info banner), the accent (list markers, checked tasks, the quote bar, the selection tint), links and
 inline code. The pickers start from the scheme in use - a built-in theme, an imported file or one of your own - so a small variation of a theme is a matter of changing one
-colour. Every change shows at once in every window (and in the preview above), but it is a draft: nothing is saved and the chosen scheme is unchanged until **Save** - which
-overwrites the custom scheme the draft came from, or makes a new one when it came from a built-in or imported scheme - or **Save as New**, which always makes a new one under a
-free name ("Warm 2" when "Warm" exists). **Revert** drops the draft, and so does closing the window or choosing another scheme in the popup; **Delete…** removes the custom
-scheme in use. The name field names the scheme (quotes are dropped; an empty name becomes "Custom").
+colour. Every change shows at once in every window (and in the preview above), but it is a draft: nothing is saved and the chosen scheme is unchanged until **Save as New…**,
+which asks for a name and makes a new scheme under it ("Warm 2" when "Warm" exists; quotes are dropped, an empty name becomes "Custom"), or **Save**, which overwrites the
+custom scheme the draft came from and is only enabled for one - a built-in or imported scheme is never changed, a variation of it is saved as new. **Revert** drops the draft,
+and so does closing the window or choosing another scheme in the popup; **Delete…** removes the custom scheme in use.
 
 Light or dark follows the page colour's lightness: a dark page makes a dark scheme, and the window's appearance follows. The scheme is built exactly like every other one, so a
 colour that would be hard to read on the page or on a band (code, quote, table) is lightened or darkened just enough; the note at the bottom of the screen names the colours this

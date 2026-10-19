@@ -37,13 +37,13 @@ final class SettingsPreview {
     private let column: ReadableColumnController
     /// The theme the text is styled with right now (rebuilt by `refresh()` when the preferences changed).
     private(set) var theme: Theme
-    private var appliedSchemeID: String
+    private var appliedPaletteSerial: Int
     private var forcedAppearance = false
 
     init() {
         let settings = EditorPreferences.themeSettings
         theme = Theme(settings: settings)
-        appliedSchemeID = EditorPreferences.colorSchemeID
+        appliedPaletteSerial = Palette.serial
         let stack = LuftigEditorFactory.make(frame: NSRect(x: 0, y: 0, width: 640, height: 340), theme: theme)
         scrollView = stack.scrollView
         textView = stack.textView
@@ -74,10 +74,10 @@ final class SettingsPreview {
     func refresh() -> Bool {
         applyPadding()
         var rebuilt = false
-        let settings = EditorPreferences.themeSettings, scheme = EditorPreferences.colorSchemeID
-        if settings != theme.settings || scheme != appliedSchemeID {
+        let settings = EditorPreferences.themeSettings, serial = Palette.serial
+        if settings != theme.settings || serial != appliedPaletteSerial {
             theme = Theme(settings: settings)
-            if scheme != appliedSchemeID { appliedSchemeID = scheme; applyColors() }
+            if serial != appliedPaletteSerial { appliedPaletteSerial = serial; applyColors() }
             restyle()
             rebuilt = true
         }
