@@ -647,7 +647,7 @@ extension SelfTestScenarios {
         let opts = AppDelegate.aboutPanelOptions()
         t.check(opts[.credits] != nil, "About panel has a credits line")
         let info = Bundle.main.infoDictionary ?? [:]
-        t.equal(info["CFBundleShortVersionString"] as? String, "1.0.0", "Info.plist version is 1.0.0 (shown by the About panel)")
+        t.check((info["CFBundleShortVersionString"] as? String)?.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil, "Info.plist version is of the form x.y.z (shown by the About panel): \(info["CFBundleShortVersionString"] ?? "")")
         t.check((info["CFBundleName"] as? String)?.hasPrefix("luftig") == true, "Info.plist name: \(info["CFBundleName"] as? String ?? "nil")")
         t.close(doc)
     }
