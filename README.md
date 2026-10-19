@@ -37,18 +37,24 @@ luftig > Settings… (⌘,) is one small window with a live preview and three sc
 | Text | Colour scheme (and Import Scheme…), text font, code font, size, line spacing (or automatic), column width |
 | Layout | Which elements are shown (outline, syntax bar, word count, reading time), the padding (one number for every gap), the panes' font, size and opacity, outline wrapping and spacing |
 
-## Build and install
+## Install
 
-MacOS 14 or later, Apple Silicon. Builds with the Xcode Command Line Tools alone (Swift 6 toolchain, no Xcode):
+Download `luftig-<version>.dmg` from the [latest release](https://github.com/bernorieder/luftig/releases/latest), open it and drag luftig to Applications. The app is signed with a Developer ID and notarized, so macOS opens it without a warning. macOS 14 or later, Apple Silicon.
+
+Homebrew: `brew install bernorieder/luftig/luftig` (a tap of its own until the app qualifies for the main cask repository).
+
+luftig never makes itself the default app for `.md`: Finder > Get Info > Open with > Change All does that.
+
+## Build from source
+
+Builds with the Xcode Command Line Tools alone (Swift 6 toolchain, no Xcode):
 
 ```sh
 Scripts/build-app.sh                            # release build -> build.noindex/luftig.app (ad-hoc signed, verified)
 cp -R build.noindex/luftig.app /Applications/   # install
 ```
 
-The signature is ad hoc, so macOS may ask once more for folder access after a rebuild; a copy that came through a browser or AirDrop needs
-System Settings > Privacy & Security > Open Anyway (or `xattr -dr com.apple.quarantine`). luftig never makes itself the default app for `.md`: Finder > Get Info
-> Open with > Change All does that.
+An ad-hoc build asks once more for folder access after every rebuild; the build folder is called `build.noindex` so that Spotlight skips it (otherwise the Finder's "Open With" lists two copies). `Scripts/release.sh` is what makes a release: sign with the Developer ID, notarize, staple, DMG, GitHub release.
 
 ## Technical choices
 
