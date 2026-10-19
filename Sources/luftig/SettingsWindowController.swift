@@ -159,7 +159,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let reloadNoteLabel = NSTextField(labelWithString: "")
     // the Colors screen: the scheme popup and a custom scheme from seven colours (ColorSchemesCustom.swift), edited as a draft the editors show live
     let colorWells: [NSColorWell] = CustomScheme.Role.allCases.map { _ in NSColorWell(style: .minimal) }
-    let legibilityNoteLabel = NSTextField(labelWithString: "")
     let saveSchemeButton = NSButton(title: "Save", target: nil, action: nil)
     let saveAsNewSchemeButton = NSButton(title: "Save as New…", target: nil, action: nil)
     let revertSchemeButton = NSButton(title: "Revert", target: nil, action: nil)
@@ -384,8 +383,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         }
         let schemeButtonsRow = NSStackView(views: [saveSchemeButton, saveAsNewSchemeButton, revertSchemeButton, deleteSchemeButton])
         schemeButtonsRow.orientation = .horizontal; schemeButtonsRow.spacing = 6
-        secondary(legibilityNoteLabel)
-        wrappingLabel(legibilityNoteLabel, width: W.controlColumnWidth, lines: 3)
 
         screenControl.target = self; screenControl.action = #selector(screenChanged(_:))
         screenControl.segmentStyle = .automatic
@@ -436,7 +433,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
         let textLabels = ["Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
-        let colorsLabels = (["Color scheme:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + ["", "Legibility:"]).map { label($0) }
+        let colorsLabels = (["Color scheme:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + [""]).map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels + colorsLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
         func makeGrid(_ rows: [[NSView]]) -> NSGridView {
             let grid = NSGridView(views: rows)
@@ -472,7 +469,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [panesLabels[6], outlineSpacingRow],
         ])
         let colorsGrid = makeGrid([[colorsLabels[0], schemePopup]] + colorRows.enumerated().map { [colorsLabels[$0.offset + 1], $0.element] }
-                                  + [[colorsLabels[8], schemeButtonsRow], [colorsLabels[9], legibilityNoteLabel]])
+                                  + [[colorsLabels[8], schemeButtonsRow]])
         colorsGrid.rowSpacing = 8                                                                              // ten rows: tighter than the other screens
         colorsGrid.rowAlignment = .none
         for i in 0..<colorsGrid.numberOfRows { colorsGrid.row(at: i).yPlacement = .center }
@@ -835,18 +832,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         }
     }
 
-    /// The wells, the name, the buttons and the legibility note show the draft (and what the legibility step did to the colours in use).
+    /// The wells and the buttons show the draft.
     private func showDraft() {
         for (i, well) in colorWells.enumerated() where CustomScheme.hex(well.color) != draft.colors[i] { well.color = CustomScheme.color(draft.colors[i]) }
         revertSchemeButton.isEnabled = draftDirty
         saveSchemeButton.isEnabled = draftSource != nil                       // only a custom scheme is overwritten; a built-in or imported one is saved as a new one
         deleteSchemeButton.isEnabled = draftSource != nil
-        let shown = ColorSchemes.colors(for: ColorSchemes.scheme(withID: EditorPreferences.activeSchemeID))
-        let adjusted = CustomScheme.adjustedRoles(of: shown)
-        legibilityNoteLabel.stringValue = SettingsWindowController.legibilityNote
-            + (adjusted.isEmpty ? " Nothing was adjusted here." : " Adjusted here: " + adjusted.map { $0.title.lowercased() }.joined(separator: ", ") + ".")
     }
-    static let legibilityNote = "A colour that would be hard to read on the page or on a band (code, quote, table) is lightened or darkened just enough, as in every built-in scheme."
 
     @objc func colorWellChanged(_ sender: NSColorWell) {
         guard let role = CustomScheme.Role(rawValue: sender.tag) else { return }

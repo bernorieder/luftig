@@ -607,14 +607,16 @@ replaces the scheme; to remove one, delete its file ("Show Imported Schemes in F
 roles as an import (page -> bg, text -> fg and caret, markers -> comment, headings -> heading and the info banner, accent, link, inline code -> literal; the warning banner a fixed amber
 `#e8b33c`; the selection the accent at 30 % over the page; light or dark from the page's luminance). It is written as a Base16 YAML file into the imported schemes' folder
 (`custom-<slug>.yaml`, the seven colours spread over the 16 slots so that `SchemeImport` reads it back with the same roles, plus the line `luftig: custom`, which lists it under
-the family "Custom" instead of "Imported"), so a custom scheme is an imported scheme afterwards: id `imported-custom-<slug>`, built by the same code, the same contrast tables.
+the family "Custom" instead of "Imported"), so a custom scheme is an imported scheme afterwards: id `imported-custom-<slug>`, built by the same code - except the legibility step: `SchemeSpec.adjustsForLegibility`
+is false for a custom scheme (set by `CustomScheme.spec` and by the importer for the `luftig: custom` line), and the builder then takes every role's base colour as it is, in
+the normal and the Increase-contrast variant, so the user's colours are used exactly as picked and the contrast tables do not apply.
 While the Colors screen edits, the editors show a DRAFT: `ColorSchemes.draft` is a spec under the id `custom-draft`, which `scheme(withID:)` and `colors(for:)` resolve but
 `all` never lists and `EditorPreferences.colorSchemeID` never accepts (it is applied with `EditorPreferences.schemeDraftChanged()`, not stored). The editors rebuild their theme
 when `Palette.serial` changes (not when the scheme id does: the draft and a re-import change colours under one id). Save as New… asks for a name and writes a new file under it
 made free (`CustomScheme.uniqueName`: "Name 2" when the name is taken by any scheme); Save overwrites the custom scheme the draft came from and is enabled for a custom scheme
-only; Revert, closing the window and choosing another scheme drop the draft; Delete removes the file and chooses the default. The note under the pickers names the roles the legibility step moved, read
-from `SchemeColors.report` (the rows whose colour in use differs from the authentic one). `schemes-custom` checks all of it: the starting colours (a built-in theme's; the
-default scheme's light and dark palettes), the YAML round trip, the draft, the four buttons, the note, and a saved scheme against the contrast tables.
+only; Revert, closing the window and choosing another scheme drop the draft; Delete removes the file and chooses the default. `schemes-custom` checks all of it: the
+starting colours (a built-in theme's; the default scheme's light and dark palettes), the YAML round trip, the draft, the four buttons, and that the colours in use are
+exactly the picked ones, normal and with Increase contrast.
 
 ## 8. Not verified
 

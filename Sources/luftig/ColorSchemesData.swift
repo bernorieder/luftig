@@ -32,6 +32,9 @@ struct SchemeSpec {
     let dark: Bool
     let bg, fg, comment, heading, accent, link, literal, warn, info, caret: UInt32
     let selection: Selection
+    /// Whether the legibility step (ColorSchemesBuild.swift, step 4) may move the text colours. False for a custom scheme (Settings > Colors): the user's colours
+    /// are used exactly as picked, in both variants.
+    var adjustsForLegibility: Bool = true
 
     var scheme: ColorScheme {
         func c(_ h: UInt32) -> NSColor { let v = ColorMath.rgb(hex: h); return NSColor(srgbRed: v.x, green: v.y, blue: v.z, alpha: 1) }

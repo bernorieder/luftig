@@ -3,7 +3,8 @@ import AppKit
 // ColorSchemesCustom.swift - the user's own colour schemes: seven colours picked in Settings > Colors (the page, text, syntax markers, headings, the accent, links,
 // inline code). A custom scheme is stored as a Base16 YAML file in the same folder as the imported schemes and read by the same code (SchemeImport): it is an imported
 // scheme with the extra line `luftig: custom`, listed under the family "Custom" instead of "Imported", and built like every other scheme (ColorSchemesBuild.swift:
-// the same tints, surfaces and legibility step). The file is a valid Base16 scheme, so other programs can use it too.
+// the same tints and surfaces) EXCEPT that the legibility step leaves the colours alone: the user's colours are used exactly as picked (`adjustsForLegibility`
+// false), in the normal and the Increase-contrast variant. The file is a valid Base16 scheme, so other programs can use it too.
 //
 // The seven colours fill the 16 slots so that the file reads back with the same roles (SchemeImport's mapping):
 //   base00 page           base01 / base02 the page moved 1/8, 2/8 towards the text (base02: the selection, see below)   base03 markers   base04 page moved 5/8 towards the text
@@ -93,7 +94,7 @@ struct CustomScheme: Equatable {
     func spec(id: String) -> SchemeSpec {
         SchemeSpec(id: id, name: name, family: CustomScheme.family, dark: dark,
                    bg: self[.page], fg: self[.text], comment: self[.markers], heading: self[.headings], accent: self[.accent], link: self[.links], literal: self[.code],
-                   warn: CustomScheme.warn, info: self[.headings], caret: self[.text], selection: .opaque(selectionHex))
+                   warn: CustomScheme.warn, info: self[.headings], caret: self[.text], selection: .opaque(selectionHex), adjustsForLegibility: false)
     }
 
     /// The Base16 YAML file of the scheme.
@@ -191,16 +192,4 @@ struct CustomScheme: Equatable {
         return hex(RGB(Double(s.redComponent), Double(s.greenComponent), Double(s.blueComponent)))
     }
 
-    /// The roles of the draft the legibility step moved (the report's rows of a built scheme, named as the Settings rows are).
-    static func adjustedRoles(of colors: SchemeColors) -> [Role] {
-        guard let report = colors.report else { return [] }
-        var out: [Role] = []
-        for row in report.rows where row.normalChanged {
-            let role: Role?
-            if row.role.hasPrefix("body text") { role = .text } else if row.role == "heading" { role = .headings } else if row.role.hasPrefix("accent") { role = .accent }
-            else if row.role == "link" { role = .links } else if row.role.hasPrefix("inline code") { role = .code } else if row.role == "syntax marker" { role = .markers } else { role = nil }
-            if let role, !out.contains(role) { out.append(role) }
-        }
-        return out.sorted { $0.rawValue < $1.rawValue }
-    }
 }

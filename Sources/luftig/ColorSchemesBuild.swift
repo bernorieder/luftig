@@ -241,6 +241,7 @@ enum SchemeBuilder {
             return list
         }
         for role in SchemeRole.allCases {
+            guard spec.adjustsForLegibility else { normal.colours[role] = base[role]!; high.colours[role] = base[role]!; continue }     // a custom scheme: the colours as picked
             let n = ColorMath.fit(base[role]!, needs: needs(for: role, in: normal, hc: false), towardsLight: dark)
             normal.colours[role] = n
             high.colours[role] = ColorMath.fit(n, needs: needs(for: role, in: high, hc: true), towardsLight: dark)

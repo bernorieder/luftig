@@ -248,9 +248,10 @@ which asks for a name and makes a new scheme under it ("Warm 2" when "Warm" exis
 custom scheme the draft came from and is only enabled for one - a built-in or imported scheme is never changed, a variation of it is saved as new. **Revert** drops the draft,
 and so does closing the window or choosing another scheme in the popup; **Delete…** removes the custom scheme in use.
 
-Light or dark follows the page colour's lightness: a dark page makes a dark scheme, and the window's appearance follows. The scheme is built exactly like every other one, so a
-colour that would be hard to read on the page or on a band (code, quote, table) is lightened or darkened just enough; the note at the bottom of the screen names the colours this
-happened to, so a picked colour that looks a little different in the text is explained. A custom scheme is a Base16 YAML file in the same folder as the imported ones
+Light or dark follows the page colour's lightness: a dark page makes a dark scheme, and the window's appearance follows. The scheme is built like every other one (the
+same bands, pills and selection tint), with one difference: the legibility step that moves a built-in or imported theme's colours leaves yours alone, in the normal and the
+Increase-contrast variant - what you pick is what the text shows, so it is up to you that text stays readable on the page and on the bands (code, quote, table).
+A custom scheme is a Base16 YAML file in the same folder as the imported ones
 (`custom-<name>.yaml`, with the line `luftig: custom`; "Show Imported Schemes in Finder" opens the folder), listed under the family "Custom", valid for other programs that read
 Base16 schemes, and importable again on another machine.
 

@@ -543,7 +543,7 @@ extension SelfTestScenarios {
 extension SelfTestScenarios {
     static let schemesImportScenarios: [SelfTest.Scenario] = [
         .init(name: "schemes-import", summary: "colour schemes from Base16 YAML files: both spellings parsed, the roles, light / dark, the import into Application Support, the list, the Settings popup, legibility, removal", run: { t in try await schemesImport(t) }),
-        .init(name: "schemes-custom", summary: "Settings > Colors: a custom scheme from seven colours - the starting points, the YAML round trip, the draft the editors show live, Save / Save as New / Revert / Delete, the legibility note, the contrast tables", run: { t in try await schemesCustom(t) }),
+        .init(name: "schemes-custom", summary: "Settings > Colors: a custom scheme from seven colours - the starting points, the YAML round trip, the draft the editors show live, Save / Save as New / Revert / Delete, the colours used exactly as picked (no legibility step)", run: { t in try await schemesCustom(t) }),
     ]
 
     static let base16DefaultDark = """
@@ -733,7 +733,8 @@ extension SelfTestScenarios {
         t.equal(CustomScheme.cleanName("  "), "Custom", "an empty name becomes Custom")
         let yaml = mine.yaml()
         guard let back = SchemeImport.spec(fromYAML: yaml, id: "x") else { t.check(false, "the written YAML parses as a Base16 scheme"); return }
-        t.check(back.family == CustomScheme.family && back.name == "My Scheme" && back.dark, "... family Custom (the luftig: custom line), the name, dark from the page")
+        t.check(back.family == CustomScheme.family && back.name == "My Scheme" && back.dark && !back.adjustsForLegibility, "... family Custom (the luftig: custom line), the name, dark from the page, no legibility step")
+        t.check(SchemeImport.spec(fromYAML: base16DefaultDark, id: "x")?.adjustsForLegibility == true && SchemeSpec.all.allSatisfy { $0.adjustsForLegibility }, "imported and built-in schemes keep the legibility step")
         t.check(back.bg == mine[.page] && back.fg == mine[.text] && back.comment == mine[.markers] && back.heading == mine[.headings] && back.accent == mine[.accent]
                 && back.link == mine[.links] && back.literal == mine[.code] && back.info == mine[.headings] && back.caret == mine[.text] && back.warn == CustomScheme.warn, "... the seven roles, the info banner (headings), the caret (text), the amber warning banner")
         if case .opaque(let s) = back.selection { t.equal(s, mine.selectionHex, "... the selection: the accent at 30 % over the page") } else { t.check(false, "the selection is opaque base02") }
@@ -758,10 +759,14 @@ extension SelfTestScenarios {
         EditorPreferences.colorSchemeID = id2
         t.equal(Palette.scheme.id, id2, "the preference takes a custom scheme")
         t.equal(hex(rgba(Palette.background, NSAppearance(named: .darkAqua)!)), "#202430", "... the page is the chosen colour")
+        // the colours exactly as picked, normal and with Increase contrast (no legibility step for a custom scheme)
         for hc in [false, true] {
             ContrastWatcher.shared.override = hc
-            let r = contrastOfCurrentScheme(t, label: "custom \(hc ? "+ Increase contrast" : "normal")", appearance: NSAppearance(named: .darkAqua)!, variant: hc ? .darkHC : .dark)
-            t.check(r.failures == 0, "the custom scheme \(hc ? "+ Increase contrast" : "normal"): every text / surface pair legible (\(r.pairs) pairs, tightest \(r.tightest))")
+            let dark = NSAppearance(named: .darkAqua)!
+            let got = [Palette.text, Palette.marker, Palette.heading, Palette.accent, Palette.link, Palette.copper].map { hex(rgba($0, dark)) }
+            let want = [R.text, R.markers, R.headings, R.accent, R.links, R.code].map { String(format: "#%06x", mine[$0]) }
+            t.check(got == want, "\(hc ? "with Increase contrast" : "normal"): text, markers, headings, accent, links and inline code are exactly the picked colours: \(got)")
+            t.check(ColorSchemes.colors(for: Palette.scheme).report?.rows.allSatisfy { !$0.normalChanged } ?? false, "... the report: nothing moved")
         }
         ContrastWatcher.shared.override = nil
         try CustomScheme.delete(id: id2)
@@ -786,7 +791,6 @@ extension SelfTestScenarios {
             EditorViewController.visibilityOverride = true
             defer { EditorViewController.visibilityOverride = nil }
             let rebuildsBefore = editor.themeRebuildCount
-            t.check(c.legibilityNoteLabel.stringValue.hasSuffix("Nothing was adjusted here."), "the note: the default scheme adjusts nothing: \(c.legibilityNoteLabel.stringValue.suffix(40))")
             // a colour changed: the editors show the draft, the preference does not change, Revert is enabled
             let pageWell = c.colorWells[R.page.rawValue]
             pageWell.color = CustomScheme.color(0x101418)
@@ -802,14 +806,14 @@ extension SelfTestScenarios {
             c.colorWellChanged(headingsWell0)
             t.equal(editor.themeRebuildCount, rebuildsBefore + 2, "a heading colour: rebuilt again")
             if let colour = editor.textView.textStorage?.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor {
-                t.equal(hex(rgba(colour, NSAppearance(named: .darkAqua)!)), String(format: "#%06x", CustomScheme.hex(Palette.heading)), "... the heading in the text has the draft's heading colour (as the legibility step left it)")
+                t.equal(hex(rgba(colour, NSAppearance(named: .darkAqua)!)), "#ff8800", "... the heading in the text has the draft's heading colour, exactly")
             } else { t.check(false, "the heading has a foreground colour") }
             t.check(!ColorSchemes.all.contains { $0.id == CustomScheme.draftID }, "the draft is not in the list")
-            // light grey markers on the dark page would be unreadable: the note names them
+            // near-black markers on the dark page: used as picked all the same (a built-in scheme would have them lightened)
             let markersWell = c.colorWells[R.markers.rawValue]
             markersWell.color = CustomScheme.color(0x303438)
             c.colorWellChanged(markersWell)
-            t.check(c.legibilityNoteLabel.stringValue.contains("Adjusted here: markers"), "the note names the adjusted colour: \(c.legibilityNoteLabel.stringValue.suffix(40))")
+            t.equal(hex(rgba(Palette.marker, NSAppearance(named: .darkAqua)!)), "#303438", "an unreadable marker colour is used as picked")
             // Revert: the draft is dropped, the editors show the chosen scheme
             c.revertScheme(nil)
             t.check(Palette.scheme.id == ColorSchemes.defaultID && !c.draftDirty && CustomScheme.hex(pageWell.color) == CustomScheme.from(schemeID: ColorSchemes.defaultID)[.page], "Revert: the default scheme again, the wells show its colours (for the current appearance)")
@@ -862,10 +866,9 @@ extension SelfTestScenarios {
             c.deleteScheme(nil)
             t.check(ColorSchemes.imported.count == 1 && !FileManager.default.fileExists(atPath: dir.appendingPathComponent("custom-warm-2.yaml").path) && EditorPreferences.colorSchemeID == ColorSchemes.defaultID, "Delete: the file is gone, the default is chosen")
             t.check(!c.deleteSchemeButton.isEnabled, "... Delete disabled again")
-            // the remaining custom scheme passes the contrast tables (light)
+            // the remaining custom scheme: its heading exactly as saved (light)
             EditorPreferences.colorSchemeID = "imported-custom-warm"
-            let r = contrastOfCurrentScheme(t, label: "custom light", appearance: NSAppearance(named: .aqua)!, variant: .light)
-            t.check(r.failures == 0, "the light custom scheme: every text / surface pair legible (\(r.pairs) pairs, tightest \(r.tightest))")
+            t.equal(hex(rgba(Palette.heading, NSAppearance(named: .aqua)!)), "#803000", "the light custom scheme: the heading exactly as saved")
         }
     }
 }

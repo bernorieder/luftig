@@ -109,7 +109,7 @@ enum SchemeImport {
         let fam = kv[CustomScheme.yamlKey]?.lowercased() == CustomScheme.yamlValue ? CustomScheme.family : family
         return SchemeSpec(id: id, name: name, family: fam, dark: dark,
                           bg: bg, fg: c[0x05]!, comment: c[0x03]!, heading: c[0x0D]!, accent: c[0x0E]!, link: c[0x0C]!, literal: c[0x0B]!,
-                          warn: c[0x0A]!, info: c[0x0D]!, caret: c[0x05]!, selection: .opaque(c[0x02]!))
+                          warn: c[0x0A]!, info: c[0x0D]!, caret: c[0x05]!, selection: .opaque(c[0x02]!), adjustsForLegibility: fam != CustomScheme.family)
     }
 
     /// `key: value` lines (keys lower-cased; a nested block such as `palette:` contributes its own keys; quotes removed; `#` starts a comment only where a value

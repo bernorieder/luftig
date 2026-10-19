@@ -22,7 +22,7 @@ Lists continue on Return (the next bullet or number, an unchecked task box), Tab
 
 ## Colour schemes
 
-The default follows the system appearance, light and dark; the other 15 are well-known editor themes (Solarized, GitHub, One, Gruvbox, Dracula, Nord, Monokai, Tomorrow Night, Catppuccin, Tokyo Night), every text colour kept legible on every surface by a deterministic adjustment ([docs/color-schemes.md](docs/color-schemes.md)). Import Scheme… in the Settings takes any Base16 YAML file, and the Colors screen makes a scheme of your own from seven colours (page, text, markers, headings, accent, links, inline code), with the same legibility treatment.
+The default follows the system appearance, light and dark; the other 15 are well-known editor themes (Solarized, GitHub, One, Gruvbox, Dracula, Nord, Monokai, Tomorrow Night, Catppuccin, Tokyo Night), every text colour kept legible on every surface by a deterministic adjustment ([docs/color-schemes.md](docs/color-schemes.md)). Import Scheme… in the Settings takes any Base16 YAML file, and the Colors screen makes a scheme of your own from seven colours (page, text, markers, headings, accent, links, inline code), used exactly as picked.
 
 ![All schemes: lists, quotes, code](docs/screenshots/schemes/contact-sheet.png)
 ![All schemes: code blocks, tables](docs/screenshots/schemes/contact-sheet-code.png)
@@ -36,7 +36,7 @@ luftig > Settings… (⌘,) is one small window with a live preview and four scr
 | General | Open files in tabs. When the file changes on disk: reload automatically, ask first, never reload. Continue lists on Return |
 | Text | Text font, code font, size, line spacing (or automatic), column width |
 | Layout | Which elements are shown (outline, syntax bar, word count, reading time), the padding (one number for every gap), the panes' font, size and opacity, outline wrapping and spacing |
-| Colors | The colour scheme (and Import Scheme…), and a scheme of your own: seven colour pickers starting from the scheme in use, shown live in every window; Save as New… asks for a name, Save overwrites a custom scheme, Revert, Delete; a note names the colours the legibility step adjusted |
+| Colors | The colour scheme (and Import Scheme…), and a scheme of your own: seven colour pickers starting from the scheme in use, shown live in every window; Save as New… asks for a name, Save overwrites a custom scheme, Revert, Delete. Your colours are used exactly as picked |
 
 ## Install
 

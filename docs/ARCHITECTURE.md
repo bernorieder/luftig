@@ -93,7 +93,7 @@ Sources/luftig/
   ColorSchemesCustom.swift              CustomScheme: the user's own scheme from seven colours (Settings > Colors, which also holds the scheme popup), stored as a Base16 YAML
                                         file in the same folder with the line `luftig: custom` (listed under "Custom"); the draft the editors show live (ColorSchemes.draft,
                                         id custom-draft, never stored; editors rebuild on Palette.serial, not on the scheme id), Save (custom schemes only) / Save as New…
-                                        (asks for a name, made free) / Delete, the roles the legibility step moved (from SchemeColors.report)
+                                        (asks for a name, made free) / Delete; no legibility step (SchemeSpec.adjustsForLegibility false: the colours exactly as picked)
   SettingsFontFactory.swift             ThemeSettings (what a Theme is built from), FontFactory (faces of any installed family via NSFontManager, cached) and FontFace
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation
