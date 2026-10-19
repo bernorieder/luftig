@@ -152,7 +152,7 @@ done
 build plain --selftest --out st; rc=$?
 check "the self-test variant must contain its hooks: a binary without them is refused (exit $rc)" '[ $rc != 0 ] && grep -q "does not contain the self-test code" "$T/last.log"'
 build selftest --selftest --out st; rc=$?
-check "the self-test variant with hooks builds as luftig-SelfTest.app (exit $rc)" '[ $rc = 0 ] && [ -d "$T/st/luftig-SelfTest.app" ] && [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$T/st/luftig-SelfTest.app/Contents/Info.plist")" = "local.luftig.luftig.selftest" ]'
+check "the self-test variant with hooks builds as luftig-SelfTest.app (exit $rc)" '[ $rc = 0 ] && [ -d "$T/st/luftig-SelfTest.app" ] && [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$T/st/luftig-SelfTest.app/Contents/Info.plist")" = "com.bernorieder.luftig.selftest" ]'
 
 # -- argument handling and what --out may replace
 build plain --out ""; rc=$?
@@ -162,6 +162,8 @@ build plain --out "$T/precious.app"; rc=$?
 check "--out <existing directory that is not an app bundle> is refused and nothing is deleted (exit $rc)" '[ $rc != 0 ] && [ -f "$T/precious.app/Documents/keep.txt" ]'
 build plain --bogus; rc=$?
 check "unknown argument: exit 1 with a hint (exit $rc)" '[ $rc = 1 ] && grep -q "unknown argument" "$T/last.log"'
+build plain --identity; rc=$?
+check "--identity without a value is refused (exit $rc)" '[ $rc != 0 ] && grep -q "identity needs a value" "$T/last.log"'
 build plain --out; rc=$?
 check "--out without a value: exit 1 (exit $rc)" '[ $rc = 1 ]'
 build plain --help; rc=$?

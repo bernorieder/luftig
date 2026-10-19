@@ -54,7 +54,7 @@ Notes for the first install:
 
 * The signature is *ad hoc*: it changes with every build, so macOS may ask again for access to Documents / Desktop / Downloads
   after a rebuild. A stable self-signed identity avoids that.
-* `CFBundleIdentifier` is the placeholder `local.luftig.luftig` (the app declares no exported file types of its own).
+* `CFBundleIdentifier` is `com.bernorieder.luftig` (the app declares no exported file types of its own); settings saved under the placeholder identifier of the first builds (`local.luftig.luftig`) are copied over once.
   Change it in `Resources/Info.plist` before you distribute the app.
 * luftig declares itself an editor for Markdown and plain text at *alternate* rank, and the rarer Markdown extensions (`.mkd`, `.mdown`, `.mkdn`, `.mdwn`, `.mdtxt`, `.mdtext`) by extension only, at rank *none*. It appears in Open With (for the rare extensions: Open With > Other...) and never becomes anybody's default by itself, and it never changes the system's idea of a file type. (With equal ranks Launch Services prefers the app that ran most recently - that is why the rare extensions are rank none.) To make it your Markdown editor: Finder > Get Info > Open with > luftig > Change All.
 * **Gatekeeper.** `spctl --assess` rejects the build (ad-hoc signature, not notarised), but Gatekeeper only assesses files that carry

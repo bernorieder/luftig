@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // start from known preferences and must not read the user's real ones.
         if let id = Bundle.main.bundleIdentifier, !id.hasSuffix(".selftest") {
             EditorPreferences.migrateLegacySettings(newDomain: id)
+            EditorPreferences.migratePlaceholderSettings(newDomain: id)            // (the placeholder bundle id before the first public release)
         }
         UserDefaults.standard.register(defaults: [
             "NSQuitAlwaysKeepsWindows": true,                 // restore documents even if the system setting would close them

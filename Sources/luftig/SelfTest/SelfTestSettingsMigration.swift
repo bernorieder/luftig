@@ -55,6 +55,17 @@ extension SelfTestScenarios {
         t.equal(P.migrateLegacySettings(oldDomain: "local.luftig.selftest.no-such-domain", newDomain: id), 0, "wrapper: once only")
         ud.setPersistentDomain(before, forName: id)                 // leave this bundle's preferences as they were
         t.check(ud.persistentDomain(forName: id)?[P.migratedKey] == nil, "the marker is removed again")
+
+        // the placeholder bundle id (local.luftig.luftig -> com.bernorieder.luftig): every Luftig… key, once, never over a value of the new domain
+        if let r = P.migratedSameKeys(current: ["LuftigFontSize": 18.0, "NSWindow Frame x": "keep"], legacy: ["LuftigFontSize": 12.0, "LuftigPaddingPoints": 30.0, "LuftigShowOutline": false, "NSWindow Frame x": "old", P.migratedKey: true]) {
+            t.equal(r.copied, 2, "placeholder id: the Luftig keys the new domain lacks are copied (padding, outline), not the font size it has, not the system's keys, not the Scribe marker")
+            t.equal(r.domain["LuftigPaddingPoints"] as? Double, 30.0, "placeholder id: the padding came over")
+            t.equal(r.domain["LuftigFontSize"] as? Double, 18.0, "placeholder id: the new domain's font size stays")
+            t.check(r.domain[P.migratedKey] == nil && r.domain[P.migratedFromPlaceholderKey] as? Bool == true, "placeholder id: its own marker, not Scribe's")
+            t.check(P.migratedSameKeys(current: r.domain, legacy: ["LuftigFontSize": 9.0]) == nil, "placeholder id: once only")
+        } else { t.check(false, "placeholder id: the migration ran") }
+        t.equal(P.migratePlaceholderSettings(oldDomain: "local.luftig.selftest.no-such-domain", newDomain: id), 0, "placeholder id wrapper: a missing old domain copies nothing")
+        ud.setPersistentDomain(before, forName: id)
     }
 }
 #endif

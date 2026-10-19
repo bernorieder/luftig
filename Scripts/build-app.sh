@@ -19,6 +19,8 @@
 #   --product <name>       executable product (default: luftig)
 #   --info-plist <file>    default: Resources/Info.plist
 #   --no-sign              skip codesign
+#   --identity NAME        sign with this identity (a "Developer ID Application: …" certificate of the keychain) under the hardened runtime,
+#                          with a secure timestamp, instead of ad hoc (what Scripts/release.sh does before notarization)
 #   --regen-icon           re-draw Resources/AppIcon.icns with Resources/make-icon.swift (overwrites the committed file)
 #   -h | --help
 #
@@ -37,6 +39,7 @@ SCRATCH=""
 PRODUCT="luftig"
 INFO="$ROOT/Resources/Info.plist"
 SIGN=1
+IDENTITY=""
 SELFTEST=0
 OUT_GIVEN=0
 REGEN_ICON=0
@@ -55,6 +58,7 @@ while [ $# -gt 0 ]; do
     --product) [ $# -ge 2 ] || die "--product needs a value"; PRODUCT="$2"; shift ;;
     --info-plist) [ $# -ge 2 ] || die "--info-plist needs a value"; INFO="$2"; shift ;;
     --no-sign) SIGN=0 ;;
+    --identity) [ $# -ge 2 ] || die "--identity needs a value"; IDENTITY="$2"; shift ;;
     --regen-icon) REGEN_ICON=1 ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1 (try --help)" ;;
@@ -171,10 +175,16 @@ else
   echo "warning: no icon (Resources/AppIcon.icns and Resources/make-icon.swift are missing)" >&2
 fi
 
-# ---- sign (ad hoc: no identity needed; the signature changes with every build)
+# ---- sign: ad hoc (no identity needed; the signature changes with every build), or with --identity for a release (hardened runtime + timestamp,
+# what notarization requires; no entitlements: luftig asks for none)
 if [ "$SIGN" = 1 ]; then
-  echo "==> codesign (ad hoc)"
-  codesign --force --deep --sign - --timestamp=none "$APP" 2>&1 | sed 's/^/    /'
+  if [ -n "$IDENTITY" ]; then
+    echo "==> codesign ($IDENTITY, hardened runtime)"
+    codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" "$APP" 2>&1 | sed 's/^/    /'
+  else
+    echo "==> codesign (ad hoc)"
+    codesign --force --deep --sign - --timestamp=none "$APP" 2>&1 | sed 's/^/    /'
+  fi
 fi
 
 # ---- Launch Services: the built bundle is a build product, not an installed app. Once Launch Services knows it, the Finder's "Open With" lists
@@ -188,7 +198,7 @@ if [ -x "$LSREGISTER" ]; then "$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true; f
 echo "==> verify"
 plutil -lint "$APP/Contents/Info.plist" | sed 's/^/    /'
 if [ "$SIGN" = 1 ]; then
-  codesign --verify --deep --strict "$APP" && echo "    codesign --verify: OK (ad hoc)"
+  codesign --verify --deep --strict "$APP" && echo "    codesign --verify: OK (${IDENTITY:-ad hoc})"
 fi
 [ -x "$APP/Contents/MacOS/$EXE_NAME" ] || die "executable missing in bundle"
 # The look on macOS 26 and later is decided by the SDK version the executable is stamped with (LC_BUILD_VERSION). Package.swift re-stamps it:

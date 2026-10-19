@@ -68,6 +68,32 @@ enum EditorPreferences {
         return result.copied
     }
 
+    /// luftig's bundle identifier was the placeholder `local.luftig.luftig` until the first public release (com.bernorieder.luftig): every `Luftig…` key
+    /// of that domain is copied ONCE, the same way, never over a value the new domain has.
+    static let placeholderDomain = "local.luftig.luftig"
+    static let migratedFromPlaceholderKey = "LuftigMigratedFromPlaceholderID"
+
+    @discardableResult
+    static func migratePlaceholderSettings(oldDomain: String = placeholderDomain, newDomain: String) -> Int {
+        let ud = UserDefaults.standard
+        guard let result = migratedSameKeys(current: ud.persistentDomain(forName: newDomain) ?? [:],
+                                            legacy: ud.persistentDomain(forName: oldDomain) ?? [:]) else { return 0 }
+        ud.setPersistentDomain(result.domain, forName: newDomain)
+        return result.copied
+    }
+
+    /// The copy of every `Luftig…` key (the settings and the View menu's switches; nothing of the system's), without any I/O; nil when done before.
+    static func migratedSameKeys(current: [String: Any], legacy: [String: Any]) -> (domain: [String: Any], copied: Int)? {
+        guard current[migratedFromPlaceholderKey] as? Bool != true else { return nil }
+        var domain = current
+        var copied = 0
+        for (key, value) in legacy where key.hasPrefix("Luftig") && key != migratedKey && key != migratedFromPlaceholderKey && domain[key] == nil {
+            domain[key] = value; copied += 1
+        }
+        domain[migratedFromPlaceholderKey] = true
+        return (domain, copied)
+    }
+
     /// The migration itself, without any I/O: the new domain's stored values after the copy, and how many values were copied;
     /// nil when the migration was done before (nothing to write).
     static func migrated(current: [String: Any], legacy: [String: Any]) -> (domain: [String: Any], copied: Int)? {
