@@ -13,6 +13,7 @@ extension SelfTestScenarios {
         .init(name: "edit-lists", summary: "list continuation (pure): Return on bullets / numbers / tasks / quotes, empty items, Tab and Shift-Tab, renumbering", run: { t in try await editLists(t) }),
         .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
         .init(name: "edit-caret", summary: "the insertion point is as tall as the font at the caret (ascent + descent, on the baseline), not the line box: body, heading and the extra line after a final line break", run: { t in try await editCaret(t) }),
+        .init(name: "edit-scroll-stability", summary: "typing and Backspace in the middle of a long document keep the caret's line where it is on screen (no drift, no jump): characters, Backspace, a joined and a split paragraph, a long line", run: { t in try await editScrollStability(t) }),
         .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
         .init(name: "edit-links", summary: "⌘-click / Edit > Open Link: the link under a character (inline, image, autolink, bare URL, reference), web / file / anchor targets, a real ⌘-click, a Markdown file opens in luftig at its anchor", run: { t in try await editLinks(t) }),
         .init(name: "edit-typewriter", summary: "View > Typewriter Mode: the caret's line in the middle, the inset makes room, remembered, every window follows", run: { t in try await editTypewriter(t) }),
@@ -182,6 +183,103 @@ extension SelfTestScenarios {
     }
 
     // MARK: edit-typewriter
+
+    @MainActor static func editScrollStability(_ t: SelfTest.T) async throws {
+        try await preservingSettings {
+            let text = SelfTestCorpus.markdown(bytes: 300_000, seed: 3)
+            let (doc, host, _) = try await openEditor(t, text: text, name: "scroll-stability.md", size: NSSize(width: 860, height: 700))
+            defer { t.close(doc) }
+            let tv = host.textView, clip = host.scrollView.contentView
+            guard let lm = tv.layoutManager, let tc = tv.textContainer else { t.check(false, "layout"); return }
+            let ns = tv.string as NSString
+            @MainActor func caretScreenY() -> CGFloat {
+                guard let line = host.caretLineRect(at: tv.selectedRange().location) else { return -1 }
+                return line.minY + tv.textContainerOrigin.y - clip.bounds.origin.y
+            }
+            @MainActor func topCharacter() -> Int {
+                let p = NSPoint(x: 0, y: clip.bounds.origin.y + 1 - tv.textContainerOrigin.y)
+                return lm.characterIndexForGlyph(at: lm.glyphIndex(for: p, in: tc))
+            }
+            /// `n` key presses; after each one the window must not have scrolled (the line at its top is the same line, the caret's line moved on screen by at most
+            /// the lines the edit itself added or removed: a Return or a wrap moves the caret down a line, un-wrapping up), and the caret stays in view.
+            @MainActor func run(_ what: String, _ n: Int, allowedLines: Int, _ key: @MainActor () -> Void) async {
+                var worst: CGFloat = 0, topMoved = 0, caretOut = 0
+                let y0 = caretScreenY(), top0 = topCharacter()
+                let topY0 = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: top0), effectiveRange: nil).minY + tv.textContainerOrigin.y - clip.bounds.origin.y
+                for _ in 0..<n {
+                    key()
+                    await AuditEd.settle(t, host, ms: 5)
+                    let y = caretScreenY()
+                    worst = max(worst, abs(y - y0))
+                    if y < 0 || y > clip.bounds.height { caretOut += 1 }
+                    let topY = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: top0), effectiveRange: nil).minY + tv.textContainerOrigin.y - clip.bounds.origin.y
+                    if abs(topY - topY0) > 1 { topMoved += 1 }
+                }
+                let limit = CGFloat(allowedLines) * host.theme.bodyLineHeight + 2
+                t.check(worst <= limit && topMoved == 0 && caretOut == 0, String(format: "%@: the window did not scroll and the caret stayed in view (caret moved %.0f pt at most, allowed %.0f; the top line moved %d times of %d; caret out of view %d times)", what, worst, limit, topMoved, n, caretOut))
+            }
+            for (label, fraction) in [("near the start", 0.05), ("in the middle", 0.5), ("near the end", 0.9)] {
+                // scroll there, settle, put the caret on the line in the middle of the window
+                let target = Int(Double(ns.length) * fraction)
+                tv.scrollRangeToVisible(NSRange(location: target, length: 0))
+                await AuditEd.settle(t, host, ms: 50)
+                let midPoint = NSPoint(x: 40, y: clip.bounds.origin.y + clip.bounds.height / 2 - tv.textContainerOrigin.y)
+                var loc = lm.characterIndexForGlyph(at: lm.glyphIndex(for: midPoint, in: tc))
+                // the start of a paragraph of prose (not a code fence or a blank line): a place where Backspace joins paragraphs
+                while loc > 0 && ns.character(at: loc - 1) != 0x0A { loc -= 1 }
+                tv.setSelectedRange(NSRange(location: loc + 3, length: 0))
+                await AuditEd.settle(t, host, ms: 20)
+                t.note("\(label): caret at \(tv.selectedRange().location) of \(ns.length), window top at character \(topCharacter()), clip y \(Int(clip.bounds.origin.y))")
+                await run("\(label): 20 characters", 20, allowedLines: 0) { AuditEd.press(host, "a", code: 0) }
+                await run("\(label): 20 Backspaces", 20, allowedLines: 0) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+                await run("\(label): Backspace into the previous paragraph (3 x)", 3, allowedLines: 3) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+                await run("\(label): Return (3 x)", 3, allowedLines: 3) { AuditEd.pressKey(host, AuditEd.Key.returnKey) }
+                await run("\(label): a long line of 120 characters", 120, allowedLines: 2) { AuditEd.press(host, "b", code: 0) }
+                await run("\(label): 120 Backspaces", 120, allowedLines: 2) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+                // the pause after typing: the outline and the word count are recomputed (300 ms); that must not move the text either
+                let yPause = caretScreenY(), topPause = topCharacter()
+                await t.spin(700)
+                host.styler.styleVisible()
+                t.check(abs(caretScreenY() - yPause) <= 1 && topCharacter() == topPause, String(format: "%@: the pause after typing (outline recomputed) moves nothing (caret %.0f -> %.0f)", label, yPause, caretScreenY()))
+            }
+            // Typewriter Mode: the caret's line stays in the middle through the same edits, and the view never moves when the caret's line does not change
+            // (with the settings the report came with: line spacing 2.0, padding 30)
+            EditorPreferences.typewriterMode = true
+            EditorPreferences.lineHeightFactor = 2
+            EditorPreferences.padding = 30
+            await AuditEd.settle(t, host, ms: 100)
+            let mid = Int(Double(ns.length) * 0.5)
+            tv.setSelectedRange(NSRange(location: mid, length: 0))
+            var loc = mid
+            while loc > 0 && ns.character(at: loc - 1) != 0x0A { loc -= 1 }
+            tv.setSelectedRange(NSRange(location: loc + 3, length: 0))
+            await AuditEd.settle(t, host, ms: 50)
+            @MainActor func caretMid() -> CGFloat {
+                guard let line = host.caretLineRect(at: tv.selectedRange().location) else { return -1 }
+                return line.midY + tv.textContainerOrigin.y - clip.bounds.origin.y
+            }
+            @MainActor func typewriterRun(_ what: String, _ n: Int, _ key: @MainActor () -> Void) async {
+                var worst: CGFloat = 0, scrolls = 0, biggest: CGFloat = 0
+                for _ in 0..<n {
+                    let y = clip.bounds.origin.y, line = tv.selectedRange().location
+                    key()
+                    await AuditEd.settle(t, host, ms: 5)
+                    worst = max(worst, abs(caretMid() - clip.bounds.height / 2))
+                    let sameLine = host.caretLineRect(at: tv.selectedRange().location)?.minY == host.caretLineRect(at: min(line, (tv.string as NSString).length))?.minY
+                    if sameLine && abs(clip.bounds.origin.y - y) > 1 { scrolls += 1; biggest = max(biggest, abs(clip.bounds.origin.y - y)) }
+                }
+                t.check(worst <= 3 && scrolls == 0, String(format: "Typewriter Mode, %@: the caret's line stays in the middle (worst %.1f pt off), no scroll while the line does not change (%d, biggest %.0f pt)", what, worst, scrolls, biggest))
+            }
+            t.check(abs(caretMid() - clip.bounds.height / 2) < 3, String(format: "Typewriter Mode: the caret's line is in the middle (%.1f of %.1f)", caretMid(), clip.bounds.height))
+            await typewriterRun("20 characters", 20) { AuditEd.press(host, "a", code: 0) }
+            await typewriterRun("20 Backspaces", 20) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+            await typewriterRun("Backspace into the previous paragraph (3 x)", 3) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+            await typewriterRun("Return (3 x)", 3) { AuditEd.pressKey(host, AuditEd.Key.returnKey) }
+            await typewriterRun("a long line of 120 characters", 120) { AuditEd.press(host, "b", code: 0) }
+            await typewriterRun("120 Backspaces", 120) { AuditEd.pressKey(host, AuditEd.Key.delete) }
+            EditorPreferences.typewriterMode = false
+        }
+    }
 
     @MainActor static func editCaret(_ t: SelfTest.T) async throws {
         try await preservingSettings {
