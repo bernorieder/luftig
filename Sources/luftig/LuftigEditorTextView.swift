@@ -119,8 +119,81 @@ final class LuftigEditorTextView: NSTextView {
     // MARK: jumps
 
     override func scrollRangeToVisible(_ range: NSRange) {
+        if frameChangeDepth > 0 { deferredScrollRange = range; return }
         lazyStyler?.prestyle(aroundCharacter: range.location)
         super.scrollRangeToVisible(range)
+    }
+
+    // MARK: the viewport across an edit (pitfall 38)
+
+    /// Every user edit goes through `shouldChangeText` and `didChangeText`. Between the two, the storage edit makes the layout manager revise the text view's height
+    /// (non-contiguous layout: the estimates for the text it has not laid out change with every edit, by a few points to 100 pt), and from inside that resize AppKit
+    /// scrolls the view by the height change as if it had happened above the viewport (`-[NSLayoutManager _resizeTextViewForTextContainer:]` -> `scrollPoint:`), and
+    /// asks to scroll the whole invalidated paragraph into view (-> `scrollRangeToVisible`). Measured in a document of long paragraphs (one physical line of 1,500
+    /// characters wrapping to a dozen visual lines): every Backspace moved the view by 34 - 100 pt while the caret's line stayed where it was, and after a few keys
+    /// the view snapped back by the sum. So: the line at the top of the viewport is captured before the edit and put back after it (the same `ViewportAnchor` the
+    /// external reload uses: a position check, not a delta, so a correct compensation is left alone), and a `scrollRangeToVisible` that arrives while the frame
+    /// changes is reduced to "is the caret's line in view once the frame change is over". The caret's own autoscroll after the edit runs after all this, as before.
+    private var editAnchor: ViewportAnchor?
+    private var editOldRange = NSRange(location: 0, length: 0)
+    private var editNewLength = 0
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        let ok = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+        if ok, let replacement = replacementString {                           // (nil: an attribute change, no layout to speak of)
+            editAnchor = ViewportAnchor.capture(in: self)
+            editOldRange = affectedCharRange
+            editNewLength = (replacement as NSString).length
+        }
+        return ok
+    }
+
+    override func didChangeText() {
+        if let anchor = editAnchor {
+            editAnchor = nil
+            // the anchor line replaced by the edit itself (a paste over everything): nothing to put back, AppKit shows the caret
+            let replaced = editOldRange.length > 0 && anchor.characterIndex >= editOldRange.location && anchor.characterIndex < NSMaxRange(editOldRange)
+            if !replaced {
+                let edit = TextEdit(oldRange: editOldRange, newRange: NSRange(location: editOldRange.location, length: editNewLength))
+                _ = anchor.restore(in: self, edits: [edit])
+            }
+        }
+        super.didChangeText()
+    }
+
+    /// > 0 while `setFrameSize` runs: a `scrollRangeToVisible` from inside it (AppKit, see above) is never done as asked; at the end of the outermost frame change the
+    /// caret's line is scrolled into view if it is out of view (a window resize that re-wrapped the text), which is what the call was for.
+    private var frameChangeDepth = 0
+    private var deferredScrollRange: NSRange?
+
+    override func setFrameSize(_ newSize: NSSize) {
+        frameChangeDepth += 1
+        super.setFrameSize(newSize)
+        frameChangeDepth -= 1
+        guard frameChangeDepth == 0, deferredScrollRange != nil else { return }
+        deferredScrollRange = nil
+        let caret = selectedRange()
+        guard caret.length == 0, !caretLineIsVisible(at: caret.location) else { return }
+        scrollRangeToVisible(caret)
+    }
+
+    /// Whether the line that holds the caret at `location` lies fully inside the visible rect (laid out first; false when it cannot be told).
+    private func caretLineIsVisible(at location: Int) -> Bool {
+        guard let lm = layoutManager, let ts = textStorage, ts.length > 0, location <= ts.length else { return false }
+        let line: NSRect
+        if location >= ts.length, let last = ts.string.utf16.last, last == 0x0A || last == 0x0D {
+            lm.ensureLayout(forCharacterRange: NSRange(location: ts.length - 1, length: 1))
+            line = lm.extraLineFragmentRect
+        } else {
+            let loc = min(location, ts.length - 1)
+            lm.ensureLayout(forCharacterRange: NSRange(location: loc, length: 1))
+            let glyph = lm.glyphIndexForCharacter(at: loc)
+            guard glyph < lm.numberOfGlyphs else { return false }
+            line = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        }
+        guard line.height > 0 else { return false }
+        let r = line.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        return visibleRect.minY <= r.minY && r.maxY <= visibleRect.maxY
     }
 
     override func moveToEndOfDocument(_ sender: Any?) {

@@ -46,16 +46,33 @@ extension SelfTestScenarios {
             @MainActor func caretY() -> CGFloat { (host.caretLineRect(at: tv.selectedRange().location)?.minY ?? -1) + tv.textContainerOrigin.y - clip.bounds.origin.y }
             @MainActor func caretLine() -> CGFloat { host.caretLineRect(at: tv.selectedRange().location)?.minY ?? -1 }
             t.note(String(format: "start: caret at %d, clip y %.0f, caret line at %.0f on screen (viewport %.0f), typewriter %@, spacing %@, inset %.0f", start, clip.bounds.origin.y, caretY(), clip.bounds.height, EditorPreferences.typewriterMode ? "on" : "off", EditorPreferences.lineHeightFactor.map { String(format: "%.2f", Double($0)) } ?? "auto", tv.textContainerInset.height))
+            // --trace: the call stack of the first scroll after each key (who moves the view)
+            var traces: [String] = []
+            var armed = false
+            let observer = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: clip, queue: nil) { _ in
+                guard armed, SelfTest.flag("trace") else { return }
+                armed = false
+                let symbols = Thread.callStackSymbols.prefix(44).map { line -> String in
+                    // "3   AppKit   0x000... -[NSClipView scrollToPoint:] + 123" -> "AppKit -[NSClipView scrollToPoint:]"
+                    let parts = line.split(separator: " ", omittingEmptySubsequences: true)
+                    guard parts.count >= 4 else { return line }
+                    return parts[1] + " " + parts[3...].dropLast(2).joined(separator: " ")
+                }
+                traces.append(symbols.joined(separator: "\n        "))
+            }
+            defer { NotificationCenter.default.removeObserver(observer) }
             var i = keys.startIndex, n = 0, moves = 0, worst: CGFloat = 0
             while i < keys.endIndex {
                 var label: String
                 let y0 = clip.bounds.origin.y, line0 = caretLine(), screen0 = caretY()
+                armed = true; traces.removeAll()
                 if keys[i...].hasPrefix("<bs>") { AuditEd.pressKey(host, AuditEd.Key.delete); label = "Backspace"; i = keys.index(i, offsetBy: 4) }
                 else if keys[i...].hasPrefix("<cr>") { AuditEd.pressKey(host, AuditEd.Key.returnKey); label = "Return"; i = keys.index(i, offsetBy: 4) }
                 else { let ch = keys[i]; AuditEd.press(host, String(ch), code: 0); label = "'\(ch)'"; i = keys.index(after: i) }
                 n += 1
                 await t.spin(pause)
                 let dy = clip.bounds.origin.y - y0, sameLine = abs(caretLine() - line0) < 0.5
+                if let tr = traces.last, abs(dy) > 0.5 { t.note("    trace of the first scroll after #\(n):\n        \(tr)"); traces.removeAll() }
                 let dScreen = caretY() - screen0
                 if abs(dy) > 0.5 || abs(dScreen) > 0.5 {
                     if sameLine { moves += 1; worst = max(worst, abs(dScreen)) }

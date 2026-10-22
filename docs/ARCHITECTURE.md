@@ -411,6 +411,17 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
 37. **`cacheDisplay(in:to:)` of the (flipped) text view gives a bitmap whose rows run bottom-up.** A test that samples pixels of a line at y (view
     coordinates) reads rows `(visible.maxY - lineRect.maxY) * scale ... (visible.maxY - lineRect.minY) * scale`, not `lineRect.minY * scale`; `edit-focus`
     reads whole 23 pt bands from the top instead of single lines, which does not depend on the mapping.
+38. **AppKit scrolls the view from inside the text view's resize after an edit, and in a document of long paragraphs it scrolls wrong.** Every edit makes the
+    layout manager revise the text view's height (the estimates for text it has not laid out change with the edit, by a few points to 100 pt), and from inside
+    `-[NSLayoutManager _resizeTextViewForTextContainer:]` AppKit (a) scrolls by the height change as if it had happened above the viewport (`scrollPoint:`) and
+    (b) asks `scrollRangeToVisible` for the whole invalidated paragraph. With paragraphs that are one physical line of 1,500 characters (a dozen visual lines), every
+    Backspace moved the view by 34 - 100 pt while the caret's line stayed put, and after a few keys the view snapped back by the sum (reported while editing a proposal;
+    typing letters did not do it, deletions did). Not reproducible in a headless window: the scrolls come from the layer geometry update of the display cycle
+    (`_updateLayerGeometryFromView` -> `_ensureLayoutCompleteForVisibleRect`). `LuftigEditorTextView` captures a `ViewportAnchor` in `shouldChangeText` and
+    restores it in `didChangeText` (a position check, so a correct compensation is left alone; invariant 12 is about deltas during styling, this is not one), and a
+    `scrollRangeToVisible` that arrives while `setFrameSize` runs is reduced to "scroll the caret into view at the end of the frame change if it is out of view".
+    The on-screen tool `scroll-probe` (`--input f.md [--typewriter] [--line-spacing X] [--padding N] [--at-text T] [--keys 'ab<bs><cr>'] [--trace]`) types in a
+    real window and logs every movement of the view with the call stack of the first scroll after each key; `edit-scroll-stability` is the headless part.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

@@ -242,6 +242,43 @@ extension SelfTestScenarios {
                 host.styler.styleVisible()
                 t.check(abs(caretScreenY() - yPause) <= 1 && topCharacter() == topPause, String(format: "%@: the pause after typing (outline recomputed) moves nothing (caret %.0f -> %.0f)", label, yPause, caretScreenY()))
             }
+            // long paragraphs (one physical line of 1,500 characters, a dozen visual lines each; the document of the report, pitfall 38): the same keys
+            let sentence = "Agentic systems are built on language models but change the setup in which these models operate, and the layers involved belong to different actors. "
+            let longParas = (1...40).map { n in "Paragraph \(n). " + String(repeating: sentence, count: 10) }.joined(separator: "\n\n")
+            let (doc2, host2, _) = try await openEditor(t, text: "# Long paragraphs\n\n" + longParas + "\n", name: "scroll-stability-long.md", size: NSSize(width: 860, height: 700))
+            defer { t.close(doc2) }
+            EditorPreferences.lineHeightFactor = 2
+            EditorPreferences.padding = 30
+            await AuditEd.settle(t, host2, ms: 100)
+            let tv2 = host2.textView, clip2 = host2.scrollView.contentView, ns2 = tv2.string as NSString, lm2 = tv2.layoutManager!
+            let p20 = ns2.range(of: "Paragraph 20. ").location + 14 + sentence.utf16.count * 4
+            tv2.scrollRangeToVisible(NSRange(location: p20, length: 0))
+            await AuditEd.settle(t, host2, ms: 50)
+            tv2.setSelectedRange(NSRange(location: p20, length: 0))
+            await AuditEd.settle(t, host2, ms: 20)
+            @MainActor func caretY2() -> CGFloat { (host2.caretLineRect(at: tv2.selectedRange().location)?.minY ?? -1) + tv2.textContainerOrigin.y - clip2.bounds.origin.y }
+            @MainActor func run2(_ what: String, _ n: Int, allowedLines: Int, _ key: @MainActor () -> Void) async {
+                let top0 = lm2.characterIndexForGlyph(at: lm2.glyphIndex(for: NSPoint(x: 0, y: clip2.bounds.origin.y + 1 - tv2.textContainerOrigin.y), in: tv2.textContainer!))
+                let topY0 = lm2.lineFragmentRect(forGlyphAt: lm2.glyphIndexForCharacter(at: top0), effectiveRange: nil).minY + tv2.textContainerOrigin.y - clip2.bounds.origin.y
+                var worst: CGFloat = 0, topMoved = 0
+                let y0 = caretY2()
+                for _ in 0..<n {
+                    key()
+                    await AuditEd.settle(t, host2, ms: 5)
+                    worst = max(worst, abs(caretY2() - y0))
+                    let topY = lm2.lineFragmentRect(forGlyphAt: lm2.glyphIndexForCharacter(at: top0), effectiveRange: nil).minY + tv2.textContainerOrigin.y - clip2.bounds.origin.y
+                    if abs(topY - topY0) > 1 { topMoved += 1 }
+                }
+                let limit = CGFloat(allowedLines) * host2.theme.bodyLineHeight + 2
+                t.check(worst <= limit && topMoved == 0, String(format: "long paragraphs, %@: the window did not scroll (caret moved %.0f pt at most, allowed %.0f; the top line moved %d times of %d)", what, worst, limit, topMoved, n))
+            }
+            await run2("8 characters", 8, allowedLines: 1) { AuditEd.press(host2, "a", code: 0) }
+            await run2("16 Backspaces", 16, allowedLines: 1) { AuditEd.pressKey(host2, AuditEd.Key.delete) }
+            await run2("Return", 1, allowedLines: 1) { AuditEd.pressKey(host2, AuditEd.Key.returnKey) }
+            await run2("Backspace over it", 1, allowedLines: 1) { AuditEd.pressKey(host2, AuditEd.Key.delete) }
+            EditorPreferences.lineHeightFactor = nil
+            EditorPreferences.padding = EditorPreferences.defaultPadding
+
             // Typewriter Mode: the caret's line stays in the middle through the same edits, and the view never moves when the caret's line does not change
             // (with the settings the report came with: line spacing 2.0, padding 30)
             EditorPreferences.typewriterMode = true
