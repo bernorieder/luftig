@@ -74,7 +74,36 @@ final class LuftigEditorTextView: NSTextView {
     /// one stuttered ("after a while it works fine"). Nothing else helped (full redraws, size changes, fresh layers, copy-on-scroll, asynchronous drawing,
     /// the redraw policy, the window's opacity, the input context, accessibility, hiding / removing the indicator: all measured). Pitfall 33.
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-        super.drawInsertionPoint(in: rect, color: color, turnedOn: flag)
+        super.drawInsertionPoint(in: caretRect(within: rect), color: color, turnedOn: flag)
+    }
+
+    /// The caret as tall as the font at the insertion point (ascent + descent), standing on the baseline, instead of the whole line box that NSTextView
+    /// hands in (1.3 - 2 x the font size: uniform line heights, Theme.swift). The box's rect is what AppKit invalidates for the blink, so the caret stays inside it.
+    func caretRect(within rect: NSRect) -> NSRect {
+        guard let lm = layoutManager, let storage = textStorage else { return rect }
+        let length = storage.length
+        let loc = min(selectedRange().location, length)
+        var font: NSFont?
+        var baselineInFragment: CGFloat?                          // the baseline's y below the top of the line fragment
+        if length > 0 {
+            // the glyph at the caret: the character there, or the last one when the caret is at the end of the text (the extra line fragment after a final
+            // line break has no glyph: it is set like the last line, which uses the same paragraph style)
+            let charIndex = min(loc, length - 1)
+            let glyph = lm.glyphIndexForCharacter(at: charIndex)
+            if glyph < lm.numberOfGlyphs {
+                baselineInFragment = lm.location(forGlyphAt: glyph).y
+                font = storage.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont
+            }
+        }
+        if font == nil { font = typingAttributes[.font] as? NSFont }
+        guard let font, let baseline = baselineInFragment, baseline > 0 else { return rect }
+        let height = font.ascender - font.descender
+        guard height < rect.height else { return rect }
+        // the typesetter rounds the baseline, so the descent can overshoot the box by a fraction of a point: moved up by that, never clipped
+        var top = rect.minY + baseline - font.ascender
+        if top + height > rect.maxY { top = rect.maxY - height }
+        if top < rect.minY { top = rect.minY }
+        return NSRect(x: rect.minX, y: top, width: rect.width, height: height)
     }
 
     override func drawBackground(in rect: NSRect) {

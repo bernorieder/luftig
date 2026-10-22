@@ -389,7 +389,7 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     (measured with a bare NSTextView: origin (28, 20) whatever the container's width), so left = inset, right = inset + extra. The extra was dropped
     again (the window frame right of the scroller is the air there) but the mechanism stayed: the width is `clip width - 2 * inset`, spelled out.
     Everything that reads `textContainerOrigin` (the styler's viewport query, the anchor, the decorations) is unaffected; what reads
-    `textContainer.size.width` sees the container's width, which is the point (the bands end there). The Settings preview uses the same controller.
+    `textContainer.size.width` sees the container's width, which is the point (the bands end there). The Settings preview uses the same controller. The override also sizes the caret: as tall as the font at the insertion point (ascent + descent, on the baseline) instead of the whole uniform line box, inside the rect AppKit invalidates for the blink (`caretRect(within:)`).
 
 35. **Do not override `draw(_:)` on the NSTextView to paint over the text.** A (since removed) Focus Mode veiled everything but the paragraph at the caret;
     drawn from an override of `draw(_:)` that called super and filled the page colour over the rest, it was correct on screen, but `visual-redraw` then

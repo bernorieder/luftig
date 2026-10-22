@@ -66,12 +66,13 @@ extension Lexer {
         let afterEmptyItem = st.emptyItem
         st.emptyItem = false
 
-        // Front matter: only at the very start of the document.
+        // Front matter: only at the very start of the document, closed within the window, and YAML-like (the first line with content is `key:` or a
+        // `#` comment): a document that opens with a thematic break and prose (`---`, a paragraph, `---`) gets two rules, as CommonMark reads it.
         if absLS == 0 && recordCPs { fmEnd = -1 }
         if absLS == 0 && st.ccount == 0 && st.leaf == Leaf.none && le - ls >= 3 && w[ls] == 45 && w[ls + 1] == 45 && w[ls + 2] == 45 {
             var q = ls + 3
             while q < le && isSpaceOrTab(w[q]) { q += 1 }
-            if q == le, let close = frontMatterClose(after: eol) {
+            if q == le, let close = frontMatterClose(after: eol), frontMatterLooksLikeYAML(after: eol, closeEnd: close.end) {
                 // A closing line without a line break (end of file) can still grow: never skip the restart then.
                 if recordCPs { fmEnd = close.hasEOL ? wStart + close.end : Int.max }
                 st.leaf = Leaf.frontMatter
@@ -457,6 +458,38 @@ extension Lexer {
             p = e2
         }
         return nil
+    }
+
+    /// Whether the lines between the opening `---` (after `eol`) and the closing line look like YAML: the first line with content (within the window) is a
+    /// `key:` line (a YAML key: a letter or `_`, then letters, digits, `_`, `-`, `.`, blanks, then `:` followed by a blank or the end of the line) or a `#` comment.
+    /// Empty front matter (nothing before the closing line) does not count.
+    func frontMatterLooksLikeYAML(after eol: Int, closeEnd: Int) -> Bool {
+        let ww = self.w
+        var p = eol
+        while p < closeEnd {
+            let (le, e2) = lineBounds(p)
+            var q = p
+            while q < le && isSpaceOrTab(ww[q]) { q += 1 }
+            if q < le {
+                if e2 >= closeEnd { return false }                     // the closing line is the first one with content: empty front matter
+                let c = ww[q]
+                if c == 35 { return true }                                // #
+                let isLetter = (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95
+                if !isLetter { return false }
+                var r = q + 1
+                while r < le {
+                    let d = ww[r]
+                    if d == 58 { let after = r + 1; return after >= le || isSpaceOrTab(ww[after]) }      // :
+                    let ok = (d >= 65 && d <= 90) || (d >= 97 && d <= 122) || (d >= 48 && d <= 57) || d == 95 || d == 45 || d == 46 || isSpaceOrTab(d)
+                    if !ok { return false }
+                    r += 1
+                }
+                return false
+            }
+            if e2 <= p { return false }
+            p = e2
+        }
+        return false
     }
 
     // MARK: - Text lines, headings, tables

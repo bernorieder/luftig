@@ -1096,7 +1096,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         EditorPreferences.outlineWraps = sender.state == .on
         syncFromPreferences()
     }
+    /// Restore Defaults: after a confirmation (one click used to undo every setting at once).
     @objc func restoreDefaults(_ sender: Any?) {
+        #if LUFTIG_SELFTEST
+        if SettingsWindowController.headless { applyRestoreDefaults(); return }
+        #endif
+        let alert = NSAlert()
+        alert.messageText = "Restore every setting to its default?"
+        alert.informativeText = "Fonts, size, spacing, column width, the colour scheme, the panels and the padding go back to how luftig came. Imported and custom colour schemes are kept."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Restore Defaults")
+        alert.addButton(withTitle: "Cancel")
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] r in if r == .alertFirstButtonReturn { self?.applyRestoreDefaults() } }
+        if let w = window, w.isVisible { alert.beginSheetModal(for: w, completionHandler: finish) } else { finish(alert.runModal()) }
+    }
+    func applyRestoreDefaults() {
         EditorPreferences.restoreDefaults()
         shownSize = 0
         syncFromPreferences()

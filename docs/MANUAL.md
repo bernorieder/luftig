@@ -202,7 +202,7 @@ a second copy that gets launched (a build next to the installed one, `open -n`) 
 | Size | 9 to 40 pt: stepper and field. The same value as ⌘+ ⌘− ⌘0; headings (1.6 / 1.35 / 1.18 / 1.05 times) and code (0.9 times) keep their ratios |
 | Line spacing | A multiple of the font size, 1.1 to 2.0. "Automatic" (the default) is the curve luftig always had (1.46 at 11 pt, 1.42 at 16 pt, 1.31 at 28 pt), so the default look is unchanged. The line box is never smaller than the tallest letters of the chosen fonts (ascent + descent): a tall family such as Zapfino raises it and the window says so |
 | Column width | 480 to 1400 pt (default 760) with "Limit line length (centered column)", the same switch as View > Wrap to Readable Width; unchecked, the text uses the full window width. The window shows about how many characters per line that is |
-| Restore Defaults | Everything above back to the default look (one click, one restyle) |
+| Restore Defaults | Everything above back to the default look, after a confirmation (one restyle) |
 
 Stored in `UserDefaults` under `LuftigColorScheme`, `LuftigBodyFontFamily`, `LuftigCodeFontFamily`, `LuftigFontSize`, `LuftigLineHeightFactor`, `LuftigColumnWidth` and `LuftigReadableWidth`.
 Hostile or stale values never crash and never leave the allowed range (a scheme id this version does not know reads as the default, a size from the future is clamped), and are

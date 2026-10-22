@@ -12,6 +12,7 @@ extension SelfTestScenarios {
     static let editingScenarios: [SelfTest.Scenario] = [
         .init(name: "edit-lists", summary: "list continuation (pure): Return on bullets / numbers / tasks / quotes, empty items, Tab and Shift-Tab, renumbering", run: { t in try await editLists(t) }),
         .init(name: "edit-lists-editor", summary: "list continuation in the real editor: Return / Tab / Shift-Tab key events, one undo step, the Settings switch, code blocks and IME untouched", run: { t in try await editListsEditor(t) }),
+        .init(name: "edit-caret", summary: "the insertion point is as tall as the font at the caret (ascent + descent, on the baseline), not the line box: body, heading and the extra line after a final line break", run: { t in try await editCaret(t) }),
         .init(name: "edit-format-menu", summary: "the Format menu: one item per syntax bar element with a unique shortcut, the same edit as a click on the bar, tooltips name the shortcut, disabled without an editor", run: { t in try await editFormatMenu(t) }),
         .init(name: "edit-links", summary: "⌘-click / Edit > Open Link: the link under a character (inline, image, autolink, bare URL, reference), web / file / anchor targets, a real ⌘-click, a Markdown file opens in luftig at its anchor", run: { t in try await editLinks(t) }),
         .init(name: "edit-typewriter", summary: "View > Typewriter Mode: the caret's line in the middle, the inset makes room, remembered, every window follows", run: { t in try await editTypewriter(t) }),
@@ -181,6 +182,40 @@ extension SelfTestScenarios {
     }
 
     // MARK: edit-typewriter
+
+    @MainActor static func editCaret(_ t: SelfTest.T) async throws {
+        try await preservingSettings {
+            let text = "# Title\n\nBody text of a paragraph.\n"
+            let (doc, host, _) = try await openEditor(t, text: text, name: "caret.md", size: NSSize(width: 700, height: 500))
+            defer { t.close(doc) }
+            let tv = host.textView as! LuftigEditorTextView
+            guard let lm = tv.layoutManager, let storage = tv.textStorage else { t.check(false, "layout manager"); return }
+            lm.ensureLayout(forCharacterRange: NSRange(location: 0, length: storage.length))
+            @MainActor func check(_ location: Int, _ what: String) {
+                tv.setSelectedRange(NSRange(location: location, length: 0))
+                let charIndex = min(location, storage.length - 1)
+                let glyph = lm.glyphIndexForCharacter(at: charIndex)
+                let fragment = location >= storage.length ? lm.extraLineFragmentRect : lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                let box = NSRect(x: fragment.minX + tv.textContainerOrigin.x, y: fragment.minY + tv.textContainerOrigin.y, width: 1, height: fragment.height)      // what NSTextView hands in: the line box
+                let font = storage.attribute(.font, at: charIndex, effectiveRange: nil) as! NSFont
+                let r = tv.caretRect(within: box)
+                let fontHeight = font.ascender - font.descender
+                t.check(abs(r.height - fontHeight) < 0.01 && fontHeight < box.height - 2, "\(what): the caret is the font's height \(Int(fontHeight.rounded())) pt, not the line box \(Int(box.height)) pt")
+                t.check(r.minY >= box.minY - 0.01 && r.maxY <= box.maxY + 0.01, "\(what): inside the line box (invalidated for the blink)")
+                let baseline = fragment.minY + tv.textContainerOrigin.y + lm.location(forGlyphAt: glyph).y
+                // on the baseline - or moved up by the fraction of a point the rounded baseline lets the descent overshoot the box
+                let bottom = min(baseline - font.descender, box.maxY)
+                t.check(abs(r.maxY - bottom) < 0.01 && bottom > baseline - font.descender - 1, "\(what): standing on the baseline (overshoot \(String(format: "%.2f", baseline - font.descender - bottom)) pt)")
+            }
+            check(3, "heading")
+            check(12, "body")
+            check(storage.length, "the extra line after the final line break")
+            let plain = NSTextView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+            t.check(plain.textStorage?.length == 0, "set-up")
+            let empty = tv.caretRect(within: NSRect(x: 0, y: 0, width: 1, height: 30))
+            t.check(empty.height > 0, "an unexpected geometry falls back to the given rect: \(empty)")
+        }
+    }
 
     @MainActor static func editTypewriter(_ t: SelfTest.T) async throws {
         try await preservingSettings {
