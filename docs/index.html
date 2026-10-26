@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>luftig – a small, fast Markdown editor for the Mac</title>
+  <meta name="description" content="luftig is a free, native macOS Markdown editor: one text view, no preview, styled in place, very fast, and made for working with an AI on the same files.">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="./"><img src="icon.png" alt="">luftig</a>
+      <nav>
+        <a href="#install">Install</a>
+        <a href="https://github.com/bernorieder/luftig/blob/main/docs/MANUAL.md">Manual</a>
+        <a href="https://github.com/bernorieder/luftig">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="hero">
+        <img class="icon" src="icon.png" alt="luftig app icon: a page with a blue heading line and three grey lines that curl like a breeze">
+        <h1>A small, fast Markdown editor for the Mac</h1>
+        <p class="lead">luftig is a native macOS app for writing and thinking in plain text. One text view, no preview: the Markdown source is what you edit, styled in place. Alone, or with an AI that edits the same file.</p>
+        <a class="button" href="https://github.com/bernorieder/luftig/releases/latest">Download luftig</a>
+        <p class="small">Free and open source · macOS 14 or later · Mac with Apple silicon</p>
+      </div>
+
+      <div class="shot">
+        <picture>
+          <source srcset="screenshots/window-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/window-light.png" width="2480" height="1704" alt="A luftig window: the outline of the headings on the left, the text in the middle with headings, lists, a quote and a code block styled in place, the word count and reading time at the top right, the syntax bar below the text">
+        </picture>
+        <p class="small">Headings are bigger, code blocks and quotes are marked, emphasis looks emphasised, and the syntax characters are dimmed but stay visible and editable. What you see is the file.</p>
+      </div>
+
+      <section>
+        <h2>Why</h2>
+        <ul>
+          <li><strong>Fast and tiny.</strong> Pure AppKit and Swift, no web view, no dependencies, a 1.4 MB executable. A 1 MB file is on screen, styled, in about 20 ms, a 20 MB file in about 30 ms, and the idle CPU is 0.02 %.</li>
+          <li><strong>Made for working with an AI on the same files.</strong> luftig watches open files. When another program, an agent, a build tool or <code>git</code>, changes one, the new text appears within about 50 ms, keeping your selection and scroll position. Your own unsaved edits are merged in when the changes do not overlap, and a banner asks when they do. Nothing is ever written over a version you have not seen. You choose the behaviour: reload automatically, ask first, or never reload.</li>
+          <li><strong>No preview, just text.</strong> The file is the document; there is no second rendering to keep in sync and nothing an agent cannot read back. Copy as HTML or Rich Text and Export as HTML, Rich Text or PDF are there for the moment a document leaves the editor. CommonMark and GFM compatible.</li>
+          <li><strong>Deep visual customisation for distraction-free writing.</strong> Fonts for text, code and the panels, size, line spacing, column width, and adjustable padding. Sixteen colour schemes, any Base16 scheme from a file, or your own from seven colour pickers. Optional panels around the text: an outline of the headings, a word count and reading time, and a syntax bar that inserts Markdown with a click, all plain text in the scheme's dim colour, no boxes, no buttons. Typewriter Mode keeps the line you write on in the middle of the window.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Colour schemes</h2>
+        <p>The default scheme follows the system appearance, light and dark. Fifteen more are the colour themes of well-known editors (Solarized, GitHub, One, Gruvbox, Dracula, Nord, Monokai, Tomorrow Night, Catppuccin, Tokyo Night), with every text colour kept legible on every surface. Import any Base16 scheme from a file, or make your own in Settings.</p>
+        <div class="shot">
+          <img src="site/schemes.jpg" width="1600" height="3080" alt="All sixteen colour schemes, each showing a heading, a list, a quote and inline code" loading="lazy">
+        </div>
+        <div class="shot">
+          <img src="site/schemes-code.jpg" width="1600" height="2656" alt="All sixteen colour schemes, each showing a code block and a table" loading="lazy">
+        </div>
+      </section>
+
+      <section id="install">
+        <h2>Installation</h2>
+        <ol>
+          <li>Download <code>luftig-&lt;version&gt;.dmg</code> from the <a href="https://github.com/bernorieder/luftig/releases/latest">latest release</a>.</li>
+          <li>Open it and drag luftig into your Applications folder. The app is signed with a Developer ID and notarized, so macOS opens it without a warning.</li>
+          <li>To make luftig the default app for <code>.md</code> files: select one in the Finder, choose File → Get Info, pick luftig under "Open with" and click "Change All".</li>
+        </ol>
+        <p>With Homebrew:</p>
+        <pre><code>brew install bernorieder/luftig/luftig</code></pre>
+        <p>Later versions arrive with <code>brew upgrade</code>. Everything else, from the keyboard shortcuts to the settings in detail and how the reload behaves in every case, is in the <a href="https://github.com/bernorieder/luftig/blob/main/docs/MANUAL.md">manual</a>.</p>
+      </section>
+
+      <section>
+        <h2>How it is built</h2>
+        <ul>
+          <li><strong>Native, with the older of Apple's two text engines.</strong> Swift and AppKit, no web view, no third-party code. The text is shown by a single standard macOS text view on TextKit 1, the engine that keeps a 10 or 20 MB file scrolling smoothly; luftig draws the code backgrounds, quote bars and code pills itself. Only the text on screen is styled, and a keystroke restyles only its own paragraph, which is why the size of a document barely matters.</li>
+          <li><strong>A regular macOS document app underneath.</strong> Open, save, autosave, undo, tabs, window restoration and Find are the system's own. Files are read with the lowest-level system call, so a file that is being rewritten by another program is never mapped into memory, and the character encoding and line endings a file came with are written back unchanged.</li>
+          <li><strong>Tested without a screen.</strong> 114 automated scenarios with about 4,300 checks cover the file handling, the editor driven by real key events, the pixels it draws, the colour contrast of every scheme, memory and speed; another 1,900 checks cover the Markdown lexer. The <a href="https://github.com/bernorieder/luftig/blob/main/docs/ARCHITECTURE.md">architecture notes</a> describe the design and the pitfalls.</li>
+        </ul>
+      </section>
+
+      <section id="privacy">
+        <h2>Privacy</h2>
+        <p>luftig runs entirely on your Mac. It has no account, no server and no network connection of its own: it reads and writes the files you open and nothing else. There are no analytics, no crash reports and no tracking. The only time it talks to the network is when you click a link, which opens in your browser.</p>
+      </section>
+    </main>
+
+    <footer class="site">
+      <p>luftig is made by Bernhard Rieder as part of <a href="https://polsys.net">polsys.net</a>. Its source code is on <a href="https://github.com/bernorieder/luftig">GitHub</a>, under the <a href="https://github.com/bernorieder/luftig/blob/main/LICENSE">MIT License</a>; the colour schemes keep their authors' names and licences. Contact: <a href="mailto:berno.rieder@gmail.com">berno.rieder@gmail.com</a></p>
+      <p>Markdown is a format by John Gruber. luftig is not affiliated with Apple.</p>
+    </footer>
+  </div>
+</body>
+</html>
