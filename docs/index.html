@@ -28,13 +28,11 @@
         <p class="small">Free and open source · macOS 14 or later · Mac with Apple silicon</p>
       </div>
 
-      <div class="shot">
-        <picture>
-          <source srcset="screenshots/window-dark.png" media="(prefers-color-scheme: dark)">
-          <img src="screenshots/window-light.png" width="2480" height="1704" alt="A luftig window: the outline of the headings on the left, the text in the middle with headings, lists, a quote and a code block styled in place, the word count and reading time at the top right, the syntax bar below the text">
-        </picture>
-        <p class="small">Headings are bigger, code blocks and quotes are marked, emphasis looks emphasised, and the syntax characters are dimmed but stay visible and editable. What you see is the file.</p>
+      <div class="shots">
+        <a class="zoom" href="screenshots/window-light.png"><img src="screenshots/window-light.png" width="2480" height="1704" alt="luftig in light: the outline of the headings on the left, the text with headings, lists, a quote and code styled in place, the word count at the top right, the syntax bar below the text"></a>
+        <a class="zoom" href="screenshots/window-dark.png"><img src="screenshots/window-dark.png" width="2480" height="1704" alt="The same window in dark"></a>
       </div>
+      <p class="small caption">Headings are bigger, code blocks and quotes are marked, emphasis looks emphasised, and the syntax characters are dimmed but stay visible and editable. What you see is the file. Click to enlarge.</p>
 
       <section>
         <h2>Why</h2>
@@ -49,12 +47,8 @@
       <section>
         <h2>Colour schemes</h2>
         <p>The default scheme follows the system appearance, light and dark. Fifteen more are the colour themes of well-known editors (Solarized, GitHub, One, Gruvbox, Dracula, Nord, Monokai, Tomorrow Night, Catppuccin, Tokyo Night), with every text colour kept legible on every surface. Import any Base16 scheme from a file, or make your own in Settings.</p>
-        <div class="shot">
-          <img src="site/schemes.jpg" width="1600" height="3080" alt="All sixteen colour schemes, each showing a heading, a list, a quote and inline code" loading="lazy">
-        </div>
-        <div class="shot">
-          <img src="site/schemes-code.jpg" width="1600" height="2656" alt="All sixteen colour schemes, each showing a code block and a table" loading="lazy">
-        </div>
+        <img class="schemes" src="site/schemes.svg" width="756" height="486" alt="The sixteen colour schemes, each as a small tile with a heading, a task with inline code and a link, and a quote">
+        <p class="small">Full screenshots of every scheme: <a class="zoom" href="site/schemes.jpg">lists and quotes</a>, <a class="zoom" href="site/schemes-code.jpg">code and tables</a>.</p>
       </section>
 
       <section id="install">
@@ -89,5 +83,20 @@
       <p>Markdown is a format by John Gruber. luftig is not affiliated with Apple.</p>
     </footer>
   </div>
+
+  <dialog id="lightbox" aria-label="Enlarged image"><img alt=""></dialog>
+  <script>
+    (() => {
+      const box = document.getElementById("lightbox"), img = box.querySelector("img");
+      if (!box.showModal) return;                       // an old browser: the links open the images
+      document.querySelectorAll("a.zoom").forEach(a => a.addEventListener("click", e => {
+        e.preventDefault();
+        img.src = a.href;
+        img.alt = a.querySelector("img")?.alt || a.textContent;
+        box.showModal();
+      }));
+      box.addEventListener("click", () => box.close());  // a click anywhere closes it; Escape too (the dialog's own)
+    })();
+  </script>
 </body>
 </html>

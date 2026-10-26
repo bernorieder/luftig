@@ -13,8 +13,10 @@ A small, very fast, native macOS Markdown editor for writing and thinking in pla
 * **No preview, just text.** The file is the document; there is no second rendering to keep in sync and nothing an agent cannot read back. Copy as HTML or Rich Text and Export as HTML / Rich Text / PDF are there for the moment a document leaves the editor. CommonMark and GFM compatible.
 * **Deep visual customization for distraction-free writing.** Fonts (text, code, outline), size, line spacing, column width, and adjustable padding. 16 colour schemes, import any Base16 scheme from a file, or create your own from seven colour pickers. Optional panels around the text: an outline of the headings, a word count and reading time, and a syntax bar that inserts Markdown with a click - all plain text in the scheme's dim colour, no boxes, no buttons. Typewriter Mode keeps the line you write on in the middle of the window.
 
-![luftig, dark: the outline on the left, the word count and reading time at the top right, the syntax bar below the text](docs/screenshots/window-dark.png)
-![luftig, light](docs/screenshots/window-light.png)
+<p align="center">
+  <a href="docs/screenshots/window-light.png"><img src="docs/screenshots/window-light.png" width="49%" alt="luftig in light: the outline on the left, the word count and reading time at the top right, the syntax bar below the text"></a>
+  <a href="docs/screenshots/window-dark.png"><img src="docs/screenshots/window-dark.png" width="49%" alt="The same window in dark"></a>
+</p>
 
 ## Install
 
@@ -48,8 +50,9 @@ Everything else (shortcuts, settings in detail, the reload matrix, the look on m
 
 ## Colour schemes
 
-![All schemes: lists, quotes, code](docs/screenshots/schemes/contact-sheet.png)
-![All schemes: code blocks, tables](docs/screenshots/schemes/contact-sheet-code.png)
+<img src="docs/site/schemes.svg" width="756" alt="The sixteen colour schemes, each as a small tile with a heading, a task with inline code and a link, and a quote">
+
+Full screenshots of every scheme: [lists and quotes](docs/screenshots/schemes/contact-sheet.png), [code and tables](docs/screenshots/schemes/contact-sheet-code.png). The tiles are drawn from the colours the editor uses (`Scripts/make-schemes-svg.py`).
 
 ## License
 

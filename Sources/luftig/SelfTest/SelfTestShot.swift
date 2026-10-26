@@ -13,8 +13,40 @@ import UniformTypeIdentifiers
 extension SelfTestScenarios {
     static let shotScenarios: [SelfTest.Scenario] = [
         .init(name: "shot-window", summary: "(ON SCREEN, tool) a PNG of a real window with every pane: --input f.md --out f.png [--appearance dark|light] [--width W --height H] [--scroll-to-text T] [--scheme id]", run: { t in try await shotWindow(t) }, inAll: false),
+        .init(name: "schemes-dump", summary: "(tool) every built-in scheme's colours as the editor uses them (after the legibility step; the default in light and dark), one JSON object per line: --out f.jsonl", run: { t in try await schemesDump(t) }, inAll: false),
         .init(name: "scroll-probe", summary: "(ON SCREEN, tool) types and deletes in a real window and logs every movement of the view: --input f.md [--typewriter] [--line-spacing X] [--padding N] [--font-size N] [--at-text T] [--keys 'aaa<bs><bs><cr>'] [--pause-ms N]", run: { t in try await scrollProbe(t) }, inAll: false),
     ]
+
+    /// The colours of every built-in scheme for docs/site/schemes.svg (Scripts/make-schemes-svg.py): page, text, markers, headings, accent, links, inline code and
+    /// its pill, the quote band and bar, all composited over the page (opaque hex).
+    @MainActor static func schemesDump(_ t: SelfTest.T) async throws {
+        guard let out = SelfTest.argument("out") else { t.check(false, "usage: --selftest schemes-dump --out f.jsonl"); return }
+        let saved = EditorPreferences.colorSchemeID
+        defer { Palette.apply(schemeID: saved) }
+        typealias C = (r: Double, g: Double, b: Double, a: Double)
+        func over(_ top: C, _ base: C) -> C { (top.r * top.a + base.r * (1 - top.a), top.g * top.a + base.g * (1 - top.a), top.b * top.a + base.b * (1 - top.a), 1) }
+        func hex(_ c: C) -> String { String(format: "#%02x%02x%02x", Int((c.r * 255).rounded()), Int((c.g * 255).rounded()), Int((c.b * 255).rounded())) }
+        var entries: [(id: String, name: String, scheme: String, dark: Bool)] = [(ColorSchemes.defaultID, "luftig", ColorSchemes.defaultID, false), (ColorSchemes.defaultID + "-dark", "luftig (dark)", ColorSchemes.defaultID, true)]
+        entries += SchemeSpec.all.map { ($0.id, $0.name, $0.id, $0.dark) }
+        var lines: [String] = []
+        for e in entries {
+            Palette.apply(schemeID: e.scheme)
+            let ap = NSAppearance(named: e.dark ? .darkAqua : .aqua)!
+            func c(_ col: NSColor) -> C { let v = Contrast.rgba(col, appearance: ap); return (v.r, v.g, v.b, v.a) }
+            let bg = over(c(Palette.background), (1, 1, 1, 1))
+            let quote = over(c(Palette.quoteBand), bg)
+            let fields: [(String, String)] = [
+                ("bg", hex(bg)), ("text", hex(over(c(Palette.text), bg))), ("marker", hex(over(c(Palette.marker), bg))), ("heading", hex(over(c(Palette.heading), bg))),
+                ("accent", hex(over(c(Palette.accent), bg))), ("link", hex(over(c(Palette.link), bg))), ("code", hex(over(c(Palette.copper), bg))),
+                ("pill", hex(over(c(Palette.inlinePill), bg))), ("quote", hex(quote)), ("bar", hex(over(c(Palette.quoteBar), quote))),
+                ("quoteText", hex(over(c(Palette.quoteText), quote))),
+            ]
+            let body = fields.map { "\"\($0.0)\": \"\($0.1)\"" }.joined(separator: ", ")
+            lines.append("{\"id\": \"\(e.id)\", \"name\": \"\(e.name)\", \"dark\": \(e.dark), \(body)}")
+        }
+        try (lines.joined(separator: "\n") + "\n").write(toFile: out, atomically: true, encoding: .utf8)
+        t.check(lines.count == entries.count, "wrote \(lines.count) schemes to \(out)")
+    }
 
     /// Real window, real key events, real time between them (the display cycle runs): after every key the view's scroll position and the caret's line on screen
     /// are logged, and every move of the view while the caret's line did not change is reported. For the report "the text scrolls up or jumps to the middle while

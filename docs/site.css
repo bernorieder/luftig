@@ -79,9 +79,26 @@ nav a:hover { color: var(--text); }
 .small { font-size: 14px; color: var(--muted); }
 .hero .small { margin-top: 12px; }
 
-.shot { margin: 30px 0 10px; }
-.shot img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; }
-.shot p { margin: 8px 0 0; }
+/* the two window screenshots, side by side; a click opens one large (the dialog below) */
+.shots { display: flex; gap: 14px; margin: 30px 0 8px; }
+.shots a { flex: 1; display: block; cursor: zoom-in; }
+.shots img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 8px; transition: transform .15s ease; }
+.shots a:hover img { transform: scale(1.015); }
+p.caption { margin: 0 0 10px; text-align: center; }
+
+img.schemes { width: 100%; height: auto; display: block; margin: 16px 0 6px; }
+a.zoom { cursor: zoom-in; }
+
+dialog#lightbox {
+  border: none;
+  padding: 0;
+  max-width: 96vw;
+  max-height: 94vh;
+  background: transparent;
+  cursor: zoom-out;
+}
+dialog#lightbox::backdrop { background: rgba(0, 0, 0, .72); }
+dialog#lightbox img { display: block; max-width: 96vw; max-height: 94vh; width: auto; height: auto; border-radius: 8px; }
 
 section { padding: 22px 0; border-top: 1px solid var(--line); }
 section:first-of-type { border-top: none; }
@@ -127,6 +144,7 @@ footer.site p { margin: 6px 0; }
   .hero h1 { font-size: 30px; }
   .hero p.lead { font-size: 17px; }
   nav { gap: 12px; }
+  .shots { flex-direction: column; }
   table, thead, tbody, tr, th, td { display: block; }
   thead { display: none; }
   td { border-bottom: none; padding: 2px 0; }

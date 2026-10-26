@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="756" height="486" viewBox="0 0 756 486" role="img" aria-label="The 16 colour schemes of luftig, each showing a heading, a task with inline code and a link, and a quote">
+  <rect x="0" y="0" width="180" height="92" rx="8" fill="#ffffff" stroke="#8080803a"/>
+  <text x="10" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#7c808c">##</tspan><tspan font-size="15" font-weight="700" fill="#222876"> Heading</tspan></text>
+  <rect x="51.3" y="37" width="47.3" height="16" rx="3" fill="#f7ede8"/>
+  <text x="10" y="49" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#4046c4">- [x] </tspan><tspan fill="#a83a00">`code`</tspan></text>
+  <text x="100.7" y="49" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#272727">and a </tspan><tspan fill="#005cc8" text-decoration="underline">link</tspan></text>
+  <rect x="6" y="60" width="168" height="22" rx="3" fill="#f5f6fc"/>
+  <rect x="6" y="60" width="2.5" height="22" fill="#9295dd"/>
+  <text x="14" y="75" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#7c808c">&gt; </tspan><tspan fill="#4a5064">A quieter quote</tspan></text>
+  <text x="2" y="108" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">luftig</text>
+  <rect x="192" y="0" width="180" height="92" rx="8" fill="#fdf6e3" stroke="#8080803a"/>
+  <text x="202" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#798687">##</tspan><tspan font-size="15" font-weight="700" fill="#b93d00"> Heading</tspan></text>
+  <rect x="243.3" y="37" width="47.3" height="16" rx="3" fill="#eaeedc"/>
+  <text x="202" y="49" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#5c5fb1">- [x] </tspan><tspan fill="#00746d">`code`</tspan></text>
+  <text x="292.7" y="49" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#4e646b">and a </tspan><tspan fill="#006cac" text-decoration="underline">link</tspan></text>
+  <rect x="198" y="60" width="168" height="22" rx="3" fill="#f6efe1"/>
+  <rect x="198" y="60" width="2.5" height="22" fill="#a1a0c7"/>
+  <text x="206" y="75" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#798687">&gt; </tspan><tspan fill="#596a6e">A quieter quote</tspan></text>
+  <text x="194" y="108" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Solarized Light</text>
+  <rect x="384" y="0" width="180" height="92" rx="8" fill="#002b36" stroke="#8080803a"/>
+  <text x="394" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#738991">##</tspan><tspan font-size="15" font-weight="700" fill="#fb7648"> Heading</tspan></text>
+  <rect x="435.3" y="37" width="47.3" height="16" rx="3" fill="#063d45"/>
+  <text x="394" y="49" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#8f97ed">- [x] </tspan><tspan fill="#46b7ad">`code`</tspan></text>
+  <text x="484.7" y="49" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#95a7a9">and a </tspan><tspan fill="#44a4ec" text-decoration="underline">link</tspan></text>
+  <rect x="390" y="60" width="168" height="22" rx="3" fill="#093142"/>
+  <rect x="390" y="60" width="2.5" height="22" fill="#6073b1"/>
+  <text x="398" y="75" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#738991">&gt; </tspan><tspan fill="#8da1a5">A quieter quote</tspan></text>
+  <text x="386" y="108" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Solarized Dark</text>
+  <rect x="576" y="0" width="180" height="92" rx="8" fill="#ffffff" stroke="#8080803a"/>
+  <text x="586" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#59636e">##</tspan><tspan font-size="15" font-weight="700" fill="#0550ae"> Heading</tspan></text>
+  <rect x="627.3" y="37" width="47.3" height="16" rx="3" fill="#f5ede8"/>
+  <text x="586" y="49" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#6639ba">- [x] </tspan><tspan fill="#953800">`code`</tspan></text>
+  <text x="676.7" y="49" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#1f2328">and a </tspan><tspan fill="#0064d5" text-decoration="underline">link</tspan></text>
+  <rect x="582" y="60" width="168" height="22" rx="3" fill="#f7f5fc"/>
+  <rect x="582" y="60" width="2.5" height="22" fill="#a78ed7"/>
+  <text x="590" y="75" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#59636e">&gt; </tspan><tspan fill="#3b424a">A quieter quote</tspan></text>
+  <text x="578" y="108" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">GitHub Light</text>
+  <rect x="0" y="124" width="180" height="92" rx="8" fill="#0d1117" stroke="#8080803a"/>
+  <text x="10" y="149" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#9198a1">##</tspan><tspan font-size="15" font-weight="700" fill="#79c0ff"> Heading</tspan></text>
+  <rect x="51.3" y="161" width="47.3" height="16" rx="3" fill="#312721"/>
+  <text x="10" y="173" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#d2a8ff">- [x] </tspan><tspan fill="#ffa657">`code`</tspan></text>
+  <text x="100.7" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#f0f6fc">and a </tspan><tspan fill="#4b9aff" text-decoration="underline">link</tspan></text>
+  <rect x="6" y="184" width="168" height="22" rx="3" fill="#1e1e2b"/>
+  <rect x="6" y="184" width="2.5" height="22" fill="#9378b5"/>
+  <text x="14" y="199" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#9198a1">&gt; </tspan><tspan fill="#bfc6ce">A quieter quote</tspan></text>
+  <text x="2" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">GitHub Dark</text>
+  <rect x="192" y="124" width="180" height="92" rx="8" fill="#fafafa" stroke="#8080803a"/>
+  <text x="202" y="149" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#828288">##</tspan><tspan font-size="15" font-weight="700" fill="#be3229"> Heading</tspan></text>
+  <rect x="243.3" y="161" width="47.3" height="16" rx="3" fill="#ebf2eb"/>
+  <text x="202" y="173" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#a626a4">- [x] </tspan><tspan fill="#217524">`code`</tspan></text>
+  <text x="292.7" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#383a42">and a </tspan><tspan fill="#295ed6" text-decoration="underline">link</tspan></text>
+  <rect x="198" y="184" width="168" height="22" rx="3" fill="#f6eff6"/>
+  <rect x="198" y="184" width="2.5" height="22" fill="#ca81c9"/>
+  <text x="206" y="199" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#828288">&gt; </tspan><tspan fill="#65666e">A quieter quote</tspan></text>
+  <text x="194" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">One Light</text>
+  <rect x="384" y="124" width="180" height="92" rx="8" fill="#282c34" stroke="#8080803a"/>
+  <text x="394" y="149" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#8c94a1">##</tspan><tspan font-size="15" font-weight="700" fill="#fe878e"> Heading</tspan></text>
+  <rect x="435.3" y="161" width="47.3" height="16" rx="3" fill="#39433e"/>
+  <text x="394" y="173" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#db8cf2">- [x] </tspan><tspan fill="#98c379">`code`</tspan></text>
+  <text x="484.7" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#abb2bf">and a </tspan><tspan fill="#62b1f1" text-decoration="underline">link</tspan></text>
+  <rect x="390" y="184" width="168" height="22" rx="3" fill="#353242"/>
+  <rect x="390" y="184" width="2.5" height="22" fill="#a16db5"/>
+  <text x="398" y="199" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#8c94a1">&gt; </tspan><tspan fill="#a3abb8">A quieter quote</tspan></text>
+  <text x="386" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">One Dark</text>
+  <rect x="576" y="124" width="180" height="92" rx="8" fill="#fbf1c7" stroke="#8080803a"/>
+  <text x="586" y="149" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#8a7b6d">##</tspan><tspan font-size="15" font-weight="700" fill="#6c6700"> Heading</tspan></text>
+  <rect x="627.3" y="161" width="47.3" height="16" rx="3" fill="#f4e1b5"/>
+  <text x="586" y="173" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#895700">- [x] </tspan><tspan fill="#ae3a02">`code`</tspan></text>
+  <text x="676.7" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#3c3836">and a </tspan><tspan fill="#076678" text-decoration="underline">link</tspan></text>
+  <rect x="582" y="184" width="168" height="22" rx="3" fill="#f7ebbe"/>
+  <rect x="582" y="184" width="2.5" height="22" fill="#bb9a56"/>
+  <text x="590" y="199" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#8a7b6d">&gt; </tspan><tspan fill="#655c54">A quieter quote</tspan></text>
+  <text x="578" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Gruvbox Light</text>
+  <rect x="0" y="248" width="180" height="92" rx="8" fill="#282828" stroke="#8080803a"/>
+  <text x="10" y="273" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#9e8f7f">##</tspan><tspan font-size="15" font-weight="700" fill="#b8bb26"> Heading</tspan></text>
+  <rect x="51.3" y="285" width="47.3" height="16" rx="3" fill="#483526"/>
+  <text x="10" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#fabd2f">- [x] </tspan><tspan fill="#ff9a58">`code`</tspan></text>
+  <text x="100.7" y="297" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#ebdbb2">and a </tspan><tspan fill="#98bbad" text-decoration="underline">link</tspan></text>
+  <rect x="6" y="308" width="168" height="22" rx="3" fill="#3a3529"/>
+  <rect x="6" y="308" width="2.5" height="22" fill="#b78d2d"/>
+  <text x="14" y="323" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#9e8f7f">&gt; </tspan><tspan fill="#c1b195">A quieter quote</tspan></text>
+  <text x="2" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Gruvbox Dark</text>
+  <rect x="192" y="248" width="180" height="92" rx="8" fill="#282a36" stroke="#8080803a"/>
+  <text x="202" y="273" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#8597cb">##</tspan><tspan font-size="15" font-weight="700" fill="#c399ff"> Heading</tspan></text>
+  <rect x="243.3" y="285" width="47.3" height="16" rx="3" fill="#2e4940"/>
+  <text x="202" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#ff94cf">- [x] </tspan><tspan fill="#50fa7b">`code`</tspan></text>
+  <text x="292.7" y="297" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#f8f8f2">and a </tspan><tspan fill="#8be9fd" text-decoration="underline">link</tspan></text>
+  <rect x="198" y="308" width="168" height="22" rx="3" fill="#3a3142"/>
+  <rect x="198" y="308" width="2.5" height="22" fill="#ba719e"/>
+  <text x="206" y="323" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#8597cb">&gt; </tspan><tspan fill="#aab3cc">A quieter quote</tspan></text>
+  <text x="194" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Dracula</text>
+  <rect x="384" y="248" width="180" height="92" rx="8" fill="#2e3440" stroke="#8080803a"/>
+  <text x="394" y="273" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#919cb3">##</tspan><tspan font-size="15" font-weight="700" fill="#88c0d0"> Heading</tspan></text>
+  <rect x="435.3" y="285" width="47.3" height="16" rx="3" fill="#40494b"/>
+  <text x="394" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#d8b1d1">- [x] </tspan><tspan fill="#acc895">`code`</tspan></text>
+  <text x="484.7" y="297" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#d8dee9">and a </tspan><tspan fill="#9fc0e1" text-decoration="underline">link</tspan></text>
+  <rect x="390" y="308" width="168" height="22" rx="3" fill="#393c49"/>
+  <rect x="390" y="308" width="2.5" height="22" fill="#a088a1"/>
+  <text x="398" y="323" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#919cb3">&gt; </tspan><tspan fill="#acb5c6">A quieter quote</tspan></text>
+  <text x="386" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Nord</text>
+  <rect x="576" y="248" width="180" height="92" rx="8" fill="#272822" stroke="#8080803a"/>
+  <text x="586" y="273" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#96917c">##</tspan><tspan font-size="15" font-weight="700" fill="#a6e22e"> Heading</tspan></text>
+  <rect x="627.3" y="285" width="47.3" height="16" rx="3" fill="#473922"/>
+  <text x="586" y="297" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#ff99ad">- [x] </tspan><tspan fill="#ffa13f">`code`</tspan></text>
+  <text x="676.7" y="297" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#f8f8f2">and a </tspan><tspan fill="#66d9ef" text-decoration="underline">link</tspan></text>
+  <rect x="582" y="308" width="168" height="22" rx="3" fill="#392829"/>
+  <rect x="582" y="308" width="2.5" height="22" fill="#ba717f"/>
+  <text x="590" y="323" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#96917c">&gt; </tspan><tspan fill="#bebcae">A quieter quote</tspan></text>
+  <text x="578" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Monokai</text>
+  <rect x="0" y="372" width="180" height="92" rx="8" fill="#1d1f21" stroke="#8080803a"/>
+  <text x="10" y="397" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#969896">##</tspan><tspan font-size="15" font-weight="700" fill="#de935f"> Heading</tspan></text>
+  <rect x="51.3" y="409" width="47.3" height="16" rx="3" fill="#34372c"/>
+  <text x="10" y="421" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#b495bd">- [x] </tspan><tspan fill="#b5bd68">`code`</tspan></text>
+  <text x="100.7" y="421" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#c5c8c6">and a </tspan><tspan fill="#82a4c0" text-decoration="underline">link</tspan></text>
+  <rect x="6" y="432" width="168" height="22" rx="3" fill="#2a292e"/>
+  <rect x="6" y="432" width="2.5" height="22" fill="#846f8b"/>
+  <text x="14" y="447" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#969896">&gt; </tspan><tspan fill="#adb0ae">A quieter quote</tspan></text>
+  <text x="2" y="480" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Tomorrow Night</text>
+  <rect x="192" y="372" width="180" height="92" rx="8" fill="#eff1f5" stroke="#8080803a"/>
+  <text x="202" y="397" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#7c7e92">##</tspan><tspan font-size="15" font-weight="700" fill="#8432e9"> Heading</tspan></text>
+  <rect x="243.3" y="409" width="47.3" height="16" rx="3" fill="#dfeae3"/>
+  <text x="202" y="421" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#ad4000">- [x] </tspan><tspan fill="#1c7300">`code`</tspan></text>
+  <text x="292.7" y="421" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#4c4f69">and a </tspan><tspan fill="#0d57e5" text-decoration="underline">link</tspan></text>
+  <rect x="198" y="432" width="168" height="22" rx="3" fill="#f0eae9"/>
+  <rect x="198" y="432" width="2.5" height="22" fill="#cb8c69"/>
+  <text x="206" y="447" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#7c7e92">&gt; </tspan><tspan fill="#61647c">A quieter quote</tspan></text>
+  <text x="194" y="480" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Catppuccin Latte</text>
+  <rect x="384" y="372" width="180" height="92" rx="8" fill="#1e1e2e" stroke="#8080803a"/>
+  <text x="394" y="397" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#9399b2">##</tspan><tspan font-size="15" font-weight="700" fill="#cba6f7"> Heading</tspan></text>
+  <rect x="435.3" y="409" width="47.3" height="16" rx="3" fill="#323c3f"/>
+  <text x="394" y="421" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#fab387">- [x] </tspan><tspan fill="#a6e3a1">`code`</tspan></text>
+  <text x="484.7" y="421" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#cdd6f4">and a </tspan><tspan fill="#89b4fa" text-decoration="underline">link</tspan></text>
+  <rect x="390" y="432" width="168" height="22" rx="3" fill="#312b36"/>
+  <rect x="390" y="432" width="2.5" height="22" fill="#b4836a"/>
+  <text x="398" y="447" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#9399b2">&gt; </tspan><tspan fill="#b0b7d3">A quieter quote</tspan></text>
+  <text x="386" y="480" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Catppuccin Mocha</text>
+  <rect x="576" y="372" width="180" height="92" rx="8" fill="#1a1b26" stroke="#8080803a"/>
+  <text x="586" y="397" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"><tspan font-size="12" fill="#7984b0">##</tspan><tspan font-size="15" font-weight="700" fill="#7aa2f7"> Heading</tspan></text>
+  <rect x="627.3" y="409" width="47.3" height="16" rx="3" fill="#3c2f2f"/>
+  <text x="586" y="421" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12"><tspan fill="#bb9af7">- [x] </tspan><tspan fill="#ff9e64">`code`</tspan></text>
+  <text x="676.7" y="421" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#c0caf5">and a </tspan><tspan fill="#7dcfff" text-decoration="underline">link</tspan></text>
+  <rect x="582" y="432" width="168" height="22" rx="3" fill="#282638"/>
+  <rect x="582" y="432" width="2.5" height="22" fill="#8771b4"/>
+  <text x="590" y="447" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12"><tspan fill="#7984b0">&gt; </tspan><tspan fill="#949ec9">A quieter quote</tspan></text>
+  <text x="578" y="480" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8a8a92">Tokyo Night</text>
+</svg>
