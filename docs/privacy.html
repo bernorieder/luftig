@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy – luftig</title>
+  <meta name="description" content="How luftig, a Markdown editor for the Mac, handles your files and data.">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="./"><img src="icon.png" alt="">luftig</a>
+      <nav>
+        <a href="./">Home</a>
+        <a href="https://github.com/bernorieder/luftig">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Privacy policy</h1>
+      <p class="small">Last updated 26 October 2026</p>
+
+      <p>luftig is a free, open-source Markdown editor for the Mac. It's made by Bernhard Rieder (<a href="mailto:berno.rieder@gmail.com">berno.rieder@gmail.com</a>). This policy explains what data luftig accesses, what it does with it, and how you can remove it.</p>
+
+      <p><strong>In short:</strong> luftig runs entirely on your Mac and has no network connection of its own. There's no luftig server and no account. The developer doesn't receive, collect or store any of your data.</p>
+
+      <h2>Data luftig accesses</h2>
+      <ul>
+        <li><strong>The files you open.</strong> luftig reads and writes the documents you open, create or save with it, and only those.</li>
+        <li><strong>Changes to open files.</strong> While a document is open, luftig asks macOS to tell it when another program changes the file, so it can show the new text.</li>
+        <li><strong>Links you follow.</strong> When you ⌘-click a link, luftig hands the address to your browser, or opens the linked file if it's a text or Markdown file.</li>
+      </ul>
+
+      <h2>How luftig uses this data</h2>
+      <ul>
+        <li>To show and style your text, and to save your changes to the file.</li>
+        <li>To show changes that other programs make to an open file.</li>
+        <li>To count words and list the headings of a document in its window.</li>
+      </ul>
+      <p>luftig doesn't use your data for anything else. It doesn't send it anywhere, doesn't use it for advertising, and doesn't use it to develop, improve or train AI or machine learning models. No person reads your data.</p>
+
+      <h2>Where your data is stored</h2>
+      <p>Only on your Mac:</p>
+      <ul>
+        <li><strong>Your documents:</strong> where you save them. luftig writes the character encoding and line endings a file came with back unchanged.</li>
+        <li><strong>Settings:</strong> your choices in luftig, such as fonts and colours, are kept in the app's preferences (<code>~/Library/Preferences/com.bernorieder.luftig.plist</code>).</li>
+        <li><strong>Colour schemes:</strong> imported and custom schemes are kept as files in <code>~/Library/Application Support/com.bernorieder.luftig/</code>.</li>
+        <li><strong>macOS's own document handling:</strong> like other Mac document apps, luftig lets macOS keep earlier versions of a document for File → Revert To, autosave new documents that aren't saved yet, and remember which windows were open. macOS stores these on your Mac.</li>
+      </ul>
+
+      <h2>Sharing</h2>
+      <p>luftig doesn't share or transfer your data to anyone. It contains no analytics, crash reporting, advertising or tracking, and it makes no network connections of its own.</p>
+
+      <h2>Removing your data</h2>
+      <ul>
+        <li><strong>Your documents</strong> are ordinary files: delete them in the Finder.</li>
+        <li><strong>Uninstall with Homebrew:</strong> <code>brew uninstall --zap --cask luftig</code> removes the app, its settings and its colour schemes.</li>
+        <li><strong>Uninstall by hand:</strong> move luftig to the Trash, then delete <code>~/Library/Preferences/com.bernorieder.luftig.plist</code> and the folder <code>~/Library/Application Support/com.bernorieder.luftig</code>.</li>
+      </ul>
+
+      <h2>Changes to this policy</h2>
+      <p>If luftig starts handling data differently, this page will be updated first, with a new date at the top. The history of this page is on <a href="https://github.com/bernorieder/luftig/commits/main/docs/privacy.html">GitHub</a>.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about this policy or about your data: Bernhard Rieder, <a href="mailto:berno.rieder@gmail.com">berno.rieder@gmail.com</a>.</p>
+    </main>
+
+    <footer class="site">
+      <p><a href="./">luftig</a> is made by Bernhard Rieder as part of <a href="https://polsys.net">polsys.net</a>. It isn't affiliated with Apple.</p>
+    </footer>
+  </div>
+</body>
+</html>
