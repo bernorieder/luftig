@@ -49,7 +49,7 @@ extension SelfTestScenarios {
     @MainActor private static func fixSettingsViews(_ c: SettingsWindowController) -> [(name: String, view: NSView)] {
         var views: [(String, NSView)] = [
             ("preview", c.preview.scrollView), ("schemePopup", c.schemePopup), ("bodyFontPopup", c.bodyFontPopup), ("codeFontPopup", c.codeFontPopup),
-            ("sizeField", c.sizeField), ("sizeStepper", c.sizeStepper), ("spacingSlider", c.spacingSlider), ("spacingValueLabel", c.spacingValueLabel),
+            ("sizeField", c.sizeField), ("sizeStepper", c.sizeStepper), ("codeSizeField", c.codeSizeField), ("codeSizeStepper", c.codeSizeStepper), ("spacingSlider", c.spacingSlider), ("spacingValueLabel", c.spacingValueLabel),
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
             ("paneFontPopup", c.paneFontPopup), ("paneSizePopup", c.paneSizePopup), ("paneOpacitySlider", c.paneOpacitySlider), ("paneOpacityValueLabel", c.paneOpacityValueLabel),
@@ -207,7 +207,7 @@ extension SelfTestScenarios {
 
             // ---- three window widths: the grid stays centred, as wide as its content, and keeps its inner layout; nothing runs out of the window
             let gridWidth = reference["grid0"]?.width ?? 0
-            let innerNames = ["schemePopup", "bodyFontPopup", "codeFontPopup", "sizeField", "sizeStepper", "spacingSlider", "spacingValueLabel", "spacingAutomaticCheckbox", "spacingNoteLabel", "limitCheckbox", "widthSlider", "widthValueLabel", "widthNoteLabel"]
+            let innerNames = ["schemePopup", "bodyFontPopup", "codeFontPopup", "sizeField", "sizeStepper", "codeSizeField", "codeSizeStepper", "spacingSlider", "spacingValueLabel", "spacingAutomaticCheckbox", "spacingNoteLabel", "limitCheckbox", "widthSlider", "widthValueLabel", "widthNoteLabel"]
             for width in [window.contentMinSize.width, 700, 1100, 2000] {
                 window.setContentSize(NSSize(width: width, height: window.contentView!.frame.height))
                 let f = fixFrames(c)

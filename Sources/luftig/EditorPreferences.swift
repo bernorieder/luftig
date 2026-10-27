@@ -14,6 +14,8 @@ enum EditorPreferences {
     static let colorSchemeKey = "LuftigColorScheme"
     static let bodyFontFamilyKey = "LuftigBodyFontFamily"
     static let codeFontFamilyKey = "LuftigCodeFontFamily"
+    /// The code font's size as a share of the text size (Settings shows it in points): ⌘+ and ⌘- scale both.
+    static let codeFontScaleKey = "LuftigCodeFontScale"
     static let lineHeightFactorKey = "LuftigLineHeightFactor"
     static let columnWidthKey = "LuftigColumnWidth"
     /// The three elements around the text (outline, word count, syntax bar): their font family (nil = the text font), size and opacity (Settings window).
@@ -32,7 +34,7 @@ enum EditorPreferences {
     /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
     static let outlineLineHeightKey = "LuftigOutlineLineHeight"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey, reloadBehaviorKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, codeFontScaleKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey, reloadBehaviorKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -194,6 +196,35 @@ enum EditorPreferences {
             guard v != fontSize else { return }
             UserDefaults.standard.set(Double(v), forKey: fontSizeKey)
             post()
+        }
+    }
+
+    /// The code font's size relative to the text size, `codeFontScaleRange`, default 0.9 (what it always was).
+    static let defaultCodeFontScale: CGFloat = 0.9
+    static let codeFontScaleRange: ClosedRange<CGFloat> = 0.5...1.5
+    static var codeFontScale: CGFloat {
+        get {
+            guard let n = number(forKey: codeFontScaleKey), n.isFinite else { return defaultCodeFontScale }
+            return min(codeFontScaleRange.upperBound, max(codeFontScaleRange.lowerBound, CGFloat(n)))
+        }
+        set {
+            guard newValue.isFinite else { return }
+            let v = min(codeFontScaleRange.upperBound, max(codeFontScaleRange.lowerBound, (newValue * 10_000).rounded() / 10_000))
+            guard v != codeFontScale else { return }
+            if abs(v - defaultCodeFontScale) < 0.00005 { defaults.removeObject(forKey: codeFontScaleKey) } else { defaults.set(Double(v), forKey: codeFontScaleKey) }
+            post()
+        }
+    }
+
+    /// The code font's size in points: the text size times the scale, to half a point (`Theme`).
+    static var codeFontSize: CGFloat {
+        get { Theme.codeSize(baseSize: fontSize, scale: codeFontScale) }
+        set {
+            guard newValue.isFinite else { return }
+            let size = fontSize
+            let points = min(size * codeFontScaleRange.upperBound, max(size * codeFontScaleRange.lowerBound, (newValue * 2).rounded() / 2))
+            // the size the default gives is the default (not a share that happens to round to it: 14.5 / 16 would scale differently from 0.9)
+            codeFontScale = points == Theme.codeSize(baseSize: size, scale: defaultCodeFontScale) ? defaultCodeFontScale : points / size
         }
     }
 
@@ -421,7 +452,7 @@ enum EditorPreferences {
 
     /// Everything a `Theme` is built from.
     static var themeSettings: ThemeSettings {
-        ThemeSettings(baseSize: fontSize, bodyFamily: bodyFontFamily, codeFamily: codeFontFamily, lineHeightFactor: lineHeightFactor)
+        ThemeSettings(baseSize: fontSize, bodyFamily: bodyFontFamily, codeFamily: codeFontFamily, codeScale: codeFontScale, lineHeightFactor: lineHeightFactor)
     }
 
     // MARK: colour scheme

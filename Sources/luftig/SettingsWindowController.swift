@@ -15,9 +15,8 @@
 //                   Tab and Shift-Tab nest and un-nest list items.
 //   Text:
 //   Color scheme   [swatch luftig (follows system appearance)  v]
-//   Text font       [System (SF Pro)  v]
-//   Code font       [System Mono (SF Mono)  v]
-//   Size            [ 16 ] (stepper) pt
+//   Text font       [System (SF Pro)  v]  [ 16 ] (stepper) pt
+//   Code font       [System Mono (SF Mono)  v]  [ 14.5 ] (stepper) pt  (a share of the text size: ⌘+ ⌘- scale both)
 //   Line spacing    ----o------   1.42 ×  (23 pt)
 //                   [x] Automatic   (a note here when the fonts raised the line box)
 //   Column width    [x] Limit line length (centered column)
@@ -84,6 +83,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     static let margin: CGFloat = 20
     static let previewHeight: CGFloat = 340
     static let popupWidth: CGFloat = 300
+    /// A font popup and its size (field, stepper, "pt") fill the control column.
+    static let sizeFieldWidth: CGFloat = 52
+    static let sizeGap: CGFloat = 8
+    static var fontPopupWidth: CGFloat {
+        let pt = ceil(("pt" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]).width) + 4
+        return floor(controlColumnWidth - sizeGap - sizeFieldWidth - 4 - ceil(NSStepper().fittingSize.width) - 4 - pt)
+    }
     static let sliderWidth: CGFloat = 250
     static let sliderGap: CGFloat = 10
     static let colorWellWidth: CGFloat = 44
@@ -123,6 +129,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let codeFontPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     let sizeField = NSTextField(string: "")
     let sizeStepper = SettingsStepper()
+    let codeSizeField = NSTextField(string: "")
+    let codeSizeStepper = SettingsStepper()
     let spacingSlider = SettingsSlider(value: 1.4, minValue: Double(EditorPreferences.lineHeightFactorRange.lowerBound), maxValue: Double(EditorPreferences.lineHeightFactorRange.upperBound), target: nil, action: nil)
     let spacingValueLabel = NSTextField(labelWithString: "")
     let spacingAutomaticCheckbox = NSButton(checkboxWithTitle: "Automatic", target: nil, action: nil)
@@ -189,6 +197,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     private var syncing = false
     /// The size the size field was last made to show (what a change of the preference is compared with while the field is being edited).
     private var shownSize: CGFloat = 0
+    private var shownCodeSize: CGFloat = 0
     /// The slider or stepper whose drag is in progress (nil: none). Its own value is the user's hand, not the preference, until the drag ends.
     private(set) var trackedControl: NSControl?
 
@@ -246,7 +255,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         for (popup, action, name) in [(schemePopup, #selector(schemeChanged(_:)), "Color scheme"), (bodyFontPopup, #selector(textFontChanged(_:)), "Text font"), (codeFontPopup, #selector(codeFontChanged(_:)), "Code font")] {
             popup.target = self; popup.action = action
             popup.setAccessibilityLabel(name)
-            popup.widthAnchor.constraint(equalToConstant: W.popupWidth).isActive = true
+            popup.widthAnchor.constraint(equalToConstant: popup === schemePopup ? W.popupWidth : W.fontPopupWidth).isActive = true
             popup.lineBreakMode = .byTruncatingMiddle                                  // a long family name never widens the popup (nor the grid)
             popup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
@@ -263,19 +272,23 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         formatter.maximumFractionDigits = 1
         formatter.minimumFractionDigits = 0
         formatter.usesGroupingSeparator = false
-        sizeField.formatter = formatter
-        sizeField.alignment = .right
-        sizeField.delegate = self
-        sizeField.target = self; sizeField.action = #selector(sizeFieldChanged(_:))
-        sizeField.widthAnchor.constraint(equalToConstant: 52).isActive = true
-        sizeField.setAccessibilityLabel("Font size")
+        for (field, stepper, action, stepAction, name) in [(sizeField, sizeStepper, #selector(sizeFieldChanged(_:)), #selector(sizeStepperChanged(_:)), "Font size"),
+                                                           (codeSizeField, codeSizeStepper, #selector(codeSizeFieldChanged(_:)), #selector(codeSizeStepperChanged(_:)), "Code font size")] {
+            field.formatter = formatter
+            field.alignment = .right
+            field.delegate = self
+            field.target = self; field.action = action
+            field.widthAnchor.constraint(equalToConstant: W.sizeFieldWidth).isActive = true
+            field.setAccessibilityLabel(name)
+            stepper.valueWraps = false
+            stepper.target = self; stepper.action = stepAction
+            stepper.onTracking = { [weak self, weak stepper] began in if let stepper { self?.tracking(stepper, began: began) } }
+            stepper.setAccessibilityLabel(name + " stepper")
+        }
         sizeStepper.minValue = Double(EditorPreferences.fontSizeRange.lowerBound)
         sizeStepper.maxValue = Double(EditorPreferences.fontSizeRange.upperBound)
         sizeStepper.increment = 1
-        sizeStepper.valueWraps = false
-        sizeStepper.target = self; sizeStepper.action = #selector(sizeStepperChanged(_:))
-        sizeStepper.onTracking = { [weak self, weak sizeStepper] began in if let sizeStepper { self?.tracking(sizeStepper, began: began) } }
-        sizeStepper.setAccessibilityLabel("Font size stepper")
+        codeSizeStepper.increment = 0.5                                                // (its range follows the text size: syncFromPreferences)
 
         spacingSlider.target = self; spacingSlider.action = #selector(spacingSliderChanged(_:))
         spacingSlider.isContinuous = true
@@ -395,8 +408,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         restoreButton.translatesAutoresizingMaskIntoConstraints = false
 
         // -- rows
-        let sizeRow = NSStackView(views: [sizeField, sizeStepper, NSTextField(labelWithString: "pt")])
-        sizeRow.orientation = .horizontal; sizeRow.spacing = 4
+        // a font and its size, in one row
+        func fontRow(_ popup: NSPopUpButton, _ field: NSTextField, _ stepper: NSStepper) -> NSStackView {
+            let size = NSStackView(views: [field, stepper, NSTextField(labelWithString: "pt")])
+            size.orientation = .horizontal; size.spacing = 4
+            let row = NSStackView(views: [popup, size])
+            row.orientation = .horizontal; row.spacing = W.sizeGap
+            return row
+        }
+        let textFontRow = fontRow(bodyFontPopup, sizeField, sizeStepper)
+        let codeFontRow = fontRow(codeFontPopup, codeSizeField, codeSizeStepper)
         let spacingSliderRow = NSStackView(views: [spacingSlider, spacingValueLabel])
         spacingSliderRow.orientation = .horizontal; spacingSliderRow.spacing = W.sliderGap
         let automaticRow = NSStackView(views: [spacingAutomaticCheckbox, spacingNoteLabel])
@@ -431,7 +452,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
         // the grids share the label column width, so the controls of every screen start at the same x
         let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
-        let textLabels = ["Text font:", "Code font:", "Size:", "Line spacing:", "Column width:"].map { label($0) }
+        let textLabels = ["Text font:", "Code font:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let colorsLabels = (["Color scheme:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + [""]).map { label($0) }
         let labelWidth = ceil((generalLabels + textLabels + panesLabels + colorsLabels).map { $0.intrinsicContentSize.width }.max() ?? 90)
@@ -453,11 +474,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [generalLabels[2], continueListsColumn],
         ])
         let grid = makeGrid([
-            [textLabels[0], bodyFontPopup],
-            [textLabels[1], codeFontPopup],
-            [textLabels[2], sizeRow],
-            [textLabels[3], spacingRow],
-            [textLabels[4], widthColumn],
+            [textLabels[0], textFontRow],
+            [textLabels[1], codeFontRow],
+            [textLabels[2], spacingRow],
+            [textLabels[3], widthColumn],
         ])
         let panesGrid = makeGrid([
             [panesLabels[0], showRow],
@@ -750,7 +770,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         select(s.bodyFamily, in: bodyFontPopup)
         select(s.codeFamily, in: codeFontPopup)
 
-        showSize(s.baseSize)
+        showSize(s.baseSize, in: sizeField, sizeStepper, shown: &shownSize)
+        codeSizeStepper.minValue = Double(Theme.codeSize(baseSize: s.baseSize, scale: EditorPreferences.codeFontScaleRange.lowerBound))
+        codeSizeStepper.maxValue = Double(Theme.codeSize(baseSize: s.baseSize, scale: EditorPreferences.codeFontScaleRange.upperBound))
+        showSize(Theme.codeSize(baseSize: s.baseSize, scale: s.codeScale), in: codeSizeField, codeSizeStepper, shown: &shownCodeSize)
 
         preview.refresh()
         let theme = preview.theme
@@ -958,25 +981,25 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         showDraft()
     }
 
-    /// The size field and its stepper show `size`, whatever has the keyboard focus.
+    /// A size field and its stepper show `size`, whatever has the keyboard focus. `shown`: what the field was last made to show.
     ///
     /// The field used to be skipped while it was being edited (`if sizeField.currentEditor() == nil`, so that a sync never overwrote what the user was typing):
     /// after a click in the field it stays first responder, so the stepper arrows and ⌘+ ⌘- ⌘0 changed the size and the number beside them stayed (the user
     /// saw the old number with its text selected). Now a CHANGE of the size goes into the field editor - selected, as if it had been typed: the next digit
     /// replaces it - and text the user is typing while the size does NOT change is left alone.
-    private func showSize(_ size: CGFloat) {
-        sizeStepper.doubleValue = Double(size)
+    private func showSize(_ size: CGFloat, in field: NSTextField, _ stepper: NSStepper, shown: inout CGFloat) {
+        stepper.doubleValue = Double(size)
         let number = NSNumber(value: Double(size))
-        if let editor = sizeField.currentEditor() {
-            if size != shownSize {
-                let text = (sizeField.formatter as? NumberFormatter)?.string(from: number) ?? String(Double(size))
+        if let editor = field.currentEditor() {
+            if size != shown {
+                let text = (field.formatter as? NumberFormatter)?.string(from: number) ?? String(Double(size))
                 editor.string = text
                 editor.selectAll(nil)
             }
         } else {
-            sizeField.objectValue = number
+            field.objectValue = number
         }
-        shownSize = size
+        shown = size
     }
 
     // MARK: drags (slider, stepper): the editors follow at a bounded rate, the last value always arrives
@@ -1001,9 +1024,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
 
     /// A string the formatter cannot read (an empty field, a lone "." ...): the number it showed comes back and the field keeps working.
     func control(_ control: NSControl, didFailToFormatString string: String, errorDescription error: String?) -> Bool {
-        guard control === sizeField else { return true }
-        sizeField.abortEditing()
-        shownSize = 0
+        guard control === sizeField || control === codeSizeField else { return true }
+        (control as? NSTextField)?.abortEditing()
+        shownSize = 0; shownCodeSize = 0
         syncFromPreferences()
         return false
     }
@@ -1039,6 +1062,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func sizeStepperChanged(_ sender: NSStepper) {
         EditorPreferences.fontSize = CGFloat(sender.doubleValue)
+        syncFromPreferences()
+    }
+    @objc func codeSizeFieldChanged(_ sender: NSTextField) {
+        // in points; kept as a share of the text size (clamped to half ... one and a half times it)
+        if let n = (sender.formatter as? NumberFormatter)?.number(from: sender.stringValue) { EditorPreferences.codeFontSize = CGFloat(n.doubleValue) }
+        sender.abortEditing()
+        shownCodeSize = 0
+        syncFromPreferences()
+    }
+    @objc func codeSizeStepperChanged(_ sender: NSStepper) {
+        EditorPreferences.codeFontSize = CGFloat(sender.doubleValue)
         syncFromPreferences()
     }
     @objc func spacingSliderChanged(_ sender: NSSlider) {
@@ -1103,7 +1137,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         #endif
         let alert = NSAlert()
         alert.messageText = "Restore every setting to its default?"
-        alert.informativeText = "Fonts, size, spacing, column width, the colour scheme, the panels and the padding go back to how luftig came. Imported and custom colour schemes are kept."
+        alert.informativeText = "Fonts, sizes, spacing, column width, the colour scheme, the panels and the padding go back to how luftig came. Imported and custom colour schemes are kept."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Restore Defaults")
         alert.addButton(withTitle: "Cancel")
@@ -1112,7 +1146,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     func applyRestoreDefaults() {
         EditorPreferences.restoreDefaults()
-        shownSize = 0
+        shownSize = 0; shownCodeSize = 0
         syncFromPreferences()
     }
 

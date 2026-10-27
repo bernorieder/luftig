@@ -1,9 +1,10 @@
 #if LUFTIG_SELFTEST
 // SelfTestTables.swift - tables aligned on screen, and Format > Align Table (TableAlignment.swift).
 //   table-align        the pipes of every row line up (measured in the laid-out text): outer pipes or none, a quote, bold / code / CJK / emoji /
-//                      a combining accent in cells; the file is unchanged; an aligned source, a tab, a too wide table are left alone
-//   table-align-edit   a keystroke in one cell re-aligns the whole table, also a long table styled lazily from its middle; a table over the size
-//                      bound is never aligned; the window getting narrower / wider than a table drops / restores its alignment; == a fresh restyle
+//                      a combining accent in cells; the file is unchanged; an aligned source, a tab are left alone; a too wide table: the columns
+//                      that fit are aligned and its rows hang from their second cell, unless that is past half the column
+//   table-align-edit  a keystroke in one cell re-aligns the whole table, also a long table styled lazily from its middle; a table over the size
+//                      bound is never aligned; the window getting narrower / wider than a table drops / restores the columns that no longer fit; == fresh
 //   table-format       Format > Align Table: the rewritten source (widths, colons, right / centred columns, quotes, missing cells, escaped pipes,
 //                      wide characters), the caret stays in its cell, one undo step, a second run changes nothing, the menu item only in a table
 
@@ -12,7 +13,7 @@ import MarkdownKit
 
 extension SelfTestScenarios {
     static let tableScenarios: [SelfTest.Scenario] = [
-        .init(name: "table-align", summary: "tables aligned on screen: the pipes of every row line up (outer pipes or none, quotes, bold / code / CJK / emoji / combining cells), the file unchanged, aligned / tab / too wide tables left alone", run: { t in try await tableAlign(t) }),
+        .init(name: "table-align", summary: "tables aligned on screen: the pipes of every row line up (outer pipes or none, quotes, bold / code / CJK / emoji / combining cells), the file unchanged, aligned / tab tables left alone, a too wide one: the columns that fit, rows hang from the second cell", run: { t in try await tableAlign(t) }),
         .init(name: "table-align-edit", summary: "a keystroke re-aligns the whole table (also a long one styled from its middle), the size bound, narrower / wider window, == a fresh restyle", run: { t in try await tableAlignEdit(t) }),
         .init(name: "table-format", summary: "Format > Align Table: the rewritten source, the caret in its cell, one undo step, idempotent, the menu item only in a table", run: { t in try await tableFormat(t) }),
     ]
@@ -74,6 +75,28 @@ extension SelfTestScenarios {
         return n
     }
 
+    /// The x position (text container coordinates) of the first glyph of each line fragment of the source line that contains `location`.
+    @MainActor static func fragmentStarts(_ host: EditorViewController, at location: Int) -> [CGFloat] {
+        let tv = host.textView
+        guard let lm = tv.layoutManager else { return [] }
+        let line = ns(tv).lineRange(for: NSRange(location: location, length: 0))
+        lm.ensureLayout(forCharacterRange: line)
+        let glyphs = lm.glyphRange(forCharacterRange: line, actualCharacterRange: nil)
+        var xs: [CGFloat] = []
+        lm.enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, range, _ in
+            xs.append(rect.minX + lm.location(forGlyphAt: range.location).x)
+        }
+        return xs
+    }
+
+    /// The x position of the glyph of character `location`.
+    @MainActor static func glyphX(_ host: EditorViewController, at location: Int) -> CGFloat {
+        let tv = host.textView
+        guard let lm = tv.layoutManager, let tc = tv.textContainer else { return -1 }
+        let g = lm.glyphRange(forCharacterRange: NSRange(location: location, length: 1), actualCharacterRange: nil)
+        return lm.boundingRect(forGlyphRange: g, in: tc).minX
+    }
+
     @MainActor static func tableRange(_ host: EditorViewController, header: String) -> NSRange {
         let text = ns(host.textView)
         let at = text.range(of: header).location
@@ -123,9 +146,13 @@ extension SelfTestScenarios {
     |---|---|
     | y | z |
 
-    | this table is far too wide for the column | because its cells are long | and there are many of them | so it cannot fit |
+    | this table is too wide | because its cells are long, really very long | and there are many of them | so it cannot fit |
     |---|---|---|---|
     | a | b | c | d |
+
+    | first column, wide enough to cramp a hang | b |
+    |---|---|
+    | a | and a second cell long enough to make this row wrap in the column, at any window size that the test uses, really |
 
     The end.
 
@@ -133,6 +160,7 @@ extension SelfTestScenarios {
 
     @MainActor static func tableAlign(_ t: SelfTest.T) async throws {
         let (doc, host, url) = try await openEditor(t, text: alignSample, name: "tables.md", size: NSSize(width: 900, height: 900))
+        await t.spin(30)                                                            // (the window settles: a restyle for its width runs on the next turn)
         host.styler.styleEverything()
         for header in ["| Name |", "alpha |", "> | quoted |", "| wide 日本語 |", "|x|caf"] {
             let rows = closingPipes(host, header: header)
@@ -141,8 +169,24 @@ extension SelfTestScenarios {
         t.equal(kernCount(host, in: tableRange(host, header: "| aligned |")), 0, "a table aligned in the source gets no extra space")
         let tabRows = closingPipes(host, header: "| tab\t")
         t.check(kernCount(host, in: tableRange(host, header: "| tab\t")) == 0, "a table with a tab gets no extra space (\(tabRows.map { $0.map { Int($0) } }))")
-        let wide = tableRange(host, header: "| this table")
-        t.check(kernCount(host, in: wide) == 0, "a table wider than the column (\(Int(host.provider.tables.widthLimit)) pt) is left as it is")
+        // a table wider than the column: the first column is aligned (its pipes fit), the others not; the header row wraps and hangs from its second cell
+        let limit = host.provider.tables.widthLimit
+        let wideRows = closingPipes(host, header: "| this table")
+        t.check(wideRows.count == 3 && pipesAligned(wideRows.map { Array($0.prefix(1)) }), "a table wider than the column (\(Int(limit)) pt): its first column is aligned \(wideRows.map { $0.map { Int($0) } })")
+        t.check(!pipesAligned(wideRows.map { Array($0.prefix(2)) }), "... and the columns that do not fit are not")
+        let wideHeader = ns(host.textView).range(of: "| this table").location
+        let starts = fragmentStarts(host, at: wideHeader)
+        let because = glyphX(host, at: ns(host.textView).range(of: "because").location)
+        t.check(starts.count >= 2 && starts.dropFirst().allSatisfy { abs($0 - because) < 0.5 }, "its wrapped header row starts its wrapped lines under the second cell (\(Int(because)) pt): \(starts.map { Int($0) })")
+        let short = ns(host.textView).range(of: "| a | b | c | d |").location
+        let shortStyle = host.textView.textStorage!.attribute(.paragraphStyle, at: short, effectiveRange: nil) as? NSParagraphStyle
+        t.check(shortStyle.map { abs($0.headIndent - because) < 0.5 } ?? false, "every row of it hangs the same way (\(shortStyle.map { Int($0.headIndent) } ?? -1) pt)")
+        // a first column wider than half the column: no hanging (the wrapped lines would be too narrow), but still aligned
+        let tooWide = ns(host.textView).range(of: "| a | and a second").location
+        let tooWideStyle = host.textView.textStorage!.attribute(.paragraphStyle, at: tooWide, effectiveRange: nil) as? NSParagraphStyle
+        t.check(tooWideStyle.map { $0.headIndent == $0.firstLineHeadIndent } ?? false, "a row whose second cell starts past half the column does not hang")
+        t.check(pipesAligned(closingPipes(host, header: "| first column,").map { Array($0.prefix(1)) }), "... and its first column is aligned")
+        t.check(fragmentStarts(host, at: tooWide).count >= 2, "(setup: that row wraps)")
         t.check(kernCount(host) > 0, "the other tables carry the extra space (\(kernCount(host)) characters)")
         t.equal(host.textView.string, alignSample, "the text is unchanged")
         assertMatchesFreshLex(t, host, "the whole sample")
@@ -244,7 +288,8 @@ extension SelfTestScenarios {
             window.setContentSize(NSSize(width: 900, height: 500)); window.contentView?.layoutSubtreeIfNeeded()
             await t.spin(30)
             host.styler.styleEverything()
-            t.check(kernCount(host) == 0, "a window narrower than the aligned table (\(Int(host.provider.tables.widthLimit)) pt): no alignment (no extra wrapping)")
+            let narrow = closingPipes(host, header: "| a fairly")
+            t.check(pipesAligned(narrow.map { Array($0.prefix(1)) }) && !pipesAligned(narrow), "a window narrower than the table (\(Int(host.provider.tables.widthLimit)) pt): only the first column is aligned \(narrow.map { $0.map { Int($0) } })")
             assertMatchesFreshLex(t, host, "narrow")
             window.setContentSize(NSSize(width: 1400, height: 500)); window.contentView?.layoutSubtreeIfNeeded()
             await t.spin(30)

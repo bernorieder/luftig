@@ -14,6 +14,8 @@ struct ThemeSettings: Equatable {
     var bodyFamily: String?
     /// Family of the code font (code blocks, inline code, tables, front matter); nil = the system monospaced font (SF Mono).
     var codeFamily: String?
+    /// Size of the code font as a share of the body size (`EditorPreferences.codeFontScale`).
+    var codeScale: CGFloat = EditorPreferences.defaultCodeFontScale
     /// Body line box as a multiple of the font size; nil = the automatic curve `Theme.lineHeightRatio(baseSize:)`.
     var lineHeightFactor: CGFloat?
 }

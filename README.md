@@ -23,7 +23,7 @@ Website: [luftig.polsys.net](https://luftig.polsys.net)
 - **Writing help:** Return continues a list or a quote, Tab and Shift-Tab nest list items, the **Format** menu has a shortcut for every element, ⌘-click follows a link, and Typewriter Mode keeps the line you write on in the middle of the window.
 - **Tables that line up:** the columns of a table are aligned on screen while you type, without a single space added to the file. **Format → Align Table** pads the table in the file too, for diffs, other editors and agents.
 - **Panels around the text:** an outline of the headings to jump through the document, a word count and reading time, and a syntax bar that inserts Markdown with a click. All plain text in the scheme's dim colour, no boxes, no buttons, and each can be switched off.
-- **Your look:** fonts for text, code and the panels, size, line spacing, column width and padding.
+- **Your look:** fonts and sizes for text, code and the panels, line spacing, column width and padding.
 - **Colour schemes:** 16 built in, any Base16 scheme from a file, or your own from seven colour pickers.
 - **Leaving the editor:** Copy as HTML or Rich Text, and Export as HTML, Rich Text or PDF, for the moment a document goes somewhere else.
 
@@ -39,7 +39,7 @@ Full screenshots of every scheme: [lists and quotes](docs/screenshots/schemes/co
 - **No sync or collaboration of its own.** luftig edits files on your Mac. To share or sync them, put them in iCloud Drive, Dropbox or a `git` repository.
 - **Mac only.** It needs a Mac with Apple silicon and macOS 14 or later. There is no iPhone, iPad or Windows version.
 - **No plugins, snippets or toolbar.** The Format menu and the syntax bar are all there is.
-- **Some Markdown is styled, not resolved:** reference links are styled whether or not the reference exists, and Copy and Export as HTML follow the same rules. A table wider than the text column, or with a tab in it, is shown as written instead of aligned.
+- **Some Markdown is styled, not resolved:** reference links are styled whether or not the reference exists, and Copy and Export as HTML follow the same rules. A table wider than the text column is aligned only as far as its columns fit, and one with a tab in it is shown as written.
 - **Very long single lines are slow.** A line of several megabytes, such as an embedded image or minified JSON, makes typing inside it slow; the rest of the document is not affected.
 - **Files over 200 MB and binary files** are refused.
 

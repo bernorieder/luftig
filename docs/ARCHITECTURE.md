@@ -131,7 +131,7 @@ Sources/luftig/
     SelfTestMergeLook.swift             look-settings-fixed: the fixed Settings layout under the new look (four appearances x every control's range, frames identical everywhere), the focused
                                         size field, clicks on the hosted sliders / stepper still reach their `mouseDown` (what the drag coalescing relies on)
     SelfTestPerf*.swift                 perf-guard (REGRESSION GUARD with generous budgets, skipped on a loaded machine) and the measurement scenarios perf-*
-    SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab / too wide tables left alone),
+    SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab tables left alone, a too wide one hangs),
                                         table-align-edit (a keystroke re-aligns the whole table, a long table styled from its middle, the size bound,
                                         narrower / wider window, == a fresh restyle), table-format (Align Table: the source, the caret, undo, the menu item)
     SelfTestAuditShell.swift            the audit-shell-* scenarios: menu matrix, Info.plist / icon / claimed file extensions, preferences, the runner itself.
@@ -435,9 +435,11 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     range once more; the result is a fresh lex, so it may replace the first one. A keystroke in one cell therefore restyles the whole table (420 rows: ~12 ms
     per keystroke, `table-align-edit`). Bounded: a table over `TableAligner.maxTableUnits` (24 K units) is never aligned, whichever way it is reached (the
     search gives up after the same bound, so a lazy slice and an edit agree); a table cut by a region that cannot be widened is left unaligned in it. The
-    decision also depends on the text container's width (a table wider than the column is not aligned: it would only wrap more), which is not part of the
-    Theme: `ReadableColumnController.onContainerWidthChange` -> `TableAligner.setWidthLimit` answers whether a table measured so far changes sides, and only
-    then the styled set is forgotten (`LazyStyler.forgetStyled`, the lexer keeps its checkpoints) and the visible text restyled after the layout pass. The
+    decision also depends on the text container's width, which is not part of the Theme: in a table wider than the column only the leading columns whose
+    pipes fit on the first line of every row are aligned, and its rows hang from their second cell (a paragraph style with `headIndent`, on the row's whole
+    line as invariant 8 wants; not when that is past half the column, cf. invariant 21's cap). `ReadableColumnController.onContainerWidthChange` ->
+    `TableAligner.setWidthLimit` answers whether one of the limits measured so far (a table's width, where each closing pipe ends, twice the widest hang)
+    lies between the old and the new width, and only then the styled set is forgotten (`LazyStyler.forgetStyled`, the lexer keeps its checkpoints) and the visible text restyled after the layout pass. The
     oracle (`StyleOracle.expectedRuns`) aligns too, with the editor's limit, so every differential test checks the alignment as well. Measurement: one
     CoreText line per row in the row's fonts, with `fixFontAttribute` for the fallback AppKit gives CJK / emoji; the pipe positions are
     `CTLineGetOffsetForStringIndex`. The kern goes on the whole composed character before the pipe (an emoji with a skin tone is one glyph from four

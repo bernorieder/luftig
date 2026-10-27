@@ -15,7 +15,7 @@ looks emphasised, syntax characters are dimmed but stay visible and editable.
   title bar with proxy icon and edited dot, native Find bar, light and dark mode.
 * **Auto-reload**: when another program (a build tool, an agent, `git`) changes the open file, luftig shows the new text
   within ~50 ms, keeping your selection and scroll position.
-* **Settings** (⌘,): fonts for text and code, size, line spacing, column width and 16 colour schemes (the default and 15 well-known editor
+* **Settings** (⌘,): fonts for text and code and their sizes, line spacing, column width and 16 colour schemes (the default and 15 well-known editor
   themes), all applied live to every window; wrapped list items hang (their second and following lines start under the text of the item).
 * **Around the text, if you want them** (View menu, remembered): an outline of the headings on the left (click one to go there; the section you are
   in is a little stronger), the word count at the top right (the selection's count while there is one), and a syntax bar at the bottom that shows the
@@ -153,7 +153,7 @@ rebuilds the gallery.
 | ⌥⌘R | File > Reload from Disk (asks first if you have unsaved edits; undoable) |
 | ⌘Z / ⇧⌘Z | Undo / Redo |
 | ⌘F, ⌘G / ⇧⌘G, ⌥⌘F, ⌘E, ⌘J | Find, Next / Previous, Find and Replace, Use Selection for Find, Jump to Selection |
-| ⌘, | luftig > Settings…: fonts, size, line spacing, column width, colour scheme (see "Settings" below) |
+| ⌘, | luftig > Settings…: fonts and their sizes, line spacing, column width, colour scheme (see "Settings" below) |
 | ⌘+ / ⌘− / ⌘0 | View > Bigger / Smaller / Actual Size (applies to all windows, remembered; the Settings window follows). Bigger answers ⌘= as well as ⌘+ (= ⇧⌘= on a US keyboard) |
 | View > Wrap to Readable Width | Centred column of at most 760 pt by default (the width is a setting), default on, remembered. The same switch as "Limit line length" in Settings |
 | View > Toggle Spell Checking | Off by default (also Edit > Spelling and Grammar) |
@@ -198,14 +198,13 @@ a second copy that gets launched (a build next to the installed one, `open -n`) 
 | Setting | What it does |
 |---|---|
 | Color scheme | The luftig default (follows the system appearance) or a scheme from a well-known editor theme, grouped by family, each with a colour swatch. A scheme that is always light or always dark also sets the window's appearance (title bar, scrollers, find bar). **Import Scheme…** at the end of the list takes a [Base16](https://github.com/tinted-theming/schemes) YAML file (hundreds of editor themes come in that format, both the classic `scheme:` / `base00:` spelling and the newer `palette:` one): the file is copied into `~/Library/Application Support/com.bernorieder.luftig/Color Schemes/`, the scheme appears under "Imported" and gets the same legibility treatment as the built-in ones (page base00, text base05, markers base03, headings base0D, accent base0E, links base0C, inline code base0B, selection base02; light or dark from the file's variant or the page's luminance). To remove one, delete its file ("Show Imported Schemes in Finder") |
-| Text font | Any installed family (each name shown in its own typeface); the default is the system font (SF Pro). Bold, italic and semibold come from the family's own faces; a family that lacks them gets a slanted (`.obliqueness`) or stroked (`.strokeWidth`) version of the regular face |
-| Code font | Monospaced families only (inline code, code blocks, tables, front matter); the default is the system monospaced font (SF Mono). A tab in code is 4 columns of this font |
-| Size | 9 to 40 pt: stepper and field. The same value as ⌘+ ⌘− ⌘0; headings (1.6 / 1.35 / 1.18 / 1.05 times) and code (0.9 times) keep their ratios |
+| Text font | Any installed family (each name shown in its own typeface); the default is the system font (SF Pro). Bold, italic and semibold come from the family's own faces; a family that lacks them gets a slanted (`.obliqueness`) or stroked (`.strokeWidth`) version of the regular face. Beside it the size, 9 to 40 pt (stepper and field): the same value as ⌘+ ⌘− ⌘0; headings (1.6 / 1.35 / 1.18 / 1.05 times) keep their ratios |
+| Code font | Monospaced families only (inline code, code blocks, tables, front matter); the default is the system monospaced font (SF Mono). A tab in code is 4 columns of this font. Beside it its size in points, half to one and a half times the text size (default 0.9 times: 14.5 pt with 16 pt text); it is kept as a share of the text size, so ⌘+ ⌘− ⌘0 scale it too |
 | Line spacing | A multiple of the font size, 1.1 to 2.0. "Automatic" (the default) is the curve luftig always had (1.46 at 11 pt, 1.42 at 16 pt, 1.31 at 28 pt), so the default look is unchanged. The line box is never smaller than the tallest letters of the chosen fonts (ascent + descent): a tall family such as Zapfino raises it and the window says so |
 | Column width | 480 to 1400 pt (default 760) with "Limit line length (centered column)", the same switch as View > Wrap to Readable Width; unchecked, the text uses the full window width. The window shows about how many characters per line that is |
 | Restore Defaults | Everything above back to the default look, after a confirmation (one restyle) |
 
-Stored in `UserDefaults` under `LuftigColorScheme`, `LuftigBodyFontFamily`, `LuftigCodeFontFamily`, `LuftigFontSize`, `LuftigLineHeightFactor`, `LuftigColumnWidth` and `LuftigReadableWidth`.
+Stored in `UserDefaults` under `LuftigColorScheme`, `LuftigBodyFontFamily`, `LuftigCodeFontFamily`, `LuftigFontSize`, `LuftigCodeFontScale`, `LuftigLineHeightFactor`, `LuftigColumnWidth` and `LuftigReadableWidth`.
 Hostile or stale values never crash and never leave the allowed range (a scheme id this version does not know reads as the default, a size from the future is clamped), and are
 not written back. A font family that is not installed any more is drawn in the system font and its name stays saved, so the font is back when it is installed again (the pop-up
 shows it as "not installed"). Render the window for review: `luftig-SelfTest --selftest settings-render --out /tmp/settings.png [--appearance dark] [--body-font Georgia] [--code-font Menlo] [--font-size 19] [--line-spacing 1.6] [--column-width 600] [--scheme id]`.
@@ -276,9 +275,11 @@ matter, HTML, rules, right-to-left lines (their paragraph is right-aligned), pla
 Tables are aligned on screen: every column is as wide as its widest cell and the pipes of all rows line up, while you type. The file is not changed; the space
 is drawn, not written (the extra width goes after the last character of each cell), so the caret, selection, undo, Copy, Export and the saved file see
 exactly the text you typed. The widths are measured in the fonts the cells really have, so bold, code, CJK and emoji cells line up too; a table that is
-already aligned in the text gets no extra space. Tables with or without outer pipes and tables in quotes are aligned; a table wider than the text column (it
-would only wrap more), one over ~24,000 characters (every keystroke in it re-measures all of it) and one with a tab in a row are shown as written. Making
-the window narrower than a table drops its alignment, wider again restores it.
+already aligned in the text gets no extra space. Tables with or without outer pipes and tables in quotes are aligned. A table wider than the text column has
+rows that wrap: its leading columns are aligned as far as their pipes fit on the first line of every row, and each row hangs, so that its wrapped lines start
+under the text of its second cell (not when that is more than half the column). Making the window narrower or wider changes which columns fit. A smaller
+code font (Settings > Text, beside the code font) lets more of a wide table fit. A table over ~24,000 characters (every keystroke in it re-measures all of
+it) and one with a tab in a row are shown as written.
 
 **Format > Align Table** (⇧⌥⌘T) writes the alignment into the file: `| cell | cell |` with every cell padded to its column's width (East Asian wide
 characters and emoji count as two), the delimiter row as dashes of the same width with its colons kept. A right-aligned column (`---:`) is padded on the left,

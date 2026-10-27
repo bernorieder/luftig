@@ -59,7 +59,7 @@ final class Theme {
     init(settings: ThemeSettings) {
         self.settings = settings
         let size = settings.baseSize
-        let mono = (size * 0.9 * 2).rounded() / 2
+        let mono = Theme.codeSize(baseSize: size, scale: settings.codeScale)
         let body = FontFactory.resolve(settings.bodyFamily), code = FontFactory.resolve(settings.codeFamily)
         baseSize = size
         monoSize = mono
@@ -87,6 +87,9 @@ final class Theme {
 
     // MARK: sizes
 
+    /// Size of the code font for text of `baseSize`: `scale` times it, to half a point (also inline code in a heading, at the heading's size).
+    static func codeSize(baseSize: CGFloat, scale: CGFloat) -> CGFloat { (baseSize * scale * 2).rounded() / 2 }
+
     func headingSize(_ level: Int) -> CGFloat { level <= 0 ? baseSize : (baseSize * Theme.headingScales[min(6, level)]).rounded() }
     func lineHeight(headingLevel level: Int) -> CGFloat {
         level <= 0 ? bodyLineHeight : max(bodyLineHeight, (headingSize(level) * Theme.headingLineRatio).rounded(), headingFloor(level))
@@ -95,7 +98,7 @@ final class Theme {
     private func headingFloor(_ level: Int) -> CGFloat {
         let l = min(6, level)
         if headingFloorCache[l] >= 0 { return headingFloorCache[l] }
-        let size = headingSize(l), code = (size * 0.9 * 2).rounded() / 2
+        let size = headingSize(l), code = Theme.codeSize(baseSize: size, scale: settings.codeScale)
         var fonts = [FontFactory.face(family: bodyFamily, mono: false, size: baseSize, weight: .regular, italic: false).font]      // the `#` marker keeps the body size
         for weight in [NSFont.Weight.semibold, .bold] {
             for italic in [false, true] {
@@ -420,7 +423,7 @@ final class Theme {
         }
         if s.contains(.inlineCode) {
             // bold / italic around a code span (`**`x`**`) keep their meaning: semibold (the span's width does not change) / slanted
-            return makeFace(mono: true, size: level > 0 ? (headingSize(level) * 0.9 * 2).rounded() / 2 : monoSize,
+            return makeFace(mono: true, size: level > 0 ? Theme.codeSize(baseSize: headingSize(level), scale: settings.codeScale) : monoSize,
                             weight: (level > 0 || s.contains(.bold)) ? .semibold : .regular, italic: s.contains(.italic))
         }
         // tables and front matter: monospaced so that pipes and keys line up

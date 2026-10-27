@@ -12,17 +12,21 @@ import MarkdownKit
 //     source (Format > Align Table) gets no extra space at all.
 //   * The width of a column depends on EVERY row, so a table is always styled as a whole: MarkdownRunProvider widens each region it styles to the
 //     whole tables it touches (`TableExtent`), and a keystroke in one cell restyles the whole table.
-//   * Not aligned (left as they are): tables wider than the text column (aligning them would only make their rows wrap; `widthLimit`), tables over
-//     `maxTableUnits` (every keystroke in one re-measures all of it), and tables with a tab character in a row (a tab's width depends on where it
-//     starts). The decision is a pure function of the text, the theme and `widthLimit`, so an incremental restyle equals a fresh one.
+//   * A table wider than the text column (`widthLimit`) has rows that wrap: only its leading columns whose closing pipes still fit on the first line
+//     of every row are aligned, and each row HANGS: its wrapped lines start where the text of its second cell starts (a head indent per row, which is
+//     a paragraph in luftig), unless that is more than half the column.
+//   * Not aligned (left as they are): tables over `maxTableUnits` (every keystroke in one re-measures all of it), and tables with a tab character in
+//     a row (a tab's width depends on where it starts). The decision is a pure function of the text, the theme and `widthLimit`, so an incremental
+//     restyle equals a fresh one.
 final class TableAligner {
-    /// Widest a table may be (from the start of its line, indent included) and still be aligned: the width of the text container.
+    /// Widest a table may be (from the start of its line, indent included) and still be aligned whole: the width of the text container.
     var widthLimit: CGFloat = .greatestFiniteMagnitude
     /// Tables over this many UTF-16 units are not aligned.
     static let maxTableUnits = 24_000
 
-    /// The widths of the tables measured so far (whole points, rounded up). When `widthLimit` moves across one of them, what is aligned changes and
-    /// the text must be restyled; otherwise a window resize leaves the styling alone. Stale entries (tables since deleted) only cost a restyle.
+    /// The limits at which the tables measured so far change (whole points, rounded up): a table's width, where each of its closing pipes ends, twice
+    /// its widest hang. When `widthLimit` moves across one of them, what is aligned changes and the text must be restyled; otherwise a window resize
+    /// leaves the styling alone. Stale entries (tables since deleted) only cost a restyle.
     private var measuredWidths = Set<Int>()
     private var measuredOverflow = false
     private static let maxRemembered = 4096
@@ -102,21 +106,56 @@ final class TableAligner {
             tables.append(lines[i..<j])
             i = j
         }
-        var kerns: [(range: NSRange, value: CGFloat)] = []
+        var edits = Edits()
         for (n, table) in tables.enumerated() {
             if n == 0 && cutAtStart && table.first!.start == lines.first!.start { continue }
             if n == tables.count - 1 && cutAtEnd && table.last!.next >= lines.last!.next { continue }
             guard table.first!.isHeader else { continue }
             guard table.last!.end - table.first!.start <= TableAligner.maxTableUnits else { continue }
-            kerns += alignment(of: table, styled: styled, lexRuns: lexRuns, text: text)
+            alignment(of: table, styled: styled, lexRuns: lexRuns, text: text, into: &edits)
         }
-        guard !kerns.isEmpty else { return styled }
-        return TableAligner.apply(kerns, to: styled)
+        var out = styled
+        if !edits.paragraphs.isEmpty { out = TableAligner.apply(edits.paragraphs, key: .paragraphStyle, to: out) }
+        if !edits.kerns.isEmpty { out = TableAligner.apply(edits.kerns, key: .kern, to: out) }
+        return out
     }
 
-    /// The extra space before each closing pipe of one table: (the characters it goes on, points).
-    private func alignment(of table: ArraySlice<Line>, styled: [StyledRun], lexRuns: [MDRun], text: NSString) -> [(range: NSRange, value: CGFloat)] {
-        struct Row { var terminators: [Int]; var offsets: [CGFloat]; var width: CGFloat; var indent: CGFloat }
+    /// What aligning adds to the styled runs: `.kern` on the character before a closing pipe, a paragraph style with a head indent on a row (its whole
+    /// line, line break included). Each list sorted, not overlapping.
+    struct Edits {
+        var kerns: [(range: NSRange, value: Any)] = []
+        var paragraphs: [(range: NSRange, value: Any)] = []
+    }
+
+    /// The paragraph styles of hanging rows: (the row's own style, head indent in half points) -> the style with that head indent. The row's style is
+    /// kept alive by the cache, so its identity cannot be reused for another.
+    private var hangStyles: [HangKey: (base: NSParagraphStyle, style: NSParagraphStyle)] = [:]
+    private struct HangKey: Hashable { var base: ObjectIdentifier; var half: Int }
+
+    private func hangStyle(_ base: NSParagraphStyle, half: Int) -> NSParagraphStyle {
+        let key = HangKey(base: ObjectIdentifier(base), half: half)
+        if let hit = hangStyles[key] { return hit.style }
+        let p = base.mutableCopy() as! NSMutableParagraphStyle
+        p.headIndent = CGFloat(half) / 2
+        if hangStyles.count > 1024 { hangStyles.removeAll(keepingCapacity: true) }
+        hangStyles[key] = (base, p)
+        return p
+    }
+
+    /// The extra space before each closing pipe of one table (and, for a table wider than the column, the head indent of each row).
+    private func alignment(of table: ArraySlice<Line>, styled: [StyledRun], lexRuns: [MDRun], text: NSString, into edits: inout Edits) {
+        struct Row {
+            var line: Line
+            var terminators: [Int]
+            var offsets: [CGFloat]
+            /// Where each closing pipe ends.
+            var pipeEnds: [CGFloat]
+            /// Where the text of the second cell starts (nil: the row has no second cell with text).
+            var secondCell: CGFloat?
+            var width: CGFloat
+            var indent: CGFloat
+            var paragraph: NSParagraphStyle?
+        }
         var rows: [Row] = []
         rows.reserveCapacity(table.count)
         var runIndex = 0
@@ -125,7 +164,7 @@ final class TableAligner {
             let length = line.end - line.start
             guard length > 0 else { continue }
             let content = text.substring(with: NSRange(location: line.start, length: length)) as NSString
-            if content.range(of: "\t").location != NSNotFound { return [] }
+            if content.range(of: "\t").location != NSNotFound { return }
             // the pipes that separate cells (the lexer's delimiters; an escaped `\|` is not one); the first is an opening pipe when no cell text is before it
             while runIndex < lexRuns.count && NSMaxRange(lexRuns[runIndex].range) <= line.start { runIndex += 1 }
             var separators: [Int] = []
@@ -150,6 +189,7 @@ final class TableAligner {
             let measured = NSMutableAttributedString(string: content as String)
             while styledIndex < styled.count && NSMaxRange(styled[styledIndex].range) <= line.start { styledIndex += 1 }
             var indent: CGFloat = 0
+            var paragraph: NSParagraphStyle?
             var s = styledIndex
             var nonASCII = false
             while s < styled.count && styled[s].range.location < line.end {
@@ -157,7 +197,7 @@ final class TableAligner {
                 if r.length > 0, let font = styled[s].attributes[.font] {
                     measured.addAttribute(.font, value: font, range: NSRange(location: r.location - line.start, length: r.length))
                 }
-                if s == styledIndex, let p = styled[s].attributes[.paragraphStyle] as? NSParagraphStyle { indent = p.firstLineHeadIndent }
+                if s == styledIndex, let p = styled[s].attributes[.paragraphStyle] as? NSParagraphStyle { indent = p.firstLineHeadIndent; paragraph = p }
                 s += 1
             }
             for k in 0..<length where content.character(at: k) > 0x7F { nonASCII = true; break }
@@ -167,10 +207,20 @@ final class TableAligner {
             let ctLine = CTLineCreateWithAttributedString(measured as CFAttributedString)
             let width = CGFloat(CTLineGetTypographicBounds(ctLine, nil, nil, nil))
             let offsets = separators.map { CTLineGetOffsetForStringIndex(ctLine, $0 - line.start, nil) }
-            rows.append(Row(terminators: separators, offsets: offsets, width: width, indent: indent))
+            let pipeEnds = separators.map { CTLineGetOffsetForStringIndex(ctLine, $0 + 1 - line.start, nil) }
+            var secondCell: CGFloat?
+            if let first = separators.first {
+                var k = first + 1 - line.start
+                while k < length && content.character(at: k) == 0x20 { k += 1 }
+                if k < length && !(separators.count > 1 && k == separators[1] - line.start) {
+                    secondCell = CTLineGetOffsetForStringIndex(ctLine, k, nil)
+                }
+            }
+            rows.append(Row(line: line, terminators: separators, offsets: offsets, pipeEnds: pipeEnds, secondCell: secondCell, width: width,
+                            indent: indent, paragraph: paragraph))
         }
         let columns = rows.map(\.terminators.count).max() ?? 0
-        guard columns > 0 else { return [] }
+        guard columns > 0 else { return }
         // where each closing pipe goes: as far right as the widest cell of its column needs (cell widths are differences of pipe positions, so the
         // indent and any quote or list prefix of a line are part of its first cell)
         var x = [CGFloat](repeating: 0, count: columns)
@@ -182,25 +232,46 @@ final class TableAligner {
             }
             x[k] = best
         }
+        // where each closing pipe ends once aligned, in the row that reaches furthest (its indent included): the column fits up to there
+        var edge = [CGFloat](repeating: 0, count: columns)
         var widest: CGFloat = 0
         for row in rows {
+            for k in row.offsets.indices { edge[k] = max(edge[k], row.indent + x[k] + row.pipeEnds[k] - row.offsets[k]) }
             let shift = row.offsets.isEmpty ? 0 : x[row.offsets.count - 1] - row.offsets[row.offsets.count - 1]
             widest = max(widest, row.indent + row.width + shift)
         }
         remember(widest)
-        guard widest <= widthLimit + 0.01 else { return [] }
-        var out: [(range: NSRange, value: CGFloat)] = []
+        edge.forEach(remember)
+        let limit = widthLimit + 0.01
+        let fits = widest <= limit
+        // the columns that are aligned: all of them, or (the rows wrap) the leading ones whose pipes stay on the first line of every row
+        let aligned = fits ? columns : (edge.firstIndex { $0 > limit } ?? columns)
         for row in rows {
             var before: CGFloat = 0
-            for (k, p) in row.terminators.enumerated() {
+            for (k, p) in row.terminators.enumerated() where k < aligned {
                 let shift = x[k] - row.offsets[k]
                 let kern = ((shift - before) * 100).rounded() / 100
                 before = shift
                 guard kern >= 0.01 else { continue }
-                out.append((text.rangeOfComposedCharacterSequence(at: p - 1), kern))
+                edits.kerns.append((text.rangeOfComposedCharacterSequence(at: p - 1), NSNumber(value: Double(kern))))
             }
         }
-        return out
+        // the rows of a table that does not fit hang from their second cell (when the first column is aligned, so the second starts at one place)
+        guard !fits, aligned > 0 else { return }
+        var hangs: [(row: Row, half: Int)] = []
+        var widestHang: CGFloat = 0
+        for row in rows {
+            guard let second = row.secondCell, let base = row.paragraph else { continue }
+            let hang = row.indent + second + x[0] - row.offsets[0]
+            widestHang = max(widestHang, hang)
+            let half = Int((hang * 2).rounded())
+            if CGFloat(half) / 2 > base.headIndent + 0.25 { hangs.append((row, half)) }
+        }
+        remember(widestHang * 2)
+        guard widestHang <= widthLimit / 2 else { return }
+        for (row, half) in hangs {
+            edits.paragraphs.append((NSRange(location: row.line.start, length: row.line.next - row.line.start), hangStyle(row.paragraph!, half: half)))
+        }
     }
 
     private static let leftToRight: NSParagraphStyle = {
@@ -209,8 +280,8 @@ final class TableAligner {
         return p
     }()
 
-    /// The runs with `.kern` on the given characters (sorted, not overlapping): a run is split where a kerned character starts or ends.
-    static func apply(_ kerns: [(range: NSRange, value: CGFloat)], to styled: [StyledRun]) -> [StyledRun] {
+    /// The runs with `key` set on the given ranges (sorted, not overlapping): a run is split where a range starts or ends.
+    static func apply(_ kerns: [(range: NSRange, value: Any)], key: NSAttributedString.Key, to styled: [StyledRun]) -> [StyledRun] {
         var out: [StyledRun] = []
         out.reserveCapacity(styled.count + kerns.count * 2)
         var ki = 0
@@ -227,7 +298,7 @@ final class TableAligner {
                 let ks = max(kerns[j].range.location, pos), ke = min(NSMaxRange(kerns[j].range), end)
                 if ks > pos { out.append(StyledRun(range: NSRange(location: pos, length: ks - pos), attributes: run.attributes)) }
                 var a = run.attributes
-                a[.kern] = NSNumber(value: Double(kerns[j].value))
+                a[key] = kerns[j].value
                 out.append(StyledRun(range: NSRange(location: ks, length: ke - ks), attributes: a))
                 pos = ke
                 if NSMaxRange(kerns[j].range) <= end { j += 1 }

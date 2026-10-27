@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 
 extension SelfTestScenarios {
     static let shotScenarios: [SelfTest.Scenario] = [
-        .init(name: "shot-window", summary: "(ON SCREEN, tool) a PNG of a real window with every pane: --input f.md --out f.png [--appearance dark|light] [--width W --height H] [--scroll-to-text T] [--scheme id]", run: { t in try await shotWindow(t) }, inAll: false),
+        .init(name: "shot-window", summary: "(ON SCREEN, tool) a PNG of a real window with every pane: --input f.md --out f.png [--appearance dark|light] [--width W --height H] [--scroll-to-text T] [--scheme id] [--code-size pt]", run: { t in try await shotWindow(t) }, inAll: false),
         .init(name: "schemes-dump", summary: "(tool) every built-in scheme's colours as the editor uses them (after the legibility step; the default in light and dark), one JSON object per line: --out f.jsonl", run: { t in try await schemesDump(t) }, inAll: false),
         .init(name: "scroll-probe", summary: "(ON SCREEN, tool) types and deletes in a real window and logs every movement of the view: --input f.md [--typewriter] [--line-spacing X] [--padding N] [--font-size N] [--at-text T] [--keys 'aaa<bs><bs><cr>'] [--pause-ms N]", run: { t in try await scrollProbe(t) }, inAll: false),
     ]
@@ -124,6 +124,7 @@ extension SelfTestScenarios {
         try await preservingSettings {
             EditorPreferences.showOutline = true; EditorPreferences.showSyntaxBar = true; EditorPreferences.showWordCount = true; EditorPreferences.showReadingTime = true
             if let id = SelfTest.argument("scheme") { EditorPreferences.colorSchemeID = id }
+            if let n = SelfTest.argument("code-size").flatMap({ Double($0) }) { EditorPreferences.codeFontSize = CGFloat(n) }
             let text = try String(contentsOfFile: input, encoding: .utf8)
             let (doc, host, _) = try await openEditor(t, text: text, name: (input as NSString).lastPathComponent, size: NSSize(width: width, height: height))
             defer { t.close(doc) }

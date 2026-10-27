@@ -72,7 +72,7 @@ extension SelfTestScenarios {
 
             // ---- the layout: every control lies inside the window at the minimum width, at the default width and at a wide one
             let panelView = window.contentView!
-            let allControls: [NSView] = [c.preview.scrollView, c.schemePopup, c.bodyFontPopup, c.codeFontPopup, c.sizeField, c.sizeStepper, c.spacingSlider, c.spacingValueLabel, c.spacingAutomaticCheckbox,
+            let allControls: [NSView] = [c.preview.scrollView, c.schemePopup, c.bodyFontPopup, c.codeFontPopup, c.sizeField, c.sizeStepper, c.codeSizeField, c.codeSizeStepper, c.spacingSlider, c.spacingValueLabel, c.spacingAutomaticCheckbox,
                                          c.limitCheckbox, c.widthSlider, c.widthValueLabel, c.widthNoteLabel, c.restoreButton]
             let height0 = panelView.frame.height
             for width in [window.contentMinSize.width, 700, 1100] {
@@ -198,6 +198,25 @@ extension SelfTestScenarios {
             t.check(!c.validateMenuItem(mi), "size: View > Bigger is disabled at 40 pt, for the Settings window as for the editors")
             P.fontSize = 16
             checkPreview("size")
+            // code size: in points beside the code font, kept as a share of the text size
+            t.equal(c.codeSizeField.doubleValue, 14.5, "code size: 0.9 x 16 pt by default")
+            c.codeSizeStepper.doubleValue = 13
+            send(c.codeSizeStepper)
+            t.check(a.theme.monoSize == 13 && b.theme.monoSize == 13 && c.preview.theme.monoSize == 13 && c.codeSizeField.doubleValue == 13, "code size: the stepper sets 13 pt in both editors and the preview (\(a.theme.monoSize))")
+            t.equal(a.theme.font(for: .table).pointSize, 13, "code size: tables use it")
+            t.equal(a.theme.bodyFont.pointSize, 16, "code size: the text keeps its size")
+            c.codeSizeField.stringValue = "12"
+            send(c.codeSizeField)
+            t.check(a.theme.monoSize == 12 && c.codeSizeStepper.doubleValue == 12, "code size: typing 12 in its field sets 12 pt")
+            a.luftigIncreaseFontSize(nil); a.luftigIncreaseFontSize(nil); a.luftigIncreaseFontSize(nil); a.luftigIncreaseFontSize(nil)
+            t.check(P.fontSize == 20 && a.theme.monoSize == 15 && c.codeSizeField.doubleValue == 15, "code size: ⌘+ scales it with the text (20 pt text: \(a.theme.monoSize) pt code)")
+            a.luftigResetFontSize(nil)
+            c.codeSizeField.stringValue = "100"
+            send(c.codeSizeField)
+            t.check(c.codeSizeField.doubleValue == 24 && a.theme.monoSize == 24, "code size: at most one and a half times the text size (\(c.codeSizeField.doubleValue))")
+            c.codeSizeField.stringValue = (c.codeSizeField.formatter as? NumberFormatter)?.string(from: 14.5) ?? "14.5"      // (the user's decimal separator)
+            send(c.codeSizeField)
+            t.check(UserDefaults.standard.object(forKey: P.codeFontScaleKey) == nil && a.theme.monoSize == 14.5, "code size: back to 14.5 pt is the default again (nothing stored)")
             // line spacing
             c.spacingSlider.doubleValue = 1.8
             send(c.spacingSlider)

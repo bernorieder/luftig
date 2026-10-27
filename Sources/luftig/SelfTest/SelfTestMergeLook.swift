@@ -22,7 +22,7 @@ extension SelfTestScenarios {
         content.layoutSubtreeIfNeeded()
         var views: [(String, NSView)] = [
             ("preview", c.preview.scrollView), ("schemePopup", c.schemePopup), ("bodyFontPopup", c.bodyFontPopup), ("codeFontPopup", c.codeFontPopup),
-            ("sizeField", c.sizeField), ("sizeStepper", c.sizeStepper), ("spacingSlider", c.spacingSlider), ("spacingValueLabel", c.spacingValueLabel),
+            ("sizeField", c.sizeField), ("sizeStepper", c.sizeStepper), ("codeSizeField", c.codeSizeField), ("codeSizeStepper", c.codeSizeStepper), ("spacingSlider", c.spacingSlider), ("spacingValueLabel", c.spacingValueLabel),
             ("spacingAutomaticCheckbox", c.spacingAutomaticCheckbox), ("spacingNoteLabel", c.spacingNoteLabel), ("limitCheckbox", c.limitCheckbox),
             ("widthSlider", c.widthSlider), ("widthValueLabel", c.widthValueLabel), ("widthNoteLabel", c.widthNoteLabel), ("restoreButton", c.restoreButton),
         ]
