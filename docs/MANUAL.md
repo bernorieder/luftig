@@ -161,6 +161,7 @@ rebuilds the gallery.
 | Format menu: ⇧⌘1 / ⇧⌘2 / ⇧⌘3 / ⇧⌘0, ⌘B, ⌘I, ⇧⌘X, ⇧⌘C, ⌘K, ⇧⌘K, ⌥⌘Q, ⌥⌘U, ⌥⌘O, ⌥⌘X, ⌥⌘-, ⌥⌘C, ⌥⌘T | Heading 1 / 2 / 3 / plain paragraph, bold, italic, strikethrough, inline code, link, image, quote, bulleted list, numbered list, task, rule, code block, table: the same edits as the syntax bar's elements (whose tooltips name the shortcut) |
 | Return, Tab, ⇧Tab on a list or quote line | Return continues the list (the next bullet, the next number - the items below are renumbered when they were in sequence -, an unchecked task box, the quote's `>`); Return on an empty item outdents it or removes its marker; Tab nests the item under the one above, ⇧Tab un-nests it. Off with Settings > General > Continue lists on Return. Inside a code block the keys are the ordinary keys |
 | ⌘-click on a link, ⌥⌘L | Follow the link under the mouse (or the caret: Edit > Open Link): a web address in the browser, a Markdown or text file in luftig (at its `#anchor`), any other file in its application, `#heading` in this document. Inline links, images, `<autolinks>`, bare `www.` / `https://` addresses and `[text][ref]` references through their definition |
+| ⇧⌥⌘T | Format > Align Table: pads the table at the caret with spaces so that it is aligned in the file too (see "Tables" below). Only enabled in a table |
 | ⇧⌘T | View > Typewriter Mode: the line with the caret stays in the middle of the window. Remembered, every window follows |
 | ⌥⇧⌘C / ⌃⇧⌘C | Edit > Copy as HTML (the selection's lines, or everything, as HTML source - also as plain text, so a text editor gets the source) / Copy as Rich Text (the same as RTF, for Mail, Pages, a chat) |
 | ⌥⌘E, File > Export as Rich Text… / as PDF… | Export as HTML: a complete page with a small stylesheet in your fonts, light and dark. Export as Rich Text: the same content as an RTF file; Export as PDF: that rich text paginated on the Page Setup paper |
@@ -270,6 +271,20 @@ matter, HTML, rules, right-to-left lines (their paragraph is right-aligned), pla
 ![A wrapped list in a narrow window, before and after](screenshots/16-hanging-before-420-light.png)
 ![With hanging indents](screenshots/16-hanging-420-light.png)
 
+### Tables
+
+Tables are aligned on screen: every column is as wide as its widest cell and the pipes of all rows line up, while you type. The file is not changed; the space
+is drawn, not written (the extra width goes after the last character of each cell), so the caret, selection, undo, Copy, Export and the saved file see
+exactly the text you typed. The widths are measured in the fonts the cells really have, so bold, code, CJK and emoji cells line up too; a table that is
+already aligned in the text gets no extra space. Tables with or without outer pipes and tables in quotes are aligned; a table wider than the text column (it
+would only wrap more), one over ~24,000 characters (every keystroke in it re-measures all of it) and one with a tab in a row are shown as written. Making
+the window narrower than a table drops its alignment, wider again restores it.
+
+**Format > Align Table** (⇧⌥⌘T) writes the alignment into the file: `| cell | cell |` with every cell padded to its column's width (East Asian wide
+characters and emoji count as two), the delimiter row as dashes of the same width with its colons kept. A right-aligned column (`---:`) is padded on the left,
+a centred one (`:---:`) on both sides. Rows keep their indent or quote prefix; a row with fewer cells than the header gets empty ones, cells beyond the
+header's are kept. The caret stays in its cell; one Undo restores the table.
+
 ## What happens when the file changes on disk
 
 luftig watches every open file with kqueue (the file and its folder, so atomic replaces, rename-away-and-back and delete+recreate
@@ -325,8 +340,9 @@ CRLF / CR files are shown with LF and written back as they were; mixed line endi
 * Undoing past a merged-in external change leaves a document that shows other text than the file but counts as unmodified; the next keystroke saves over the
   external line without asking (you did undo it).
 * Lexer gaps (documented in `Sources/MarkdownKit/README.md`): reference definitions are not resolved (`[text][ref]` is styled
-  whether or not `[ref]` exists), no multi-line inline HTML tags, no link destination on another line than its `]`, tables are styled but not
-  aligned for you (they use a monospaced font so your pipes line up).
+  whether or not `[ref]` exists), no multi-line inline HTML tags, no link destination on another line than its `]`.
+* Tables are aligned on screen only while they fit: a table wider than the text column, one over ~24,000 characters, and one with a tab character in a row
+  are shown as written (Format > Align Table still works on all of them).
 * Files larger than 200 MB and binary files are refused with an error. A file with unsaved changes is never overwritten silently,
   which also means the autosave of a conflicted document waits for your decision.
 * Copy as HTML / Export as HTML follow the lexer, not a full Markdown parser: `[shortcut]` references stay text, footnote definitions become a paragraph, a

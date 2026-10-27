@@ -109,6 +109,12 @@ final class LazyStyler: NSObject, NSTextStorageDelegate {
         onTextReplaced?()
     }
 
+    /// Forget what is styled WITHOUT resetting the lexer (its checkpoints stay valid: the text did not change); what is visible is restyled by the
+    /// next `styleVisible()`. For a change of something the styling depends on besides the text and the theme (the width tables may take).
+    func forgetStyled() {
+        styled.removeAll()
+    }
+
     /// Style what is visible (+ margin) and has not been styled yet. Cheap no-op when everything needed is already styled.
     @discardableResult
     func styleVisible() -> Int {

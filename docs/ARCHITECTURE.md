@@ -97,7 +97,9 @@ Sources/luftig/
   SettingsFontFactory.swift             ThemeSettings (what a Theme is built from), FontFactory (faces of any installed family via NSFontManager, cached) and FontFace
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation
-  MarkdownRunProvider.swift             adapter: LazyStyler closures <-> MarkdownStyler <-> Theme
+  MarkdownRunProvider.swift             adapter: LazyStyler closures <-> MarkdownStyler <-> Theme; widens a region to the whole tables it touches
+  TableAlignment.swift                  tables aligned on screen (TableAligner: `.kern` before each closing pipe, measured with CoreText; TableExtent: a
+                                        table's start / end through the lexer), Format > Align Table (TableFormatter: the padded source)
   HangingIndent.swift                   hanging indents: the head indent of list items / indented lines (prefix width in the real fonts), HangMeasurer cache
   LazyStyler.swift                      viewport styling, the styled-range set, didProcessEditing restyle, IME guard, stale-tail handling
 
@@ -129,6 +131,9 @@ Sources/luftig/
     SelfTestMergeLook.swift             look-settings-fixed: the fixed Settings layout under the new look (four appearances x every control's range, frames identical everywhere), the focused
                                         size field, clicks on the hosted sliders / stepper still reach their `mouseDown` (what the drag coalescing relies on)
     SelfTestPerf*.swift                 perf-guard (REGRESSION GUARD with generous budgets, skipped on a loaded machine) and the measurement scenarios perf-*
+    SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab / too wide tables left alone),
+                                        table-align-edit (a keystroke re-aligns the whole table, a long table styled from its middle, the size bound,
+                                        narrower / wider window, == a fresh restyle), table-format (Align Table: the source, the caret, undo, the menu item)
     SelfTestAuditShell.swift            the audit-shell-* scenarios: menu matrix, Info.plist / icon / claimed file extensions, preferences, the runner itself.
                                         SelfTestHooks.swift also holds LaunchProbe and CommandPump (drive a Launch Services launch from a script)
 
@@ -422,6 +427,22 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     `scrollRangeToVisible` that arrives while `setFrameSize` runs is reduced to "scroll the caret into view at the end of the frame change if it is out of view".
     The on-screen tool `scroll-probe` (`--input f.md [--typewriter] [--line-spacing X] [--padding N] [--at-text T] [--keys 'ab<bs><cr>'] [--trace]`) types in a
     real window and logs every movement of the view with the call stack of the first scroll after each key; `edit-scroll-stability` is the headless part.
+
+39. **A table's alignment depends on every row, so a table is always styled whole.** Tables are aligned on screen by a `.kern` attribute on the last
+    character before each closing pipe (TableAlignment.swift); the text is never touched. The width of a column is the widest cell of ALL rows, so styling
+    one row needs the others: `MarkdownRunProvider.wholeTables` widens every region it styles (lazy slices and the re-lex after an edit) to the whole tables at
+    its two ends, by asking the lexer about the lines above (up to the header row) and below (`TableExtent`, resuming from checkpoints), and lexes the widened
+    range once more; the result is a fresh lex, so it may replace the first one. A keystroke in one cell therefore restyles the whole table (420 rows: ~12 ms
+    per keystroke, `table-align-edit`). Bounded: a table over `TableAligner.maxTableUnits` (24 K units) is never aligned, whichever way it is reached (the
+    search gives up after the same bound, so a lazy slice and an edit agree); a table cut by a region that cannot be widened is left unaligned in it. The
+    decision also depends on the text container's width (a table wider than the column is not aligned: it would only wrap more), which is not part of the
+    Theme: `ReadableColumnController.onContainerWidthChange` -> `TableAligner.setWidthLimit` answers whether a table measured so far changes sides, and only
+    then the styled set is forgotten (`LazyStyler.forgetStyled`, the lexer keeps its checkpoints) and the visible text restyled after the layout pass. The
+    oracle (`StyleOracle.expectedRuns`) aligns too, with the editor's limit, so every differential test checks the alignment as well. Measurement: one
+    CoreText line per row in the row's fonts, with `fixFontAttribute` for the fallback AppKit gives CJK / emoji; the pipe positions are
+    `CTLineGetOffsetForStringIndex`. The kern goes on the whole composed character before the pipe (an emoji with a skin tone is one glyph from four
+    units, which takes its attributes from its first unit); a decomposed `e` + U+0301 was checked to come out right. Rows with a tab are not aligned (a tab's
+    width depends on where it starts, and the kern before it would move the tab stop).
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

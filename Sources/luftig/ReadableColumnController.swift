@@ -19,6 +19,8 @@ final class ReadableColumnController {
     /// Typewriter Mode: the vertical inset is half the clip view's height (less half a line), so that the first and the last line can sit in the middle.
     var typewriter = false
     var typewriterLineHeight: CGFloat = 23
+    /// Called with the text container's new width whenever it changes (tables are aligned only while they fit: TableAlignment.swift).
+    var onContainerWidthChange: ((CGFloat) -> Void)?
     private weak var scrollView: NSScrollView?
     private weak var textView: NSTextView?
     private var observer: NSObjectProtocol?
@@ -50,6 +52,7 @@ final class ReadableColumnController {
         let containerWidth = max(50, tv.frame.width - 2 * inset)
         if let tc = tv.textContainer, abs(tc.size.width - containerWidth) > 0.5 {
             tc.size = NSSize(width: containerWidth, height: tc.size.height)
+            onContainerWidthChange?(containerWidth - 2 * tc.lineFragmentPadding)
         }
     }
 }

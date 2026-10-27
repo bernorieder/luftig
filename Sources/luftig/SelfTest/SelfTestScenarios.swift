@@ -9,7 +9,7 @@ enum SelfTestScenarios {
     static let all: [SelfTest.Scenario] = [
         .init(name: "codec", summary: "encodings, BOM, line endings: decode + byte-exact round trip", run: { t in try await codec(t) }),
         .init(name: "diff", summary: "minimal edits, position mapping, 3-way merge (fuzzed)", run: { t in try await diff(t) }),
-    ] + reloadScenarios + dirtyScenarios + appScenarios + benchScenarios + integrationScenarios + renderScenarios + auditShellScenarios + robustScenarios + perfScenarios + settingsScenarios + indentScenarios + matrixScenarios + fixSettingsScenarios + fixScrollScenarios + fixWindowsScenarios + lookScenarios + mergeLookScenarios + chromeScenarios + editingScenarios + shotScenarios
+    ] + reloadScenarios + dirtyScenarios + appScenarios + benchScenarios + integrationScenarios + renderScenarios + auditShellScenarios + robustScenarios + perfScenarios + settingsScenarios + indentScenarios + matrixScenarios + fixSettingsScenarios + fixScrollScenarios + fixWindowsScenarios + lookScenarios + mergeLookScenarios + chromeScenarios + editingScenarios + tableScenarios + shotScenarios
 
     // MARK: codec
 

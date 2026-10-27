@@ -514,9 +514,12 @@ extension SelfTestScenarios {
 
     @MainActor static func editFormatMenu(_ t: SelfTest.T) async throws {
         guard let main = NSApp.mainMenu, let format = main.items.first(where: { $0.title == "Format" })?.submenu else { t.check(false, "a Format menu exists"); return }
-        let items = format.items.filter { !$0.isSeparatorItem }
+        let items = format.items.filter { !$0.isSeparatorItem && $0.action == #selector(LuftigEditorActions.luftigInsertSyntax(_:)) }
         t.equal(items.count, SyntaxElement.allCases.count, "one item per element of the syntax bar")
-        t.equal(format.items.filter { $0.isSeparatorItem }.count, SyntaxElement.groups.count - 1, "a separator between the bar's groups")
+        t.equal(format.items.filter { $0.isSeparatorItem }.count, SyntaxElement.groups.count, "a separator between the bar's groups, and one before Align Table")
+        let align = format.items.last
+        t.check(align?.title == "Align Table" && align?.action == #selector(LuftigEditorActions.luftigAlignTable(_:)) && align?.keyEquivalent == "t"
+                && align?.keyEquivalentModifierMask == [.command, .option, .shift], "the last item is Align Table, ⇧⌥⌘T")
         t.check(items.allSatisfy { $0.action == #selector(LuftigEditorActions.luftigInsertSyntax(_:)) && $0.target == nil && SyntaxElement.element(menuTag: $0.tag) != nil }, "every item: the insert action through the responder chain, a tag that names its element")
         let keys = items.map { $0.keyEquivalent + "/" + String($0.keyEquivalentModifierMask.rawValue) }
         t.check(Set(keys).count == keys.count && items.allSatisfy { !$0.keyEquivalent.isEmpty }, "every item has a shortcut, all different: \(items.map { SyntaxElement.element(menuTag: $0.tag)!.shortcut.label })")

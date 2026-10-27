@@ -62,7 +62,7 @@ extension SelfTestScenarios {
     /// Assert that the storage equals a fresh lex for `range` (default whole text). `label` names the check.
     @MainActor static func assertMatchesFreshLex(_ t: SelfTest.T, _ host: EditorViewController, range: NSRange? = nil, _ label: String) {
         guard let ts = host.textView.textStorage else { return }
-        let r = StyleOracle.compare(storage: ts, settings: host.theme.settings, range: range)      // the editor's own settings: fonts / spacing are part of the oracle (SelfTestSettings.swift)
+        let r = StyleOracle.compare(storage: ts, settings: host.theme.settings, range: range, tableWidthLimit: host.provider.tables.widthLimit)      // the editor's own settings: fonts / spacing are part of the oracle (SelfTestSettings.swift)
         t.check(r.mismatches == 0, "\(label): \(r.checkedRuns) runs compared with a fresh Theme + lexAll, \(r.mismatches) mismatches")
         for m in r.first { t.info("mismatch at \(NSStringFromRange(m.range)): expected [\(m.expected)] actual [\(m.actual)]") }
         if let m = r.first.first, SelfTest.flag("debug-mismatch") {
@@ -330,7 +330,7 @@ extension SelfTestScenarios {
             let events0 = host.styler.staleEvents
             let mid = ns(tv).length / 2
             t.scrollToTop(host, character: mid)                    // something far away is styled already: it must be restyled after the edit
-            let beforeMid = StyleOracle.compare(storage: tv.textStorage!, baseSize: host.theme.baseSize, range: visibleRange(host)).mismatches
+            let beforeMid = StyleOracle.compare(storage: tv.textStorage!, baseSize: host.theme.baseSize, range: visibleRange(host), tableWidthLimit: host.provider.tables.widthLimit).mismatches
             t.equal(beforeMid, 0, "setup: the middle of the document is styled correctly")
             t.typeText("```\n", into: doc, at: NSRange(location: (ns(tv).range(of: "\n\n").location) + 2, length: 0))
             t.check(host.styler.staleEvents > events0, "an opening fence near the top of a big document hits the re-lex bound (stale events \(host.styler.staleEvents - events0))")

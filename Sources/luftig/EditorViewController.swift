@@ -30,6 +30,8 @@ import MarkdownKit
     /// Edit > Copy as HTML / Copy as Rich Text: the selection (or everything) rendered (MarkdownHTML.swift).
     func luftigCopyAsHTML(_ sender: Any?)
     func luftigCopyAsRichText(_ sender: Any?)
+    /// Format > Align Table: pads the table at the caret with spaces so that it is aligned in the file too (TableFormatter).
+    func luftigAlignTable(_ sender: Any?)
 }
 
 final class EditorViewController: NSViewController, TextViewEditorHost, NSTextViewDelegate, NSMenuItemValidation, LuftigEditorActions {
@@ -105,6 +107,8 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         LaunchProbe.mark("EditorViewController: stack built")
         #endif
         textView.delegate = self
+        if let tc = stack.textView.textContainer { _ = provider.tables.setWidthLimit(tc.size.width - 2 * tc.lineFragmentPadding) }
+        column.onContainerWidthChange = { [weak self] width in self?.tableWidthChanged(width) }
         preferenceObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.didChange, object: nil, queue: nil) { [weak self] _ in        // synchronous, on the posting (main) thread
             self?.preferencesDidChange()
         }
@@ -300,6 +304,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     #endif
     /// How many times this editor built a new Theme and restyled (a settings or scheme change). Tests count them.
     private(set) var themeRebuildCount = 0
+    private var tableRestyleScheduled = false
 
     /// New settings (size, fonts, line spacing, colour scheme): new Theme (new attribute caches), base attributes over the whole text (so NOT yet
     /// styled text changes too), restyle what is visible, keep the line at the top of the window where it was.
@@ -323,6 +328,21 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         if let anchor, anchor.restoreSameCharacter(in: textView) { styler.styleVisible() }
         textView.needsDisplay = true
         applyChromeTheme()
+    }
+
+    /// The text column got wider or narrower: a table that fits only on one side of the change is aligned on one side only (TableAlignment.swift).
+    /// Restyled after the layout pass that changed the width (not from inside it), keeping the line at the top of the window where it was.
+    private func tableWidthChanged(_ width: CGFloat) {
+        guard provider.tables.setWidthLimit(width), !tableRestyleScheduled else { return }
+        tableRestyleScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.tableRestyleScheduled = false
+            let anchor = ViewportAnchor.capture(in: self.textView)
+            self.styler.forgetStyled()
+            self.styler.styleVisible()
+            if let anchor, anchor.restoreSameCharacter(in: self.textView) { self.styler.styleVisible() }
+        }
     }
 
     /// The page, the caret and the window's appearance follow the colour scheme. A scheme that is always light or always dark (Solarized Light,
@@ -364,6 +384,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         switch item.action {
         case #selector(luftigInsertSyntax(_:)): return textView.isEditable && SyntaxElement.element(menuTag: item.tag) != nil
         case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
+        case #selector(luftigAlignTable(_:)): return textView.isEditable && caretIsInTable
         case #selector(luftigToggleTypewriterMode(_:)): item.state = EditorPreferences.typewriterMode ? .on : .off
         case #selector(luftigCopyAsHTML(_:)), #selector(luftigCopyAsRichText(_:)):
             item.title = (item.action == #selector(luftigCopyAsHTML(_:)) ? "Copy" : "Copy") + (textView.selectedRange().length > 0 ? "" : " All") + (item.action == #selector(luftigCopyAsHTML(_:)) ? " as HTML" : " as Rich Text")
@@ -578,6 +599,45 @@ extension EditorViewController {
         let sel = NSIntersectionRange(change.selection, NSRange(location: 0, length: storage.length))
         tv.setSelectedRange(sel.length == 0 && change.selection.location <= storage.length ? NSRange(location: change.selection.location, length: 0) : sel)
         tv.scrollRangeToVisible(tv.selectedRange())
+    }
+}
+
+// MARK: - Format > Align Table (TableAlignment.swift)
+
+extension EditorViewController {
+
+    /// The caret's line is a table row (the lexer's answer, not the styling's: a table in a quote has no panel mark).
+    var caretIsInTable: Bool {
+        let text = storage.string as NSString
+        guard text.length > 0 else { return false }
+        let line = text.lineRange(for: NSRange(location: min(textView.selectedRange().location, text.length - 1), length: 0))
+        let r = provider.styler.styleRuns(in: line, of: text)
+        return r.runs.contains { $0.style.contains(.table) && NSIntersectionRange($0.range, line).length > 0 }
+    }
+
+    /// The lines of the table at `location` and the lexer runs that cover them (any size: an explicit command, not styling). nil: no table there.
+    func table(at location: Int) -> (lines: [TableAligner.Line], runs: [MDRun])? {
+        let text = storage.string as NSString
+        guard text.length > 0 else { return nil }
+        let loc = min(location, text.length - 1)
+        let line = text.lineRange(for: NSRange(location: loc, length: 0))
+        let lex: (NSRange) -> MDResult = { [provider] in provider.styler.styleRuns(in: $0, of: text) }
+        let here = lex(line)
+        guard let mine = TableAligner.lines(here.runs, text: text, in: here.range).first(where: { $0.start <= loc && ($0.next > loc || $0.next == text.length) }),
+              mine.isTable else { return nil }
+        let limit = Int.max / 4
+        let start = mine.isHeader ? mine.start : (TableExtent.start(above: mine.start, text: text, limit: limit, lex: lex) ?? mine.start)
+        let end = mine.next >= text.length ? text.length : (TableExtent.end(below: mine.next, text: text, limit: limit, lex: lex) ?? mine.next)
+        let r = lex(NSRange(location: start, length: max(1, end - start)))
+        let lines = TableAligner.lines(r.runs, text: text, in: r.range).filter { $0.start >= start && $0.start < max(end, start + 1) && $0.isTable }
+        guard let first = lines.first, first.isHeader else { return nil }
+        return (lines, r.runs)
+    }
+
+    @objc func luftigAlignTable(_ sender: Any?) {
+        guard textView.isEditable, let t = table(at: textView.selectedRange().location) else { NSSound.beep(); return }
+        guard let change = TableFormatter.change(text: storage.string as NSString, runs: t.runs, lines: t.lines, caret: textView.selectedRange().location) else { return }
+        apply(change, actionName: "Align Table")
     }
 }
 

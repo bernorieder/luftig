@@ -152,6 +152,9 @@ enum MainMenu {
                 format.addItem(i)
             }
         }
+        format.addItem(.separator())
+        // pads the table at the caret with spaces, so that it is aligned in the file too (on screen tables are aligned anyway)
+        format.addItem(item("Align Table", #selector(LuftigEditorActions.luftigAlignTable(_:)), "t", [.command, .option, .shift]))
         add(format, to: main, title: "Format")
 
         // ---- View

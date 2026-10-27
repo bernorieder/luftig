@@ -121,7 +121,7 @@ enum AuditEd {
     @MainActor static func styledMismatches(_ host: EditorViewController, only: NSRange? = nil, maxReport: Int = 3) -> (compared: Int, bad: Int, first: [Mismatch]) {
         guard let ts = host.textView.textStorage else { return (0, 0, []) }
         let text = ts.string as NSString
-        let (expected, md) = StyleOracle.expectedRuns(text: text, settings: host.theme.settings)       // the editor's own settings: fonts and line spacing are part of the look
+        let (expected, md) = StyleOracle.expectedRuns(text: text, settings: host.theme.settings, tableWidthLimit: host.provider.tables.widthLimit)       // the editor's own settings: fonts and line spacing are part of the look
         func lexStyle(at loc: Int) -> MDStyle {
             var lo = 0, hi = md.count - 1
             while lo < hi { let mid = (lo + hi + 1) / 2; if md[mid].range.location <= loc { lo = mid } else { hi = mid - 1 } }
