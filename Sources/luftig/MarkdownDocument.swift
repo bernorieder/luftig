@@ -98,6 +98,7 @@ final class MarkdownDocument: NSDocument {
         addWindowController(wc)
         if let h = wc.editorHost {
             host = h
+            h.documentURLDidChange(fileURL)
             h.loadInitialText(pendingText)
             pendingText = ""
         }

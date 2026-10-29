@@ -112,6 +112,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         if let tc = stack.textView.textContainer { _ = provider.tables.setWidthLimit(tc.size.width - 2 * tc.lineFragmentPadding) }
         column.onContainerWidthChange = { [weak self] width in self?.tableWidthChanged(width) }
         provider.tables.renderTables = EditorPreferences.renderTables
+        provider.tables.renderImages = EditorPreferences.renderImages
         provider.tables.revealed = [NSRange(location: 0, length: 0)]          // (the caret of a new document: a table at its very start shows its Markdown)
         provider.tables.onDecided = { [weak self] in self?.scheduleReconcile() }
         preferenceObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.didChange, object: nil, queue: nil) { [weak self] _ in        // synchronous, on the posting (main) thread
@@ -291,8 +292,9 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         applyChromeVisibility()
         applyChromeTheme()                   // (the panes' font, size and opacity are preferences of their own: cheap to re-apply on every change)
         applyTypewriterMode()
-        if provider.tables.renderTables != EditorPreferences.renderTables {
+        if provider.tables.renderTables != EditorPreferences.renderTables || provider.tables.renderImages != EditorPreferences.renderImages {
             provider.tables.renderTables = EditorPreferences.renderTables
+            provider.tables.renderImages = EditorPreferences.renderImages
             restyleKeepingViewport { $0.forgetStyled() }
         }
     }
@@ -325,6 +327,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     /// The tables the selection touched when it was last set (TableRender.swift: they show their Markdown).
     var revealedExtents: [NSRange] = []
     private var reconcileScheduled = false
+    private var imageRestyleScheduled = false
 
     /// New settings (size, fonts, line spacing, colour scheme): new Theme (new attribute caches), base attributes over the whole text (so NOT yet
     /// styled text changes too), restyle what is visible, keep the line at the top of the window where it was.
@@ -440,7 +443,18 @@ extension EditorViewController {
         syntaxBar.onInsert = { [weak self] e in self?.insert(e) }
         editorTextView.onCommandClick = { [weak self] index in self?.followLink(at: index) ?? false }
         editorTextView.onPlainClick = { [weak self] point in self?.clickIntoTable(at: point) ?? false }
+        editorTextView.onDropImages = { [weak self] urls, index in self?.insertImageLinks(urls, at: index) ?? false }
         let nc = NotificationCenter.default
+        // images: a size became known (a web image arrived) -> restyle; pixels were decoded -> redraw; the app is active again -> look at the files again
+        chromeObservers.append(nc.addObserver(forName: ImageStore.didChange, object: nil, queue: nil) { [weak self] note in
+            guard let self, self.provider.tables.renderImages != .never else { return }
+            if note.userInfo?["kind"] as? String == "size" { self.scheduleImageRestyle() } else { self.textView.needsDisplay = true }
+        })
+        chromeObservers.append(nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let self, self.provider.tables.renderImages != .never, self.provider.tables.sawTables else { return }
+            ImageStore.shared.forgetFiles()
+            self.scheduleImageRestyle()
+        })
         // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
         chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.tableSelectionChanged(); self?.updateChromeSelection(); self?.typewriterSelectionChanged() })
@@ -637,7 +651,7 @@ extension EditorViewController {
         let selection = textView.selectedRanges.map { $0.rangeValue }
         let old = tables.revealed
         tables.revealed = selection
-        guard tables.renderTables, tables.sawTables else { return }
+        guard tables.drawsBlocks, tables.sawTables else { return }
         defer { reconcileTables() }
         guard old != selection else { return }
         let length = storage.length
@@ -667,7 +681,7 @@ extension EditorViewController {
     func reconcileTables() {
         let tables = provider.tables
         let decided = tables.takeDecided()
-        guard tables.renderTables, !decided.isEmpty else { return }
+        guard tables.drawsBlocks, !decided.isEmpty else { return }
         let length = storage.length
         let stale = decided.filter { NSMaxRange($0.range) <= length && $0.drawn == tables.isRevealed($0.range) }
         guard !stale.isEmpty else { return }
@@ -680,8 +694,41 @@ extension EditorViewController {
         DispatchQueue.main.async { [weak self] in self?.reconcileScheduled = false; self?.reconcileTables() }
     }
 
+    /// The document's file moved or got a name: relative image paths start from its folder.
+    func documentURLDidChange(_ url: URL?) {
+        let folder = url?.deletingLastPathComponent()
+        guard folder != provider.tables.baseURL else { return }
+        provider.tables.baseURL = folder
+        if provider.tables.renderImages != .never, storage.length > 0 { restyleKeepingViewport { $0.forgetStyled() } }
+    }
+
+    private func scheduleImageRestyle() {
+        guard !imageRestyleScheduled else { return }
+        imageRestyleScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.imageRestyleScheduled = false
+            self.restyleKeepingViewport { $0.forgetStyled() }
+        }
+    }
+
+    /// Image files (or web images) dropped at `index`: one `![name](path)` line each (ImageDrop), as one undoable edit; the caret after them.
+    func insertImageLinks(_ urls: [URL], at index: Int) -> Bool {
+        guard textView.isEditable, !urls.isEmpty else { return false }
+        let text = storage.string as NSString
+        let at = min(max(0, index), text.length)
+        var insert = urls.map { ImageDrop.markdown(for: $0, documentFolder: provider.tables.baseURL) }.joined(separator: "\n")
+        if at > 0, ![0x0A, 0x0D].contains(text.character(at: at - 1)) { insert = "\n" + insert }      // on lines of their own
+        let breakFollows = at < text.length && [0x0A, 0x0D].contains(text.character(at: at))
+        if !breakFollows { insert += "\n" }
+        let caret = at + (insert as NSString).length + (breakFollows ? 1 : 0)                          // (after the line: the image is drawn at once)
+        textView.window?.makeFirstResponder(textView)
+        apply(TextChange(range: NSRange(location: at, length: 0), replacement: insert, selection: NSRange(location: caret, length: 0)), actionName: "Insert Image")
+        return true
+    }
+
     /// The characters of the table that holds `location` (a caret right after its last character included), or nil (also for a table over the size
-    /// bound: it is never drawn, and looking for its ends would cost every keystroke in it).
+    /// bound: it is never drawn, and looking for its ends would cost every keystroke in it). A line that holds only an image counts as a block too.
     func tableExtent(at location: Int) -> NSRange? {
         let length = storage.length
         guard length > 0 else { return nil }
@@ -693,13 +740,18 @@ extension EditorViewController {
             if let t = table(at: loc, limit: TableAligner.maxTableUnits), let first = t.lines.first, let last = t.lines.last {
                 return NSRange(location: first.start, length: last.next - first.start)
             }
+            // an image line: cheap, from the text (`![` ... `)` and nothing else; a false hit only restyles a line)
+            let text = storage.string as NSString
+            let line = text.lineRange(for: NSRange(location: loc, length: 0))
+            let s = text.substring(with: line).trimmingCharacters(in: .whitespacesAndNewlines)
+            if s.hasPrefix("![") && s.hasSuffix(")") { return line }
         }
         return nil
     }
 
     /// A click into a table drawn as a grid: the caret goes to the end of the clicked cell's text (which shows the table's Markdown).
     func clickIntoTable(at point: NSPoint) -> Bool {
-        guard provider.tables.renderTables, let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0 else { return false }
+        guard provider.tables.drawsBlocks, let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0 else { return false }
         let o = textView.textContainerOrigin
         let local = NSPoint(x: point.x - o.x, y: point.y - o.y)
         let glyph = lm.glyphIndex(for: local, in: tc)
@@ -712,6 +764,15 @@ extension EditorViewController {
         let chars = lm.characterRange(forGlyphRange: fragGlyphs, actualGlyphRange: nil)
         var char = max(chars.location, NSMaxRange(chars) - 1)
         for c in chars.location..<NSMaxRange(chars) where text.character(at: c) == 0x0A || text.character(at: c) == 0x0D { char = c; break }
+        if char < storage.length, storage.attribute(.luftigImage, at: char, effectiveRange: nil) != nil {
+            // a drawn image: the caret to the end of its line (which shows its Markdown)
+            let line = text.lineRange(for: NSRange(location: char, length: 0))
+            var end = NSMaxRange(line)
+            while end > line.location, [0x0A, 0x0D].contains(text.character(at: end - 1)) { end -= 1 }
+            textView.window?.makeFirstResponder(textView)
+            textView.setSelectedRange(NSRange(location: end, length: 0))
+            return true
+        }
         guard char < storage.length, let row = storage.attribute(.luftigTableRow, at: char, effectiveRange: nil) as? TableRenderRow else { return false }
         let line = text.lineRange(for: NSRange(location: char, length: 0))
         let indent = (storage.attribute(.paragraphStyle, at: char, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0

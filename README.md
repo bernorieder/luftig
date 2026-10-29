@@ -21,6 +21,7 @@ Website: [luftig.polsys.net](https://luftig.polsys.net)
 - **Working with an AI on the same files:** luftig watches open files. When another program - an agent, a build tool, or `git` - changes one, the new text appears within ~50 ms, keeping your selection and scroll position. Your own unsaved edits are merged in when the changes do not overlap, and a banner asks when they do. Nothing is ever written over a version you have not seen. **Settings → General** chooses the behaviour: reload automatically, ask first, or never reload.
 - **No preview, just text:** the file is the document; there is no second rendering to keep in sync and nothing an agent cannot read back. CommonMark and GFM: headings, emphasis, links, lists and task lists, quotes, code blocks with their language, tables, footnotes and YAML front matter.
 - **Writing help:** Return continues a list or a quote, Tab and Shift-Tab nest list items, the **Format** menu has a shortcut for every element, ⌘-click follows a link, and Typewriter Mode keeps the line you write on in the middle of the window.
+- **Images in the text:** a line that holds only an image shows the image while the caret is elsewhere; drop image files into the text to link them. Images on your Mac by default, web images if you choose so.
 - **Tables that line up:** while the caret is elsewhere, a table is drawn as a grid with wrapping cells; click into it and its Markdown shows, with the columns aligned while you type. Neither adds a single space to the file. **Format → Align Table** pads the table in the file too, for diffs, other editors and agents.
 - **Panels around the text:** an outline of the headings to jump through the document, a word count and reading time, and a syntax bar that inserts Markdown with a click. All plain text in the scheme's dim colour, no boxes, no buttons, and each can be switched off.
 - **Your look:** fonts and sizes for text, code and the panels, line spacing, column width and padding.
@@ -65,7 +66,7 @@ To make luftig the default app for `.md` files, select one in the Finder, choose
 
 ## Privacy
 
-- **No network.** luftig has no account, no server and no network connection of its own. It reads and writes the files you open, and nothing else. The only time it touches the network is when you click a link, which opens in your browser.
+- **No network.** luftig has no account, no server and no network connection of its own. It reads and writes the files you open and the images they show, and nothing else. The only time it touches the network is when you click a link, which opens in your browser, or, if you choose so in Settings → General → Images, to download the web images your documents show.
 - **No tracking.** No analytics, no crash reports, no telemetry.
 - **Your files stay as they are.** The character encoding and line endings a file came with are written back unchanged.
 - **On your Mac.** Your settings are stored in `~/Library/Preferences/com.bernorieder.luftig.plist`, and imported and custom colour schemes in `~/Library/Application Support/com.bernorieder.luftig/`.

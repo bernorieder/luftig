@@ -180,7 +180,8 @@ applies at once to every open window and is saved (no OK / Apply buttons); the l
 current settings, so fonts, size, spacing, column and colours change in front of you. Under the preview a switch chooses between four screens, remembered:
 **General** (Open files in tabs: off by default, every file gets a window of its own; on, new files open as tabs of the front window. When the file changes
 on disk: reload automatically - the default, see below -, ask first - a banner offers Reload from Disk / Keep My Version for every change and nothing is
-merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts"), **Text**
+merged -, or never reload - the change is not shown, saving over it asks first. Continue lists on Return: the list keys, see "Keyboard shortcuts". Tables: draw
+tables as grids, see "Tables". Images: never, images on this Mac (the default) or on this Mac and the web, see "Images"), **Text**
 (the fonts, size, spacing and column) and **Layout**, for the elements around the text (outline, syntax bar, word count, reading time): which of them are shown (the
 View menu's switches, the other way to reach them; the reading time shares the word count's row), the **Padding** - one number of points, 0 to 50, that is every gap in the editor: between the
 window's edge and the panels on the left and the right, between the outline and the text, and between the text and the sides of its own panel; the
@@ -271,9 +272,23 @@ matter, HTML, rules, right-to-left lines (their paragraph is right-aligned), pla
 ![A wrapped list in a narrow window, before and after](screenshots/16-hanging-before-420-light.png)
 ![With hanging indents](screenshots/16-hanging-420-light.png)
 
+### Images
+
+A line that holds only an image (`![alt](path)`, spaces around it allowed) shows the image while the caret is elsewhere, as wide as the image is (a 144 dpi
+screenshot counts half its pixels), never wider than the text column and never taller than three quarters of its width. Click on it, or move the caret
+onto its line, and the Markdown shows; move away and the image is drawn again. The file is not changed. The path is relative to the document's folder
+(an untitled document has none), absolute, `~/...` or a `file:` URL; a path with spaces goes in angle brackets (`![x](<my image.png>)`) or is
+percent-encoded. Shown as Markdown: an image inside a sentence, in a quote or a list item, a missing or unreadable file, and the last line of a file
+when it has no line break. **Settings > General > Images** chooses: **Never**, **Images on this Mac** (the default: web images stay Markdown and luftig
+makes no network connection), or **Images on this Mac and the web**: images at `http(s):` addresses are downloaded (once per run, kept in memory, no
+cookies) and drawn when they arrive; luftig then connects to the sites your documents link to.
+
+**Dropping images**: drag image files from the Finder (or an image from a browser) into the text and luftig inserts `![name](path)`, one line per
+image, with the path relative to the document's folder (`../` where needed); the files are linked where they are, not copied. One Undo removes them.
+
 ### Tables
 
-**Tables as grids** (View > Tables as Grids, on by default): while the caret is elsewhere, a table is drawn as a grid in the text font: a header band, lines
+**Tables as grids** (Settings > General > Tables, or View > Tables as Grids; on by default): while the caret is elsewhere, a table is drawn as a grid in the text font: a header band, lines
 between the rows and columns, each cell's text with its bold, italic, code and links but without the Markdown markers, aligned left, centred or right
 as its column's colons say. Columns fit the text column: a column that fits in an equal share keeps its width, the others share the rest, and a long cell
 wraps inside its column (its row grows). Click into a cell, move the caret into the table with the arrow keys, or end a selection or a found match in it,

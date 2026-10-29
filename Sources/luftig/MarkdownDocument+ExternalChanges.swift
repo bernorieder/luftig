@@ -91,6 +91,7 @@ extension MarkdownDocument {
     }
 
     func fileURLDidChange() {
+        host?.documentURLDidChange(fileURL)
         if fileURL == nil {
             monitor?.stop(); monitor = nil
             NotificationCenter.default.removeObserver(self)      // armMonitorIfNeeded installs them again with a new monitor

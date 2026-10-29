@@ -198,7 +198,7 @@ enum StyleOracle {
     static func aligned(_ styled: [StyledRun], _ md: [MDRun], _ text: NSString, _ limit: CGFloat, like editor: TableAligner? = nil, theme: Theme? = nil) -> [StyledRun] {
         let aligner = TableAligner()
         _ = aligner.setWidthLimit(editor?.widthLimit ?? limit)
-        if let editor { aligner.renderTables = editor.renderTables; aligner.revealed = editor.revealed }
+        if let editor { aligner.renderTables = editor.renderTables; aligner.renderImages = editor.renderImages; aligner.baseURL = editor.baseURL; aligner.revealed = editor.revealed }
         return aligner.align(styled, lexRuns: md, text: text, region: NSRange(location: 0, length: text.length), cutAtStart: false, cutAtEnd: false, theme: theme)
     }
 

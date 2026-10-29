@@ -15,6 +15,16 @@ final class LuftigEditorTextView: NSTextView {
     var onCommandClick: ((Int) -> Bool)?
     /// A plain click: true when it was taken (a click into a table drawn as a grid puts the caret into the clicked cell: TableRender.swift).
     var onPlainClick: ((NSPoint) -> Bool)?
+    /// Image files (or web images) dropped at a character index: true when they were taken (inserted as Markdown image links).
+    var onDropImages: (([URL], Int) -> Bool)?
+
+    /// Images dropped into the text become `![name](path)` lines (EditorViewController.insertImageLinks); anything else is NSTextView's.
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
+        let images = urls.filter { ImageDrop.isImage($0) }
+        if !images.isEmpty, let handler = onDropImages, handler(images, characterIndexForInsertion(at: convert(sender.draggingLocation, from: nil))) { return true }
+        return super.performDragOperation(sender)
+    }
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), let handler = onCommandClick,

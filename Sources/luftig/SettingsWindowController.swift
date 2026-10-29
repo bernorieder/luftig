@@ -13,6 +13,10 @@
 //                   Changes made by other programs appear at once (merged with yours when both edited).
 //   Editing         [x] Continue lists on Return
 //                   Tab and Shift-Tab nest and un-nest list items.
+//   Tables          [x] Draw tables as grids
+//                   While the caret is elsewhere. Click into a table to edit its Markdown.
+//   Images          [Images on this Mac  v]                            (never / this Mac / this Mac and the web)
+//                   (a note on what the choice means: the web one says luftig then connects to the sites)
 //   Text:
 //   Color scheme   [swatch luftig (follows system appearance)  v]
 //   Text font       [System (SF Pro)  v]  [ 16 ] (stepper) pt
@@ -165,6 +169,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     let continueListsNoteLabel = NSTextField(labelWithString: "")
     let reloadPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     let reloadNoteLabel = NSTextField(labelWithString: "")
+    let tablesCheckbox = NSButton(checkboxWithTitle: "Draw tables as grids", target: nil, action: nil)
+    let tablesNoteLabel = NSTextField(labelWithString: "")
+    let imagesPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    let imagesNoteLabel = NSTextField(labelWithString: "")
     // the Colors screen: the scheme popup and a custom scheme from seven colours (ColorSchemesCustom.swift), edited as a draft the editors show live
     let colorWells: [NSColorWell] = CustomScheme.Role.allCases.map { _ in NSColorWell(style: .minimal) }
     let saveSchemeButton = NSButton(title: "Save", target: nil, action: nil)
@@ -373,6 +381,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         reloadPopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
         secondary(reloadNoteLabel)
         wrappingLabel(reloadNoteLabel, width: W.controlColumnWidth, lines: 2)             // (the longest of its three texts needs two lines)
+        tablesCheckbox.target = self; tablesCheckbox.action = #selector(tablesChanged(_:))
+        tablesCheckbox.setAccessibilityLabel("Draw tables as grids")
+        secondary(tablesNoteLabel)
+        wrappingLabel(tablesNoteLabel, width: W.controlColumnWidth, lines: 1)
+        tablesNoteLabel.stringValue = "While the caret is elsewhere. Click into a table to edit its Markdown."
+        imagesPopup.target = self; imagesPopup.action = #selector(imagesChanged(_:))
+        imagesPopup.setAccessibilityLabel("Show images")
+        for m in EditorPreferences.ImageMode.allCases {
+            let item = NSMenuItem(title: m.title, action: nil, keyEquivalent: "")
+            item.representedObject = m.rawValue
+            imagesPopup.menu?.addItem(item)
+        }
+        imagesPopup.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        secondary(imagesNoteLabel)
+        wrappingLabel(imagesNoteLabel, width: W.controlColumnWidth, lines: 3)             // (the longest of its three texts needs three lines)
 
         // -- the Colors screen
         let noteLabels: [NSTextField] = CustomScheme.Role.allCases.map { NSTextField(labelWithString: $0.note) }
@@ -449,9 +472,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         continueListsColumn.orientation = .vertical; continueListsColumn.alignment = .leading; continueListsColumn.spacing = 6
         let reloadColumn = NSStackView(views: [reloadPopup, reloadNoteLabel])
         reloadColumn.orientation = .vertical; reloadColumn.alignment = .leading; reloadColumn.spacing = 6
+        let tablesColumn = NSStackView(views: [tablesCheckbox, tablesNoteLabel])
+        tablesColumn.orientation = .vertical; tablesColumn.alignment = .leading; tablesColumn.spacing = 6
+        let imagesColumn = NSStackView(views: [imagesPopup, imagesNoteLabel])
+        imagesColumn.orientation = .vertical; imagesColumn.alignment = .leading; imagesColumn.spacing = 6
 
         // the grids share the label column width, so the controls of every screen start at the same x
-        let generalLabels = ["Files:", "File changes:", "Editing:"].map { label($0) }
+        let generalLabels = ["Files:", "File changes:", "Editing:", "Tables:", "Images:"].map { label($0) }
         let textLabels = ["Text font:", "Code font:", "Line spacing:", "Column width:"].map { label($0) }
         let panesLabels = ["Show:", "Padding:", "Panes font:", "Panes size:", "Panes opacity:", "Outline:", "Outline spacing:"].map { label($0) }
         let colorsLabels = (["Color scheme:"] + CustomScheme.Role.allCases.map { $0.title + ":" } + [""]).map { label($0) }
@@ -472,6 +499,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
             [generalLabels[0], openInTabsCheckbox],
             [generalLabels[1], reloadColumn],
             [generalLabels[2], continueListsColumn],
+            [generalLabels[3], tablesColumn],
+            [generalLabels[4], imagesColumn],
         ])
         let grid = makeGrid([
             [textLabels[0], textFontRow],
@@ -821,6 +850,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
         let behavior = EditorPreferences.reloadBehavior
         if let item = reloadPopup.menu?.items.first(where: { ($0.representedObject as? String) == behavior.rawValue }) { reloadPopup.select(item) }
         reloadNoteLabel.stringValue = behavior.note
+        tablesCheckbox.state = EditorPreferences.renderTables ? .on : .off
+        let images = EditorPreferences.renderImages
+        if let item = imagesPopup.menu?.items.first(where: { ($0.representedObject as? String) == images.rawValue }) { imagesPopup.select(item) }
+        imagesNoteLabel.stringValue = images.note
         showOutlineCheckbox.state = EditorPreferences.showOutline ? .on : .off
         showWordCountCheckbox.state = EditorPreferences.showWordCount ? .on : .off
         showSyntaxBarCheckbox.state = EditorPreferences.showSyntaxBar ? .on : .off
@@ -1110,6 +1143,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSMe
     }
     @objc func openInTabsChanged(_ sender: NSButton) { EditorPreferences.openInTabs = sender.state == .on; syncFromPreferences() }
     @objc func continueListsChanged(_ sender: NSButton) { EditorPreferences.continueLists = sender.state == .on; syncFromPreferences() }
+    @objc func tablesChanged(_ sender: NSButton) { EditorPreferences.renderTables = sender.state == .on; syncFromPreferences() }
+    @objc func imagesChanged(_ sender: NSPopUpButton) {
+        if let raw = sender.selectedItem?.representedObject as? String, let m = EditorPreferences.ImageMode(rawValue: raw) { EditorPreferences.renderImages = m }
+        syncFromPreferences()
+    }
     @objc func reloadBehaviorChanged(_ sender: NSPopUpButton) {
         if let raw = sender.selectedItem?.representedObject as? String, let b = EditorPreferences.ReloadBehavior(rawValue: raw) { EditorPreferences.reloadBehavior = b }
         syncFromPreferences()

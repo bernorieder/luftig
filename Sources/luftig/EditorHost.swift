@@ -48,6 +48,8 @@ protocol EditorHost: AnyObject {
     func hideBanner()
     /// The document is about to write its file: what the user types next must be a change of its own (see MarkdownDocument.performSave).
     func documentWillSave()
+    /// The document's file is `url` now (opened, saved under a new name, moved; nil: untitled): relative image paths start from its folder.
+    func documentURLDidChange(_ url: URL?)
 }
 
 /// Convenience for NSTextView based editors: implement `textView`, `showBanner`, `hideBanner` and get the rest.
@@ -67,6 +69,7 @@ extension TextViewEditorHost {
     /// nothing new is registered, NSDocument's change count does not move, and the document says "not edited" while the editor holds text that
     /// is not on disk (TextEdit breaks the coalescing on every save for the same reason). Undo then takes back the typing since the last save.
     func documentWillSave() { textView.breakUndoCoalescing() }
+    func documentURLDidChange(_ url: URL?) {}
 
     @discardableResult
     func applyExternalText(_ new: NSString, mode: ExternalApplyMode) -> ExternalApplyReport { defaultApplyExternalText(new, mode: mode) }

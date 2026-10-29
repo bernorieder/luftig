@@ -33,6 +33,11 @@ final class TableAligner {
 
     /// Tables are drawn as a grid while no selection touches them (TableRender.swift; View > Tables as Grids).
     var renderTables = false
+    /// Which images are drawn on lines of their own (ImageRender.swift), and the folder their relative paths start from (the document's; nil: untitled).
+    var renderImages: EditorPreferences.ImageMode = .never
+    var baseURL: URL?
+    /// Tables or images are drawn (their look then follows the selection).
+    var drawsBlocks: Bool { renderTables || renderImages != .never }
     /// The selection: a table that holds the caret or an end of a selected range is shown as Markdown (aligned), not drawn.
     var revealed: [NSRange] = []
     /// The tables decided since the editor last looked (drawn or not): an edit is styled before the text view moves the selection, so the editor checks
@@ -108,7 +113,9 @@ final class TableAligner {
     /// `styled` with the alignment of every complete table in `region` added. `cutAtStart` / `cutAtEnd`: the first / last table of the region goes on
     /// beyond it (it could not be widened to the whole table, or the table is too big): those are left alone.
     func align(_ styled: [StyledRun], lexRuns: [MDRun], text: NSString, region: NSRange, cutAtStart: Bool, cutAtEnd: Bool, theme: Theme? = nil) -> [StyledRun] {
-        guard lexRuns.contains(where: { $0.style.contains(.table) }) else { return styled }
+        let hasTables = lexRuns.contains { $0.style.contains(.table) }
+        let hasImages = renderImages != .never && theme != nil && lexRuns.contains { $0.style.contains(.image) }
+        guard hasTables || hasImages else { return styled }
         sawTables = true
         let lines = TableAligner.lines(lexRuns, text: text, in: region)
         // the tables: a header line and the table lines after it (a region may also start in the middle of one: that is a table too, marked cut)
@@ -127,20 +134,49 @@ final class TableAligner {
             if n == tables.count - 1 && cutAtEnd && table.last!.next >= lines.last!.next { continue }
             guard table.first!.isHeader else { continue }
             guard table.last!.end - table.first!.start <= TableAligner.maxTableUnits else { continue }
-            if renderTables, let theme {
+            // (the last row needs a line break: a paragraph of hidden glyphs alone gets no line fragment of its own)
+            if renderTables, let theme, table.last!.next > table.last!.end {
                 let range = NSRange(location: table.first!.start, length: table.last!.end - table.first!.start)
-                let drawn = !isRevealed(range) && render(table, styled: styled, lexRuns: lexRuns, text: text, theme: theme, into: &edits)
-                if decided.count < 256 { decided.append((range, drawn)) }
-                onDecided?()
-                if drawn { continue }
+                if isRevealed(range) { decide(range, drawn: false) }
+                else if render(table, styled: styled, lexRuns: lexRuns, text: text, theme: theme, into: &edits) { decide(range, drawn: true); continue }
             }
             alignment(of: table, styled: styled, lexRuns: lexRuns, text: text, into: &edits)
         }
+        if hasImages { images(lines, styled: styled, lexRuns: lexRuns, text: text, into: &edits) }
         var out = styled
+        edits.paragraphs.sort { $0.range.location < $1.range.location }
         if !edits.paragraphs.isEmpty { out = TableAligner.apply(edits.paragraphs, key: .paragraphStyle, to: out) }
         if !edits.kerns.isEmpty { out = TableAligner.apply(edits.kerns, key: .kern, to: out) }
         if !edits.rows.isEmpty { out = TableAligner.apply(edits.rows, key: .luftigTableRow, to: out) }
+        if !edits.images.isEmpty { out = TableAligner.apply(edits.images, key: .luftigImage, to: out) }
         return out
+    }
+
+    /// A table or image line whose look depends on the selection: shown as Markdown because the selection is in it (`drawn` false), or drawn. Blocks
+    /// that cannot be drawn anyway (a table in a quote, a missing image) are not recorded: the check after the selection has settled would restyle them
+    /// for nothing, and again after that.
+    private func decide(_ range: NSRange, drawn: Bool) {
+        if decided.count < 256 { decided.append((range, drawn)) }
+        onDecided?()
+    }
+
+    /// Lines that hold only an image, drawn as the image (ImageRender.swift).
+    private func images(_ lines: [Line], styled: [StyledRun], lexRuns: [MDRun], text: NSString, into edits: inout Edits) {
+        var si = 0
+        for line in lines where !line.isTable && line.next > line.end {
+            guard let (dest, alt) = ImageRenderer.imageLine(line, lexRuns: lexRuns, text: text), let url = ImageRenderer.resolve(dest, base: baseURL) else { continue }
+            let range = NSRange(location: line.start, length: line.end - line.start)
+            if isRevealed(range) { decide(range, drawn: false); continue }
+            guard let info = ImageStore.shared.info(for: url, web: renderImages == .all) else { continue }
+            while si < styled.count && NSMaxRange(styled[si].range) <= line.start { si += 1 }
+            guard si < styled.count, let base = styled[si].attributes[.paragraphStyle] as? NSParagraphStyle else { continue }
+            let size = ImageRenderer.drawnSize(info, available: max(100, widthLimit - base.firstLineHeadIndent))
+            let whole = NSRange(location: line.start, length: line.next - line.start)
+            edits.paragraphs.append((whole, rowStyle(base, height: size.height + 2 * ImageRenderer.padY)))
+            edits.images.append((whole, ImageRenderLine(url: url, size: size, alt: alt)))
+            renderedAny = true
+            decide(range, drawn: true)
+        }
     }
 
     /// The caret or an end of a selected range lies in the table (right before its first or after its last character counts). A selection that only
@@ -189,6 +225,7 @@ final class TableAligner {
         var kerns: [(range: NSRange, value: Any)] = []
         var paragraphs: [(range: NSRange, value: Any)] = []
         var rows: [(range: NSRange, value: Any)] = []
+        var images: [(range: NSRange, value: Any)] = []
     }
 
     /// The paragraph styles of hanging rows: (the row's own style, head indent in half points) -> the style with that head indent. The row's style is

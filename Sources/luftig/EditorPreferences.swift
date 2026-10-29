@@ -34,7 +34,7 @@ enum EditorPreferences {
     /// Settings > Layout > Outline spacing: the height of an outline row as a multiple of its font's height.
     static let outlineLineHeightKey = "LuftigOutlineLineHeight"
     /// Every key the Settings window controls (Restore Defaults removes them all).
-    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, codeFontScaleKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey, reloadBehaviorKey]
+    static let allKeys = [fontSizeKey, readableWidthKey, colorSchemeKey, bodyFontFamilyKey, codeFontFamilyKey, codeFontScaleKey, lineHeightFactorKey, columnWidthKey, paneFontFamilyKey, paneFontSizeKey, paneOpacityKey, outlineWrapsKey, paddingKey, openInTabsKey, outlineLineHeightKey, continueListsKey, reloadBehaviorKey, renderTablesKey, renderImagesKey]
     /// The three elements around the text (View menu), not part of the Settings window.
     static let showOutlineKey = "LuftigShowOutline"
     static let showWordCountKey = "LuftigShowWordCount"
@@ -43,10 +43,12 @@ enum EditorPreferences {
     static let showReadingTimeKey = "LuftigShowReadingTime"
     /// View > Typewriter Mode (the caret's line stays in the middle of the window).
     static let typewriterModeKey = "LuftigTypewriterMode"
-    /// View > Tables as Grids: a table is drawn as a grid while the caret is elsewhere (TableRender.swift).
+    /// Settings > General > Tables (and View > Tables as Grids): a table is drawn as a grid while the caret is elsewhere (TableRender.swift).
     static let renderTablesKey = "LuftigRenderTables"
+    /// Settings > General > Images: lines that hold only an image show the image (ImageRender.swift): never, local files only, local and web.
+    static let renderImagesKey = "LuftigRenderImages"
     /// The View menu's switches (not part of the Settings window's Restore Defaults).
-    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, showReadingTimeKey, typewriterModeKey, renderTablesKey]
+    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, showReadingTimeKey, typewriterModeKey]
 
     // MARK: one-time migration from the app's previous name
 
@@ -401,6 +403,39 @@ enum EditorPreferences {
             }
         }
     }
+    /// Settings > General > Images.
+    enum ImageMode: String, CaseIterable {
+        /// Images are shown as Markdown.
+        case never
+        /// Images on the Mac (a path, relative to the document or absolute, or a file URL) are drawn; web images stay Markdown. luftig stays offline.
+        case local
+        /// Web images are downloaded and drawn too: luftig then connects to the sites the documents link to.
+        case all
+        var title: String {
+            switch self {
+            case .never: return "Never"
+            case .local: return "Images on this Mac"
+            case .all: return "Images on this Mac and the web"
+            }
+        }
+        var note: String {
+            switch self {
+            case .never: return "Images are shown as Markdown."
+            case .local: return "A line with only an image shows it while the caret is elsewhere. Web images stay Markdown: luftig stays offline."
+            case .all: return "Web images are downloaded too: luftig then connects to the sites your documents link to."
+            }
+        }
+    }
+    /// Which images are drawn. Default: images on this Mac (the app makes no network connections of its own unless asked to).
+    static var renderImages: ImageMode {
+        get { (defaults.object(forKey: renderImagesKey) as? String).flatMap { ImageMode(rawValue: $0) } ?? .local }
+        set {
+            guard newValue != renderImages else { return }
+            defaults.set(newValue.rawValue, forKey: renderImagesKey)
+            post()
+        }
+    }
+
     /// What happens when another program changes the open file. Default: reload automatically; an unknown stored value reads as the default.
     static var reloadBehavior: ReloadBehavior {
         get { (defaults.object(forKey: reloadBehaviorKey) as? String).flatMap { ReloadBehavior(rawValue: $0) } ?? .automatic }

@@ -46,7 +46,9 @@ final class LuftigLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let span = NSIntersectionRange(NSRange(location: first, length: last - first + 1), NSRange(location: 0, length: ts.length))
         guard span.length > 0 else { return 0 }
         var hidden = IndexSet()
-        ts.enumerateAttribute(.luftigTableRow, in: span, options: []) { v, r, _ in if v != nil { hidden.insert(integersIn: r.location..<NSMaxRange(r)) } }
+        for key in [NSAttributedString.Key.luftigTableRow, .luftigImage] {
+            ts.enumerateAttribute(key, in: span, options: []) { v, r, _ in if v != nil { hidden.insert(integersIn: r.location..<NSMaxRange(r)) } }
+        }
         guard !hidden.isEmpty else { return 0 }
         hidesGlyphs = true
         let text = ts.string as NSString
@@ -249,6 +251,12 @@ final class LuftigLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let tv = textContainers.first?.textView
         let selected = (tv?.selectedRanges ?? []).map { $0.rangeValue }.filter { $0.length > 0 }
         for f in frags where f.chars.location < ts.length {
+            if let image = ts.attribute(.luftigImage, at: f.chars.location, effectiveRange: nil) as? ImageRenderLine {
+                let indent = (ts.attribute(.paragraphStyle, at: f.chars.location, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0
+                let rect = CGRect(x: origin.x + f.rect.minX, y: origin.y + f.rect.minY, width: f.rect.width, height: f.rect.height)
+                ImageRenderer.draw(image, rect: rect, left: rect.minX + indent, ctx: ctx, placeholder: colors.panel, scale: scale)
+                continue
+            }
             guard let row = ts.attribute(.luftigTableRow, at: f.chars.location, effectiveRange: nil) as? TableRenderRow else { continue }
             let indent = (ts.attribute(.paragraphStyle, at: f.chars.location, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0
             let rect = CGRect(x: origin.x + f.rect.minX, y: origin.y + f.rect.minY, width: f.rect.width, height: f.rect.height)
@@ -389,7 +397,7 @@ final class LuftigLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                 var eff = NSRange(location: 0, length: 0)
                 let v = ts.attribute(.luftigInline, at: idx, longestEffectiveRange: &eff, in: NSRange(location: idx, length: end - idx))
                 // (inline code in a table drawn as a grid has hidden glyphs; they can sit in the line fragment ABOVE the row)
-                if v != nil, ts.attribute(.luftigTableRow, at: eff.location, effectiveRange: nil) == nil {
+                if v != nil, ts.attribute(.luftigTableRow, at: eff.location, effectiveRange: nil) == nil, ts.attribute(.luftigImage, at: eff.location, effectiveRange: nil) == nil {
                     let gr = glyphRange(forCharacterRange: eff, actualCharacterRange: nil)
                     if gr.length > 0 {
                         let bounds = boundingRect(forGlyphRange: gr, in: tc)

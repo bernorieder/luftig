@@ -98,6 +98,10 @@ Sources/luftig/
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation
   MarkdownRunProvider.swift             adapter: LazyStyler closures <-> MarkdownStyler <-> Theme; widens a region to the whole tables it touches
+  ImageRender.swift                     lines that hold only an image drawn as the image (`.luftigImage`, the same machinery as TableRender), the
+                                        destination's parsing and resolving, ImageDrop (dropped files -> `![name](relative path)` lines)
+  ImageStore.swift                      image sizes from the file header (re-checked by stat), pixels decoded in the background at the drawn size,
+                                        web images downloaded with an ephemeral session only with Settings > General > Images "this Mac and the web"
   TableRender.swift                     tables drawn as grids while the caret is elsewhere (TableRenderer: column widths, wrapped cells, drawing; the
                                         row to draw is the `.luftigTableRow` attribute, LuftigLayoutManager hides its glyphs)
   TableAlignment.swift                  tables aligned on screen (TableAligner: `.kern` before each closing pipe, measured with CoreText; TableExtent: a
@@ -136,6 +140,8 @@ Sources/luftig/
     SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab tables left alone, a too wide one hangs),
                                         table-align-edit (a keystroke re-aligns the whole table, a long table styled from its middle, the size bound,
                                         narrower / wider window, == a fresh restyle), table-format (Align Table: the source, the caret, undo, the menu item)
+    SelfTestImageRender.swift           image-render: sizes (resolution, column, height cap), hidden glyphs, where not (sentence, quote, list, missing,
+                                        web with "this Mac": no download), paths, the caret and a click, the switch, dropped files, == a fresh restyle
     SelfTestTableRender.swift           table-render: tables drawn as grids (hidden glyphs, row heights, wrapping, the Markdown when the caret enters by
                                         selection / click / Select All, a narrower window, the switch, == a fresh restyle with the same selection)
     SelfTestFixTyping.swift             fix-typing-after-save: letters typed after an autosave survive a coordinated write, NSDocument's revert and an
@@ -477,6 +483,15 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     row may belong to the line fragment ABOVE (AppKit's choice depends on the layout's history): measure a drawn row through its line break, map a click
     through the fragment's line break, skip such fragments when comparing layouts. Not drawn: tables in quotes (the `>` prefix is part of every row),
     tables over the size bound or cut by the region.
+42. **Images are drawn with the tables' machinery, and add one input to styling: the file system** (ImageRender.swift, ImageStore.swift). A line
+    that holds only an image gets `.luftigImage` and a paragraph style as tall as the image; the reveal rule, the recorded decisions, the glyph hiding
+    and the drawing are those of tables (TableAligner draws both; `drawsBlocks`). What is drawn depends on whether the file exists and its size: the
+    store answers from the file's header and re-checks it by stat on every styling, so an incremental restyle and the oracle (which asks the same
+    store) agree; a web image's size becomes known when it arrives (`ImageStore.didChange` "size": every editor restyles), decoded pixels only redraw
+    ("pixels"). Only decisions that depend on the selection are recorded: a block that cannot be drawn anyway (a missing image, a table in a quote)
+    would otherwise be restyled after every look at the selection, and again, forever. A block on the last line of the text, without a line break, is
+    not drawn: a paragraph of hidden glyphs alone gets no line fragment of its own. Web images: only with "this Mac and the web" (the default makes no
+    network connection: the privacy policy says so), an ephemeral URLSession, at most 40 MB, kept in memory.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 
