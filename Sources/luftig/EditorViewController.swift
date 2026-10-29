@@ -27,6 +27,8 @@ import MarkdownKit
     func luftigOpenLink(_ sender: Any?)
     /// View > Typewriter Mode (the `typewriter` extension).
     func luftigToggleTypewriterMode(_ sender: Any?)
+    /// View > Tables as Grids (TableRender.swift).
+    func luftigToggleTableGrids(_ sender: Any?)
     /// Edit > Copy as HTML / Copy as Rich Text: the selection (or everything) rendered (MarkdownHTML.swift).
     func luftigCopyAsHTML(_ sender: Any?)
     func luftigCopyAsRichText(_ sender: Any?)
@@ -109,6 +111,9 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         textView.delegate = self
         if let tc = stack.textView.textContainer { _ = provider.tables.setWidthLimit(tc.size.width - 2 * tc.lineFragmentPadding) }
         column.onContainerWidthChange = { [weak self] width in self?.tableWidthChanged(width) }
+        provider.tables.renderTables = EditorPreferences.renderTables
+        provider.tables.revealed = [NSRange(location: 0, length: 0)]          // (the caret of a new document: a table at its very start shows its Markdown)
+        provider.tables.onDecided = { [weak self] in self?.scheduleReconcile() }
         preferenceObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.didChange, object: nil, queue: nil) { [weak self] _ in        // synchronous, on the posting (main) thread
             self?.preferencesDidChange()
         }
@@ -286,6 +291,18 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         applyChromeVisibility()
         applyChromeTheme()                   // (the panes' font, size and opacity are preferences of their own: cheap to re-apply on every change)
         applyTypewriterMode()
+        if provider.tables.renderTables != EditorPreferences.renderTables {
+            provider.tables.renderTables = EditorPreferences.renderTables
+            restyleKeepingViewport { $0.forgetStyled() }
+        }
+    }
+
+    /// Restyle what `forget` drops, keeping the line at the top of the window where it was.
+    func restyleKeepingViewport(_ forget: (LazyStyler) -> Void) {
+        let anchor = ViewportAnchor.capture(in: textView)
+        forget(styler)
+        styler.styleVisible()
+        if let anchor, anchor.restoreSameCharacter(in: textView) { styler.styleVisible() }
     }
 
     /// The user cannot see this window right now. `isVisible` is false for a minimized window, a background tab and a hidden app; `occlusionState` has no
@@ -305,6 +322,9 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
     /// How many times this editor built a new Theme and restyled (a settings or scheme change). Tests count them.
     private(set) var themeRebuildCount = 0
     private var tableRestyleScheduled = false
+    /// The tables the selection touched when it was last set (TableRender.swift: they show their Markdown).
+    var revealedExtents: [NSRange] = []
+    private var reconcileScheduled = false
 
     /// New settings (size, fonts, line spacing, colour scheme): new Theme (new attribute caches), base attributes over the whole text (so NOT yet
     /// styled text changes too), restyle what is visible, keep the line at the top of the window where it was.
@@ -386,6 +406,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         case #selector(luftigOpenLink(_:)): return linkDestination(at: textView.selectedRange().location) != nil
         case #selector(luftigAlignTable(_:)): return textView.isEditable && caretIsInTable
         case #selector(luftigToggleTypewriterMode(_:)): item.state = EditorPreferences.typewriterMode ? .on : .off
+        case #selector(luftigToggleTableGrids(_:)): item.state = EditorPreferences.renderTables ? .on : .off
         case #selector(luftigCopyAsHTML(_:)), #selector(luftigCopyAsRichText(_:)):
             item.title = (item.action == #selector(luftigCopyAsHTML(_:)) ? "Copy" : "Copy") + (textView.selectedRange().length > 0 ? "" : " All") + (item.action == #selector(luftigCopyAsHTML(_:)) ? " as HTML" : " as Rich Text")
             return storage.length > 0
@@ -418,10 +439,11 @@ extension EditorViewController {
         outline.onSelect = { [weak self] e in self?.jump(toOutlineEntry: e) }
         syntaxBar.onInsert = { [weak self] e in self?.insert(e) }
         editorTextView.onCommandClick = { [weak self] index in self?.followLink(at: index) ?? false }
+        editorTextView.onPlainClick = { [weak self] point in self?.clickIntoTable(at: point) ?? false }
         let nc = NotificationCenter.default
         // a text change: recompute the outline and the count a little later (coalesced: typing never recomputes per keystroke)
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.scheduleChromeRefresh() })
-        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.updateChromeSelection(); self?.typewriterSelectionChanged() })
+        chromeObservers.append(nc.addObserver(forName: NSTextView.didChangeSelectionNotification, object: textView, queue: nil) { [weak self] _ in self?.tableSelectionChanged(); self?.updateChromeSelection(); self?.typewriterSelectionChanged() })
         chromeObservers.append(nc.addObserver(forName: NSText.didChangeNotification, object: textView, queue: nil) { [weak self] _ in self?.typewriterTextChanged() })
         applyTypewriterMode()
         chromeObservers.append(nc.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil) { [weak self] _ in self?.updateCurrentOutlineEntry() })
@@ -606,6 +628,103 @@ extension EditorViewController {
 
 extension EditorViewController {
 
+    @objc func luftigToggleTableGrids(_ sender: Any?) { EditorPreferences.renderTables.toggle() }
+
+    /// The selection moved: a table it now touches shows its Markdown, a table it left is drawn as a grid again (TableRender.swift). Only the tables at the
+    /// ends of the old and the new selection can change, plus whatever a selected range covers.
+    func tableSelectionChanged() {
+        let tables = provider.tables
+        let selection = textView.selectedRanges.map { $0.rangeValue }
+        let old = tables.revealed
+        tables.revealed = selection
+        guard tables.renderTables, tables.sawTables else { return }
+        defer { reconcileTables() }
+        guard old != selection else { return }
+        let length = storage.length
+        if (old + selection).contains(where: { $0.length > 0 }) { textView.needsDisplay = true }       // (the tint of drawn rows a selection passes over)
+        func extents(_ ranges: [NSRange]) -> [NSRange] {
+            var out: [NSRange] = []
+            for r in ranges {
+                for loc in Set([r.location, NSMaxRange(r)]) where loc <= length {
+                    if let t = tableExtent(at: loc), !out.contains(t) { out.append(t) }
+                }
+            }
+            return out
+        }
+        // the tables of the old selection were found when it was made (typing moves the selection, so they are as current as the text)
+        var was = revealedExtents
+        for t in extents(old) where !was.contains(t) { was.append(t) }           // (also a table shown by an edit rather than by a selection change)
+        let now = extents(selection)
+        revealedExtents = now
+        guard was != now else { return }           // the caret moved within one table, or between lines outside tables
+        restyleKeepingViewport { styler in
+            for r in was + now { styler.forgetStyled(NSIntersectionRange(r, NSRange(location: 0, length: length))) }
+        }
+    }
+
+    /// The tables styled since the last look, against the selection as it is now: an edit is styled before the text view moves the selection (a pasted
+    /// or typed table, an external change), so one may be drawn although the caret is in it, or shown as Markdown although the caret has gone.
+    func reconcileTables() {
+        let tables = provider.tables
+        let decided = tables.takeDecided()
+        guard tables.renderTables, !decided.isEmpty else { return }
+        let length = storage.length
+        let stale = decided.filter { NSMaxRange($0.range) <= length && $0.drawn == tables.isRevealed($0.range) }
+        guard !stale.isEmpty else { return }
+        restyleKeepingViewport { styler in for d in stale { styler.forgetStyled(d.range) } }
+        _ = tables.takeDecided()                 // (just restyled with this selection)
+    }
+    private func scheduleReconcile() {
+        guard !reconcileScheduled else { return }
+        reconcileScheduled = true
+        DispatchQueue.main.async { [weak self] in self?.reconcileScheduled = false; self?.reconcileTables() }
+    }
+
+    /// The characters of the table that holds `location` (a caret right after its last character included), or nil (also for a table over the size
+    /// bound: it is never drawn, and looking for its ends would cost every keystroke in it).
+    func tableExtent(at location: Int) -> NSRange? {
+        let length = storage.length
+        guard length > 0 else { return nil }
+        var candidates = [min(location, length - 1)]
+        // the character before: a caret right after the table's last character; not a line break (the caret is then on the line after the table, which
+        // TableAligner.isRevealed does not count)
+        if location > 0, location - 1 < length, ![0x0A, 0x0D].contains((storage.string as NSString).character(at: location - 1)) { candidates.append(location - 1) }
+        for loc in candidates {
+            if let t = table(at: loc, limit: TableAligner.maxTableUnits), let first = t.lines.first, let last = t.lines.last {
+                return NSRange(location: first.start, length: last.next - first.start)
+            }
+        }
+        return nil
+    }
+
+    /// A click into a table drawn as a grid: the caret goes to the end of the clicked cell's text (which shows the table's Markdown).
+    func clickIntoTable(at point: NSPoint) -> Bool {
+        guard provider.tables.renderTables, let lm = textView.layoutManager, let tc = textView.textContainer, storage.length > 0 else { return false }
+        let o = textView.textContainerOrigin
+        let local = NSPoint(x: point.x - o.x, y: point.y - o.y)
+        let glyph = lm.glyphIndex(for: local, in: tc)
+        guard glyph < lm.numberOfGlyphs else { return false }
+        var fragGlyphs = NSRange(location: 0, length: 0)
+        let frag = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &fragGlyphs)
+        guard frag.contains(local) || (local.y >= frag.minY && local.y < frag.maxY) else { return false }
+        // the row is the line whose line break this fragment holds (hidden glyphs at the start of the NEXT row can belong to it too)
+        let text = storage.string as NSString
+        let chars = lm.characterRange(forGlyphRange: fragGlyphs, actualGlyphRange: nil)
+        var char = max(chars.location, NSMaxRange(chars) - 1)
+        for c in chars.location..<NSMaxRange(chars) where text.character(at: c) == 0x0A || text.character(at: c) == 0x0D { char = c; break }
+        guard char < storage.length, let row = storage.attribute(.luftigTableRow, at: char, effectiveRange: nil) as? TableRenderRow else { return false }
+        let line = text.lineRange(for: NSRange(location: char, length: 0))
+        let indent = (storage.attribute(.paragraphStyle, at: char, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0
+        let x = local.x - frag.minX - indent
+        var k = row.edges.count - 2
+        while k > 0 && x < row.edges[k] { k -= 1 }
+        let offset = row.cellEnds.isEmpty ? 0 : row.cellEnds[min(max(0, k), row.cellEnds.count - 1)]
+        textView.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: min(line.location + offset, NSMaxRange(line)), length: 0))
+        textView.scrollRangeToVisible(textView.selectedRange())
+        return true
+    }
+
     /// The caret's line is a table row (the lexer's answer, not the styling's: a table in a quote has no panel mark).
     var caretIsInTable: Bool {
         let text = storage.string as NSString
@@ -616,7 +735,7 @@ extension EditorViewController {
     }
 
     /// The lines of the table at `location` and the lexer runs that cover them (any size: an explicit command, not styling). nil: no table there.
-    func table(at location: Int) -> (lines: [TableAligner.Line], runs: [MDRun])? {
+    func table(at location: Int, limit: Int = Int.max / 4) -> (lines: [TableAligner.Line], runs: [MDRun])? {
         let text = storage.string as NSString
         guard text.length > 0 else { return nil }
         let loc = min(location, text.length - 1)
@@ -625,7 +744,6 @@ extension EditorViewController {
         let here = lex(line)
         guard let mine = TableAligner.lines(here.runs, text: text, in: here.range).first(where: { $0.start <= loc && ($0.next > loc || $0.next == text.length) }),
               mine.isTable else { return nil }
-        let limit = Int.max / 4
         let start = mine.isHeader ? mine.start : (TableExtent.start(above: mine.start, text: text, limit: limit, lex: lex) ?? mine.start)
         let end = mine.next >= text.length ? text.length : (TableExtent.end(below: mine.next, text: text, limit: limit, lex: lex) ?? mine.next)
         let r = lex(NSRange(location: start, length: max(1, end - start)))

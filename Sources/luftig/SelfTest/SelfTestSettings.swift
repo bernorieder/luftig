@@ -153,16 +153,16 @@ extension SelfTestScenarios {
 
 extension StyleOracle {
     /// `expectedRuns(text:baseSize:)` for a Theme built from any settings: a FRESH Theme + a fresh `MarkdownStyler.lexAll`.
-    static func expectedRuns(text: NSString, settings: ThemeSettings, tableWidthLimit: CGFloat = .greatestFiniteMagnitude) -> (runs: [StyledRun], mdRuns: [MDRun]) {
+    static func expectedRuns(text: NSString, settings: ThemeSettings, tableWidthLimit: CGFloat = .greatestFiniteMagnitude, tables: TableAligner? = nil) -> (runs: [StyledRun], mdRuns: [MDRun]) {
         let theme = Theme(settings: settings)
         let md = MarkdownStyler().lexAll(text)
-        return (aligned(theme.styledRuns(md, text: text), md, text, tableWidthLimit), md)
+        return (aligned(theme.styledRuns(md, text: text), md, text, tableWidthLimit, like: tables, theme: theme), md)
     }
 
     /// `compare(storage:baseSize:)` for a Theme built from any settings (the same comparison, character by character).
-    static func compare(storage: NSTextStorage, settings: ThemeSettings, range: NSRange? = nil, maxReport: Int = 5, tableWidthLimit: CGFloat = .greatestFiniteMagnitude) -> (checkedRuns: Int, mismatches: Int, first: [Mismatch]) {
+    static func compare(storage: NSTextStorage, settings: ThemeSettings, range: NSRange? = nil, maxReport: Int = 5, tableWidthLimit: CGFloat = .greatestFiniteMagnitude, tables: TableAligner? = nil) -> (checkedRuns: Int, mismatches: Int, first: [Mismatch]) {
         let text = storage.string as NSString
-        let (expected, md) = expectedRuns(text: text, settings: settings, tableWidthLimit: tableWidthLimit)
+        let (expected, md) = expectedRuns(text: text, settings: settings, tableWidthLimit: tableWidthLimit, tables: tables)
         let window = range ?? NSRange(location: 0, length: storage.length)
         var checked = 0, bad = 0
         var first: [Mismatch] = []

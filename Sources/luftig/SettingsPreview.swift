@@ -39,6 +39,8 @@ final class SettingsPreview {
     private(set) var theme: Theme
     private var appliedPaletteSerial: Int
     private var forcedAppearance = false
+    /// Tables aligned or drawn as a grid, as in the editor (the preview has no caret: its table is drawn whenever View > Tables as Grids is on).
+    let tables = TableAligner()
 
     init() {
         let settings = EditorPreferences.themeSettings
@@ -51,6 +53,12 @@ final class SettingsPreview {
         layoutManager = stack.layoutManager
         column = ReadableColumnController(scrollView: stack.scrollView, textView: stack.textView, maxColumnWidth: EditorPreferences.columnWidth)
         applyPadding()
+        column.onContainerWidthChange = { [weak self] width in
+            guard let self, self.tables.setWidthLimit(width) else { return }
+            DispatchQueue.main.async { [weak self] in self?.restyle() }          // (after the layout pass that changed the width)
+        }
+        if let tc = textView.textContainer { _ = tables.setWidthLimit(tc.size.width - 2 * tc.lineFragmentPadding) }
+        tables.renderTables = EditorPreferences.renderTables
         textView.isEditable = false
         textView.isSelectable = false
         scrollView.borderType = .bezelBorder
@@ -75,8 +83,9 @@ final class SettingsPreview {
         applyPadding()
         var rebuilt = false
         let settings = EditorPreferences.themeSettings, serial = Palette.serial
-        if settings != theme.settings || serial != appliedPaletteSerial {
+        if settings != theme.settings || serial != appliedPaletteSerial || tables.renderTables != EditorPreferences.renderTables {
             theme = Theme(settings: settings)
+            tables.renderTables = EditorPreferences.renderTables
             if serial != appliedPaletteSerial { appliedPaletteSerial = serial; applyColors() }
             restyle()
             rebuilt = true
@@ -89,7 +98,9 @@ final class SettingsPreview {
     /// Base attributes over everything, then one complete attribute dictionary per styled run: what the editor's styler does for the visible part.
     private func restyle() {
         let text = storage.string as NSString
-        let runs = theme.styledRuns(MarkdownStyler().lexAll(text), text: text)
+        let lex = MarkdownStyler().lexAll(text)
+        let runs = tables.align(theme.styledRuns(lex, text: text), lexRuns: lex, text: text, region: NSRange(location: 0, length: text.length),
+                                cutAtStart: false, cutAtEnd: false, theme: theme)
         storage.beginEditing()
         storage.setAttributes(theme.baseAttributes, range: NSRange(location: 0, length: storage.length))
         for run in runs { storage.setAttributes(run.attributes, range: run.range) }

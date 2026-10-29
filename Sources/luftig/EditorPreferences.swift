@@ -43,8 +43,10 @@ enum EditorPreferences {
     static let showReadingTimeKey = "LuftigShowReadingTime"
     /// View > Typewriter Mode (the caret's line stays in the middle of the window).
     static let typewriterModeKey = "LuftigTypewriterMode"
+    /// View > Tables as Grids: a table is drawn as a grid while the caret is elsewhere (TableRender.swift).
+    static let renderTablesKey = "LuftigRenderTables"
     /// The View menu's switches (not part of the Settings window's Restore Defaults).
-    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, showReadingTimeKey, typewriterModeKey]
+    static let chromeKeys = [showOutlineKey, showWordCountKey, showSyntaxBarKey, showReadingTimeKey, typewriterModeKey, renderTablesKey]
 
     // MARK: one-time migration from the app's previous name
 
@@ -276,6 +278,11 @@ enum EditorPreferences {
     static var showReadingTime: Bool {
         get { flag(forKey: showReadingTimeKey, default: false) }
         set { setFlag(newValue, forKey: showReadingTimeKey, current: showReadingTime) }
+    }
+    /// View > Tables as Grids: tables are drawn as a grid while the caret is elsewhere; the Markdown shows when the caret enters one. Default on.
+    static var renderTables: Bool {
+        get { flag(forKey: renderTablesKey, default: true) }
+        set { setFlag(newValue, forKey: renderTablesKey, current: renderTables) }
     }
     /// View > Typewriter Mode: the line with the caret is kept in the middle of the window. Default off.
     static var typewriterMode: Bool {

@@ -163,6 +163,7 @@ rebuilds the gallery.
 | ⌘-click on a link, ⌥⌘L | Follow the link under the mouse (or the caret: Edit > Open Link): a web address in the browser, a Markdown or text file in luftig (at its `#anchor`), any other file in its application, `#heading` in this document. Inline links, images, `<autolinks>`, bare `www.` / `https://` addresses and `[text][ref]` references through their definition |
 | ⇧⌥⌘T | Format > Align Table: pads the table at the caret with spaces so that it is aligned in the file too (see "Tables" below). Only enabled in a table |
 | ⇧⌘T | View > Typewriter Mode: the line with the caret stays in the middle of the window. Remembered, every window follows |
+| View > Tables as Grids | Tables are drawn as a grid while the caret is elsewhere; the Markdown shows when the caret enters one (see "Tables" below). On by default, remembered, every window follows |
 | ⌥⇧⌘C / ⌃⇧⌘C | Edit > Copy as HTML (the selection's lines, or everything, as HTML source - also as plain text, so a text editor gets the source) / Copy as Rich Text (the same as RTF, for Mail, Pages, a chat) |
 | ⌥⌘E, File > Export as Rich Text… / as PDF… | Export as HTML: a complete page with a small stylesheet in your fonts, light and dark. Export as Rich Text: the same content as an RTF file; Export as PDF: that rich text paginated on the Page Setup paper |
 | View > Show / Hide Reading Time | "7 min read" (200 words a minute, rounded up) in the word count's row, next to the count or alone; off by default. Settings > Layout has the switch too |
@@ -272,7 +273,15 @@ matter, HTML, rules, right-to-left lines (their paragraph is right-aligned), pla
 
 ### Tables
 
-Tables are aligned on screen: every column is as wide as its widest cell and the pipes of all rows line up, while you type. The file is not changed; the space
+**Tables as grids** (View > Tables as Grids, on by default): while the caret is elsewhere, a table is drawn as a grid in the text font: a header band, lines
+between the rows and columns, each cell's text with its bold, italic, code and links but without the Markdown markers, aligned left, centred or right
+as its column's colons say. Columns fit the text column: a column that fits in an equal share keeps its width, the others share the rest, and a long cell
+wraps inside its column (its row grows). Click into a cell, move the caret into the table with the arrow keys, or end a selection or a found match in it,
+and the table shows its Markdown, aligned as below; move the caret out and it is drawn again. A selection that only passes over a table (Select All)
+leaves it drawn and tints its rows. A click puts the caret at the end of the clicked cell's
+text. Only how the table looks changes: the file, Copy, Export and undo see the Markdown. Tables in quotes are not drawn as grids.
+
+With the switch off, or while the caret is in a table, tables are aligned on screen: every column is as wide as its widest cell and the pipes of all rows line up, while you type. The file is not changed; the space
 is drawn, not written (the extra width goes after the last character of each cell), so the caret, selection, undo, Copy, Export and the saved file see
 exactly the text you typed. The widths are measured in the fonts the cells really have, so bold, code, CJK and emoji cells line up too; a table that is
 already aligned in the text gets no extra space. Tables with or without outer pipes and tables in quotes are aligned. A table wider than the text column has

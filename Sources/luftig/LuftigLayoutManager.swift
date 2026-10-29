@@ -15,7 +15,54 @@ import AppKit
 /// therefore has a gap above the first line and none below the last one (descenders touched the edge). The bands here are laid around the
 /// TEXT instead: top = top of the first line's glyphs - padding, bottom = bottom of the last line's glyphs + padding. A side that continues
 /// beyond the drawn part (a block cut by the dirty rect) uses the line box edge, which is where the next piece starts.
-final class LuftigLayoutManager: NSLayoutManager {
+final class LuftigLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
+
+    override init() {
+        super.init()
+        delegate = self
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    // MARK: tables drawn as a grid (TableRender.swift)
+
+    /// Glyphs were hidden in this text: from now on a change of attributes regenerates the glyphs of its range. AppKit regenerates glyphs when a FONT
+    /// changes, not when only `.luftigTableRow` does, so a row shown as Markdown again kept its hidden glyphs (and a row drawn again its visible ones).
+    private var hidesGlyphs = false
+
+    override func processEditing(for textStorage: NSTextStorage, edited editMask: NSTextStorageEditActions, range newCharRange: NSRange,
+                                 changeInLength delta: Int, invalidatedRange invalidatedCharRange: NSRange) {
+        super.processEditing(for: textStorage, edited: editMask, range: newCharRange, changeInLength: delta, invalidatedRange: invalidatedCharRange)
+        if hidesGlyphs, editMask.contains(.editedAttributes), invalidatedCharRange.length > 0 {      // (also with characters: the styler restyles inside the edit)
+            invalidateGlyphs(forCharacterRange: invalidatedCharRange, changeInLength: 0, actualCharacterRange: nil)
+        }
+    }
+
+    /// The characters of a table drawn as a grid get no glyphs (`.null`: they take no room); their rows are drawn by `drawDecorations`. Line breaks keep
+    /// their glyph, so every row stays a line of its own.
+    func layoutManager(_ layoutManager: NSLayoutManager, shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>, properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
+                       characterIndexes charIndexes: UnsafePointer<Int>, font aFont: NSFont, forGlyphRange glyphRange: NSRange) -> Int {
+        guard let ts = textStorage, glyphRange.length > 0 else { return 0 }
+        let first = charIndexes[0], last = charIndexes[glyphRange.length - 1]
+        let span = NSIntersectionRange(NSRange(location: first, length: last - first + 1), NSRange(location: 0, length: ts.length))
+        guard span.length > 0 else { return 0 }
+        var hidden = IndexSet()
+        ts.enumerateAttribute(.luftigTableRow, in: span, options: []) { v, r, _ in if v != nil { hidden.insert(integersIn: r.location..<NSMaxRange(r)) } }
+        guard !hidden.isEmpty else { return 0 }
+        hidesGlyphs = true
+        let text = ts.string as NSString
+        var newProps = [NSLayoutManager.GlyphProperty](repeating: [], count: glyphRange.length)
+        for i in 0..<glyphRange.length {
+            let c = charIndexes[i]
+            var p = props[i]
+            if hidden.contains(c) {
+                let ch = text.character(at: c)
+                if ch != 0x0A && ch != 0x0D { p = .null }
+            }
+            newProps[i] = p
+        }
+        newProps.withUnsafeBufferPointer { setGlyphs(glyphs, properties: $0.baseAddress!, characterIndexes: charIndexes, font: aFont, forGlyphRange: glyphRange) }
+        return glyphRange.length
+    }
 
     /// Self-test only (the render scenario): paint the selection as an ACTIVE (key window) selection although the offscreen window is never key.
     nonisolated(unsafe) static var simulateActiveSelection = false
@@ -105,6 +152,7 @@ final class LuftigLayoutManager: NSLayoutManager {
     /// neighbouring line's text than 1 pt (the space between two lines is the leading above the text: a band that starts right under a text line must
     /// not run into its descenders).
     private func bandEdge(_ f: Frag, _ ts: NSTextStorage, above: Bool) -> CGFloat {
+        if f.chars.location < ts.length, ts.attribute(.luftigTableRow, at: f.chars.location, effectiveRange: nil) != nil { return above ? f.rect.minY : f.rect.maxY }   // a drawn table row: the band holds the whole row
         let e = textExtent(of: f, ts)
         let pad = e.size * DecorationMetrics.bandPaddingRatio
         let leading = max(0, e.top - f.used.minY)
@@ -193,6 +241,40 @@ final class LuftigLayoutManager: NSLayoutManager {
         }
 
         drawPills(ctx, frags, ts, tc, origin: origin, colors: colors)
+        drawTableRows(ctx, frags, ts, origin: origin, colors: colors, scale: scale)
+    }
+
+    /// The rows of tables drawn as a grid (their glyphs are hidden): grid lines and cell text, in each row's own line fragment.
+    private func drawTableRows(_ ctx: CGContext, _ frags: [Frag], _ ts: NSTextStorage, origin: NSPoint, colors: DecorationDrawing.Colors, scale: CGFloat) {
+        let tv = textContainers.first?.textView
+        let selected = (tv?.selectedRanges ?? []).map { $0.rangeValue }.filter { $0.length > 0 }
+        for f in frags where f.chars.location < ts.length {
+            guard let row = ts.attribute(.luftigTableRow, at: f.chars.location, effectiveRange: nil) as? TableRenderRow else { continue }
+            let indent = (ts.attribute(.paragraphStyle, at: f.chars.location, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0
+            let rect = CGRect(x: origin.x + f.rect.minX, y: origin.y + f.rect.minY, width: f.rect.width, height: f.rect.height)
+            let left = origin.x + f.rect.minX + indent
+            // a selection that passes over the table: its rows are tinted like selected text (their glyphs, which the selection would paint behind, are hidden)
+            let line = (ts.string as NSString).lineRange(for: NSRange(location: f.chars.location, length: 0))
+            if let tv, selected.contains(where: { NSIntersectionRange($0, line).length > 0 }), let fill = selectionTint(tv) {
+                ctx.setFillColor(fill)
+                ctx.fill(CGRect(x: left, y: rect.minY, width: row.edges.last ?? 0, height: rect.height))
+            }
+            TableRenderer.draw(row, rect: rect, left: left, ctx: ctx, line: colors.rule, strong: colors.rule, scale: scale)
+        }
+    }
+
+    /// The colour of selected text's background, translucent as `fillBackgroundRectArray` paints it.
+    private func selectionTint(_ tv: NSTextView) -> CGColor? {
+        let appearance = tv.effectiveAppearance
+        let variant = Palette.variant(for: appearance)
+        let active = tv.window?.isKeyWindow ?? false || LuftigLayoutManager.simulateActiveSelection
+        var out: CGColor?
+        appearance.performAsCurrentDrawingAppearance {
+            let alpha = Palette.selectionAlpha(variant)
+            let c = Palette.selectionFill(variant, active: active) ?? (active ? NSColor.selectedTextBackgroundColor : NSColor.unemphasizedSelectedTextBackgroundColor).withAlphaComponent(alpha)
+            out = c.cgColor
+        }
+        return out
     }
 
     // MARK: rules
@@ -300,12 +382,14 @@ final class LuftigLayoutManager: NSLayoutManager {
     private func drawPills(_ ctx: CGContext, _ frags: [Frag], _ ts: NSTextStorage, _ tc: NSTextContainer, origin: NSPoint, colors: DecorationDrawing.Colors) {
         let length = ts.length
         for f in frags {
+            if f.chars.location < length, ts.attribute(.luftigTableRow, at: f.chars.location, effectiveRange: nil) != nil { continue }   // (a drawn table row: its glyphs are hidden)
             var idx = f.chars.location
             let end = min(NSMaxRange(f.chars), length)
             while idx < end {
                 var eff = NSRange(location: 0, length: 0)
                 let v = ts.attribute(.luftigInline, at: idx, longestEffectiveRange: &eff, in: NSRange(location: idx, length: end - idx))
-                if v != nil {
+                // (inline code in a table drawn as a grid has hidden glyphs; they can sit in the line fragment ABOVE the row)
+                if v != nil, ts.attribute(.luftigTableRow, at: eff.location, effectiveRange: nil) == nil {
                     let gr = glyphRange(forCharacterRange: eff, actualCharacterRange: nil)
                     if gr.length > 0 {
                         let bounds = boundingRect(forGlyphRange: gr, in: tc)

@@ -238,6 +238,7 @@ extension SelfTestScenarios {
                         lm.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: lm.numberOfGlyphs)) { rect, used, _, glyphs, _ in
                             let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
                             guard chars.location < ts.length, let p = ts.attribute(.paragraphStyle, at: chars.location, effectiveRange: nil) as? NSParagraphStyle else { return }
+                            if ts.attribute(.luftigTableRow, at: chars.location, effectiveRange: nil) != nil { return }      // (a table drawn as a grid: its rows have the drawn rows' heights)
                             lines += 1
                             var ascent: CGFloat = 0, descent: CGFloat = 0, leading: CGFloat = 0
                             // the fonts of the glyphs the line shows: its line break carries the font of the run it ends (the underline of a setext heading ends in the

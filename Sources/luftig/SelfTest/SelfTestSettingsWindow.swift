@@ -125,7 +125,7 @@ extension SelfTestScenarios {
                 t.check(!tv.isEditable && !tv.isSelectable, "\(label): the preview is read-only")
                 t.equal(ts.string, SettingsPreview.sampleText, "\(label): the preview shows the sample text")
                 t.equal(c.preview.theme.settings, P.themeSettings, "\(label): the preview's theme is built from the preferences")
-                let r = StyleOracle.compare(storage: ts, settings: P.themeSettings)
+                let r = StyleOracle.compare(storage: ts, settings: P.themeSettings, tables: c.preview.tables)       // (its table aligned or drawn as the preview's width says)
                 t.check(r.mismatches == 0, "\(label): the preview == a fresh restyle (\(r.checkedRuns) runs compared, \(r.mismatches) mismatches) \(r.first.map { "\($0.range): \($0.expected) / \($0.actual)" }.prefix(2))")
             }
             checkPreview("start")

@@ -187,25 +187,27 @@ enum StyleOracle {
 
     /// What the storage should look like: a FRESH Theme (same base size) + a fresh `MarkdownStyler.lexAll` of the current text.
     /// Tables are aligned as in the editor (TableAlignment.swift), for a text container `tableWidthLimit` wide.
-    static func expectedRuns(text: NSString, baseSize: CGFloat, tableWidthLimit: CGFloat = .greatestFiniteMagnitude) -> (runs: [StyledRun], mdRuns: [MDRun]) {
+    /// `tables`: the editor's aligner, whose width limit, grid switch and selection the oracle uses (TableRender.swift); nil: tables aligned only.
+    static func expectedRuns(text: NSString, baseSize: CGFloat, tableWidthLimit: CGFloat = .greatestFiniteMagnitude, tables: TableAligner? = nil) -> (runs: [StyledRun], mdRuns: [MDRun]) {
         let theme = Theme(baseSize: baseSize)
         let md = MarkdownStyler().lexAll(text)
-        return (aligned(theme.styledRuns(md, text: text), md, text, tableWidthLimit), md)
+        return (aligned(theme.styledRuns(md, text: text), md, text, tableWidthLimit, like: tables, theme: theme), md)
     }
 
-    /// The whole text's tables aligned (the oracle sees the whole text, so no table is cut).
-    static func aligned(_ styled: [StyledRun], _ md: [MDRun], _ text: NSString, _ limit: CGFloat) -> [StyledRun] {
+    /// The whole text's tables aligned, or drawn as grids like the editor's (the oracle sees the whole text, so no table is cut).
+    static func aligned(_ styled: [StyledRun], _ md: [MDRun], _ text: NSString, _ limit: CGFloat, like editor: TableAligner? = nil, theme: Theme? = nil) -> [StyledRun] {
         let aligner = TableAligner()
-        _ = aligner.setWidthLimit(limit)
-        return aligner.align(styled, lexRuns: md, text: text, region: NSRange(location: 0, length: text.length), cutAtStart: false, cutAtEnd: false)
+        _ = aligner.setWidthLimit(editor?.widthLimit ?? limit)
+        if let editor { aligner.renderTables = editor.renderTables; aligner.revealed = editor.revealed }
+        return aligner.align(styled, lexRuns: md, text: text, region: NSRange(location: 0, length: text.length), cutAtStart: false, cutAtEnd: false, theme: theme)
     }
 
     struct Mismatch { var range: NSRange; var expected: String; var actual: String }
 
     /// Compares every character of `range` (default: all) with the oracle. Returns the number of mismatching runs and the first few.
-    static func compare(storage: NSTextStorage, baseSize: CGFloat, range: NSRange? = nil, maxReport: Int = 5, tableWidthLimit: CGFloat = .greatestFiniteMagnitude) -> (checkedRuns: Int, mismatches: Int, first: [Mismatch]) {
+    static func compare(storage: NSTextStorage, baseSize: CGFloat, range: NSRange? = nil, maxReport: Int = 5, tableWidthLimit: CGFloat = .greatestFiniteMagnitude, tables: TableAligner? = nil) -> (checkedRuns: Int, mismatches: Int, first: [Mismatch]) {
         let text = storage.string as NSString
-        let (expected, md) = expectedRuns(text: text, baseSize: baseSize, tableWidthLimit: tableWidthLimit)
+        let (expected, md) = expectedRuns(text: text, baseSize: baseSize, tableWidthLimit: tableWidthLimit, tables: tables)
         let window = range ?? NSRange(location: 0, length: storage.length)
         var checked = 0, bad = 0
         var first: [Mismatch] = []

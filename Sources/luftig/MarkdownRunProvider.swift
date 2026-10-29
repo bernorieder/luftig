@@ -57,7 +57,7 @@ final class MarkdownRunProvider {
 
     private func styledRuns(_ r: TableRegion, text: NSString) -> [StyledRun] {
         let styled = theme.styledRuns(r.lex.runs, text: text)
-        return tables.align(styled, lexRuns: r.lex.runs, text: text, region: r.lex.range, cutAtStart: r.cutAtStart, cutAtEnd: r.cutAtEnd)
+        return tables.align(styled, lexRuns: r.lex.runs, text: text, region: r.lex.range, cutAtStart: r.cutAtStart, cutAtEnd: r.cutAtEnd, theme: theme)
     }
 
     /// When the first line of `r` is a table row below the header, or the line after `r` goes on with its last table, lex the region again from the

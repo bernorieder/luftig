@@ -956,7 +956,7 @@ extension Robust {
             await spin(2)
             h.styler.styleVisible()
             let text = ts.string as NSString
-            let (expected, _) = StyleOracle.expectedRuns(text: text, baseSize: h.theme.baseSize, tableWidthLimit: h.provider.tables.widthLimit)
+            let (expected, _) = StyleOracle.expectedRuns(text: text, baseSize: h.theme.baseSize, tables: h.provider.tables)
             guard !expected.isEmpty else { return }
             var bad = 0
             var first: String?

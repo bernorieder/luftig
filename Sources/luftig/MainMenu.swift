@@ -173,6 +173,7 @@ enum MainMenu {
         view.addItem(.separator())
         // checked while on, remembered, every window follows: the caret's line in the middle
         view.addItem(item("Typewriter Mode", #selector(LuftigEditorActions.luftigToggleTypewriterMode(_:)), "t", [.command, .shift]))
+        view.addItem(item("Tables as Grids", #selector(LuftigEditorActions.luftigToggleTableGrids(_:))))
         view.addItem(.separator())
         // the three elements around the text; the titles flip to "Hide …" while an element is shown (EditorViewController.validateMenuItem)
         view.addItem(item("Show Outline", #selector(LuftigEditorActions.luftigToggleOutline(_:))))

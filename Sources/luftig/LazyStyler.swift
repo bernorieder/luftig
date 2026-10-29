@@ -115,6 +115,12 @@ final class LazyStyler: NSObject, NSTextStorageDelegate {
         styled.removeAll()
     }
 
+    /// Forget only `range` (a table that is shown differently now: TableRender.swift).
+    func forgetStyled(_ range: NSRange) {
+        guard range.length > 0 else { return }
+        styled.remove(integersIn: range.location..<NSMaxRange(range))
+    }
+
     /// Style what is visible (+ margin) and has not been styled yet. Cheap no-op when everything needed is already styled.
     @discardableResult
     func styleVisible() -> Int {

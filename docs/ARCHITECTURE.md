@@ -98,6 +98,8 @@ Sources/luftig/
                                         (what a family cannot provide - italic, semibold, bold - is faked with `.obliqueness` / `.strokeWidth`)
   Theme.swift                           MDStyle -> COMPLETE attribute dictionary, cached; built from ThemeSettings; uniform line heights; line-level normalisation
   MarkdownRunProvider.swift             adapter: LazyStyler closures <-> MarkdownStyler <-> Theme; widens a region to the whole tables it touches
+  TableRender.swift                     tables drawn as grids while the caret is elsewhere (TableRenderer: column widths, wrapped cells, drawing; the
+                                        row to draw is the `.luftigTableRow` attribute, LuftigLayoutManager hides its glyphs)
   TableAlignment.swift                  tables aligned on screen (TableAligner: `.kern` before each closing pipe, measured with CoreText; TableExtent: a
                                         table's start / end through the lexer), Format > Align Table (TableFormatter: the padded source)
   HangingIndent.swift                   hanging indents: the head indent of list items / indented lines (prefix width in the real fonts), HangMeasurer cache
@@ -134,6 +136,8 @@ Sources/luftig/
     SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab tables left alone, a too wide one hangs),
                                         table-align-edit (a keystroke re-aligns the whole table, a long table styled from its middle, the size bound,
                                         narrower / wider window, == a fresh restyle), table-format (Align Table: the source, the caret, undo, the menu item)
+    SelfTestTableRender.swift           table-render: tables drawn as grids (hidden glyphs, row heights, wrapping, the Markdown when the caret enters by
+                                        selection / click / Select All, a narrower window, the switch, == a fresh restyle with the same selection)
     SelfTestFixTyping.swift             fix-typing-after-save: letters typed after an autosave survive a coordinated write, NSDocument's revert and an
                                         external change, also when the change count missed them (pitfall 40)
     SelfTestAuditShell.swift            the audit-shell-* scenarios: menu matrix, Info.plist / icon / claimed file extensions, preferences, the runner itself.
@@ -458,6 +462,21 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     presses break the coalescing after every key, so they never saw it; `fix-typing-after-save` sets the change count wrong by hand. The shipping
     app logs every save / reload / merge / conflict decision to the system log (subsystem `com.bernorieder.luftig`, category `file`; counts and
     reasons, never the text or a file name).
+41. **A table drawn as a grid is still its Markdown, laid out differently** (TableRender.swift). Its characters keep their place in the text storage;
+    `.luftigTableRow` on every character of a row (line break included) makes LuftigLayoutManager (its own NSLayoutManagerDelegate) give them `.null`
+    glyphs, so they take no room, and the row's paragraph style has the drawn row's height (min = max; the delimiter row 2 pt). The grid and the cell
+    text are drawn with the decorations, per line fragment (invariant 18: a strip draws what the full draw does). What is drawn depends on the text, the
+    theme, the column width AND THE SELECTION (`TableAligner.revealed`: a table that holds the caret or an END of a selected range shows its aligned
+    Markdown; a selection that only passes over a table leaves it drawn and tints its rows, so Select All and a drag restyle nothing). The selection is
+    an input of the styling like the width: `EditorViewController.tableSelectionChanged` forgets and restyles the tables at the ends of the old and the
+    new selection, and since an edit is styled BEFORE the text view moves the selection, every decision is recorded (`TableAligner.decided`) and checked
+    against the settled selection (`reconcileTables`, right after the selection notification or on the next turn). "The table at the caret" and
+    `isRevealed` must agree on the line after a table (not in it: found by `audit-keys`, ⌥↓ out of a table). The oracle is handed the editor's aligner
+    (`StyleOracle.expectedRuns(..., tables:)`). Glyphs: AppKit regenerates them when a FONT changes, not when only `.luftigTableRow` does, so once a
+    table was hidden every attribute change regenerates the glyphs of its range (`LuftigLayoutManager.processEditing`). A hidden glyph at the start of a
+    row may belong to the line fragment ABOVE (AppKit's choice depends on the layout's history): measure a drawn row through its line break, map a click
+    through the fragment's line break, skip such fragments when comparing layouts. Not drawn: tables in quotes (the `>` prefix is part of every row),
+    tables over the size bound or cut by the region.
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

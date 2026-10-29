@@ -31,12 +31,26 @@ final class TableAligner {
     private var measuredOverflow = false
     private static let maxRemembered = 4096
 
+    /// Tables are drawn as a grid while no selection touches them (TableRender.swift; View > Tables as Grids).
+    var renderTables = false
+    /// The selection: a table that holds the caret or an end of a selected range is shown as Markdown (aligned), not drawn.
+    var revealed: [NSRange] = []
+    /// The tables decided since the editor last looked (drawn or not): an edit is styled before the text view moves the selection, so the editor checks
+    /// them against the selection once it has settled (EditorViewController.reconcileTables). Bounded; `onDecided` asks for that check.
+    private(set) var decided: [(range: NSRange, drawn: Bool)] = []
+    var onDecided: (() -> Void)?
+    func takeDecided() -> [(range: NSRange, drawn: Bool)] { defer { decided.removeAll() }; return decided }
+    /// A table was seen (the editor then follows the selection: entering / leaving a table switches how it is shown).
+    private(set) var sawTables = false
+    /// A table was drawn as a grid: its column widths follow the width of the text column, so every width change restyles.
+    private var renderedAny = false
+
     /// A new limit (the text container's width changed). True when a table that was measured may change its alignment: restyle.
     func setWidthLimit(_ limit: CGFloat) -> Bool {
         let old = widthLimit
         guard abs(old - limit) > 0.25 else { return false }
         widthLimit = limit
-        if measuredOverflow { return true }
+        if measuredOverflow || renderedAny { return true }
         let lo = min(old, limit), hi = max(old, limit)
         return measuredWidths.contains { CGFloat($0) > lo - 1 && CGFloat($0) <= hi + 1 }
     }
@@ -93,8 +107,9 @@ final class TableAligner {
 
     /// `styled` with the alignment of every complete table in `region` added. `cutAtStart` / `cutAtEnd`: the first / last table of the region goes on
     /// beyond it (it could not be widened to the whole table, or the table is too big): those are left alone.
-    func align(_ styled: [StyledRun], lexRuns: [MDRun], text: NSString, region: NSRange, cutAtStart: Bool, cutAtEnd: Bool) -> [StyledRun] {
+    func align(_ styled: [StyledRun], lexRuns: [MDRun], text: NSString, region: NSRange, cutAtStart: Bool, cutAtEnd: Bool, theme: Theme? = nil) -> [StyledRun] {
         guard lexRuns.contains(where: { $0.style.contains(.table) }) else { return styled }
+        sawTables = true
         let lines = TableAligner.lines(lexRuns, text: text, in: region)
         // the tables: a header line and the table lines after it (a region may also start in the middle of one: that is a table too, marked cut)
         var tables: [ArraySlice<Line>] = []
@@ -112,12 +127,60 @@ final class TableAligner {
             if n == tables.count - 1 && cutAtEnd && table.last!.next >= lines.last!.next { continue }
             guard table.first!.isHeader else { continue }
             guard table.last!.end - table.first!.start <= TableAligner.maxTableUnits else { continue }
+            if renderTables, let theme {
+                let range = NSRange(location: table.first!.start, length: table.last!.end - table.first!.start)
+                let drawn = !isRevealed(range) && render(table, styled: styled, lexRuns: lexRuns, text: text, theme: theme, into: &edits)
+                if decided.count < 256 { decided.append((range, drawn)) }
+                onDecided?()
+                if drawn { continue }
+            }
             alignment(of: table, styled: styled, lexRuns: lexRuns, text: text, into: &edits)
         }
         var out = styled
         if !edits.paragraphs.isEmpty { out = TableAligner.apply(edits.paragraphs, key: .paragraphStyle, to: out) }
         if !edits.kerns.isEmpty { out = TableAligner.apply(edits.kerns, key: .kern, to: out) }
+        if !edits.rows.isEmpty { out = TableAligner.apply(edits.rows, key: .luftigTableRow, to: out) }
         return out
+    }
+
+    /// The caret or an end of a selected range lies in the table (right before its first or after its last character counts). A selection that only
+    /// passes over a table leaves it drawn (its rows are tinted: LuftigLayoutManager.drawTableRows).
+    func isRevealed(_ table: NSRange) -> Bool {
+        let start = table.location, end = NSMaxRange(table)
+        return revealed.contains { ($0.location >= start && $0.location <= end) || (NSMaxRange($0) >= start && NSMaxRange($0) <= end) }
+    }
+
+    /// The table drawn as a grid: every row's line as tall as the drawn row, its characters marked with the row to draw. False: it cannot be drawn.
+    private func render(_ table: ArraySlice<Line>, styled: [StyledRun], lexRuns: [MDRun], text: NSString, theme: Theme, into edits: inout Edits) -> Bool {
+        guard let rows = TableRenderer.rows(table, lexRuns: lexRuns, text: text, theme: theme, available: max(100, widthLimit)) else { return false }
+        renderedAny = true
+        var si = 0
+        for (line, row) in zip(table, rows) {
+            while si < styled.count && NSMaxRange(styled[si].range) <= line.start { si += 1 }
+            let range = NSRange(location: line.start, length: line.next - line.start)
+            guard range.length > 0 else { continue }
+            if si < styled.count, let base = styled[si].attributes[.paragraphStyle] as? NSParagraphStyle {
+                edits.paragraphs.append((range, rowStyle(base, height: row.height)))
+            }
+            edits.rows.append((range, row))
+        }
+        return true
+    }
+
+    /// The paragraph styles of drawn rows: (the row's own style, its height in half points) -> the style with that line height.
+    private var rowStyles: [HangKey: (base: NSParagraphStyle, style: NSParagraphStyle)] = [:]
+
+    private func rowStyle(_ base: NSParagraphStyle, height: CGFloat) -> NSParagraphStyle {
+        let half = Int((height * 2).rounded())
+        let key = HangKey(base: ObjectIdentifier(base), half: half)
+        if let hit = rowStyles[key] { return hit.style }
+        let p = base.mutableCopy() as! NSMutableParagraphStyle
+        p.minimumLineHeight = CGFloat(half) / 2
+        p.maximumLineHeight = CGFloat(half) / 2
+        p.paragraphSpacingBefore = 0
+        if rowStyles.count > 1024 { rowStyles.removeAll(keepingCapacity: true) }
+        rowStyles[key] = (base, p)
+        return p
     }
 
     /// What aligning adds to the styled runs: `.kern` on the character before a closing pipe, a paragraph style with a head indent on a row (its whole
@@ -125,6 +188,7 @@ final class TableAligner {
     struct Edits {
         var kerns: [(range: NSRange, value: Any)] = []
         var paragraphs: [(range: NSRange, value: Any)] = []
+        var rows: [(range: NSRange, value: Any)] = []
     }
 
     /// The paragraph styles of hanging rows: (the row's own style, head indent in half points) -> the style with that head indent. The row's style is

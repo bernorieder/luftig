@@ -159,6 +159,7 @@ extension SelfTestScenarios {
     """
 
     @MainActor static func tableAlign(_ t: SelfTest.T) async throws {
+        let grids = EditorPreferences.renderTables; EditorPreferences.renderTables = false; defer { EditorPreferences.renderTables = grids }   // (the aligned Markdown, not the grid: table-render)
         let (doc, host, url) = try await openEditor(t, text: alignSample, name: "tables.md", size: NSSize(width: 900, height: 900))
         await t.spin(30)                                                            // (the window settles: a restyle for its width runs on the next turn)
         host.styler.styleEverything()
@@ -210,6 +211,7 @@ extension SelfTestScenarios {
     // MARK: table-align-edit
 
     @MainActor static func tableAlignEdit(_ t: SelfTest.T) async throws {
+        let grids = EditorPreferences.renderTables; EditorPreferences.renderTables = false; defer { EditorPreferences.renderTables = grids }   // (the aligned Markdown, not the grid: table-render)
         // 1. typing in one cell re-aligns every row
         do {
             var rows = (1...12).map { "| r\($0) | value \($0) | x |" }
@@ -315,6 +317,7 @@ extension SelfTestScenarios {
     }
 
     @MainActor static func tableFormat(_ t: SelfTest.T) async throws {
+        let grids = EditorPreferences.renderTables; EditorPreferences.renderTables = false; defer { EditorPreferences.renderTables = grids }   // (the aligned Markdown, not the grid: table-render)
         let cases: [(String, String, String)] = [
             ("widths, a centred column", "| a | bb |\n|---|:-:|\n| ccc | d |", "| a   | bb  |\n| --- | :-: |\n| ccc |  d  |"),
             ("no outer pipes", "a | b\n--|--\nccc | d", "| a   | b   |\n| --- | --- |\n| ccc | d   |"),

@@ -121,7 +121,7 @@ enum AuditEd {
     @MainActor static func styledMismatches(_ host: EditorViewController, only: NSRange? = nil, maxReport: Int = 3) -> (compared: Int, bad: Int, first: [Mismatch]) {
         guard let ts = host.textView.textStorage else { return (0, 0, []) }
         let text = ts.string as NSString
-        let (expected, md) = StyleOracle.expectedRuns(text: text, settings: host.theme.settings, tableWidthLimit: host.provider.tables.widthLimit)       // the editor's own settings: fonts and line spacing are part of the look
+        let (expected, md) = StyleOracle.expectedRuns(text: text, settings: host.theme.settings, tables: host.provider.tables)       // the editor's own settings: fonts and line spacing are part of the look
         func lexStyle(at loc: Int) -> MDStyle {
             var lo = 0, hi = md.count - 1
             while lo < hi { let mid = (lo + hi + 1) / 2; if md[mid].range.location <= loc { lo = mid } else { hi = mid - 1 } }
@@ -211,6 +211,13 @@ enum AuditEd {
         }
     }
 
+    /// A line fragment that holds characters of a table drawn as a grid (see `visibleLayoutMismatch`: such lines are not compared).
+    static func touchesDrawnTable(_ r: NSRange, _ s: NSTextStorage) -> Bool {
+        var hit = false
+        s.enumerateAttribute(.luftigTableRow, in: NSIntersectionRange(r, NSRange(location: 0, length: s.length)), options: []) { v, _, stop in if v != nil { hit = true; stop.pointee = true } }
+        return hit
+    }
+
     static func fragments(_ lm: NSLayoutManager) -> [Fragment] {
         var out: [Fragment] = []
         let n = lm.numberOfGlyphs
@@ -231,7 +238,7 @@ enum AuditEd {
         let mine = fragments(lm)
         let copy = NSTextStorage(attributedString: NSAttributedString(attributedString: ts))
         copy.fixAttributes(in: NSRange(location: 0, length: copy.length))      // eager: the lazy pass can lose a race with glyph generation
-        let flm = NSLayoutManager()
+        let flm = LuftigLayoutManager()          // (its delegate hides the glyphs of tables drawn as grids)
         copy.addLayoutManager(flm)
         let fc = NSTextContainer(size: tc.size)
         fc.lineFragmentPadding = tc.lineFragmentPadding
@@ -239,8 +246,9 @@ enum AuditEd {
         flm.ensureLayout(for: fc)
         let fresh = fragments(flm)
         if mine.count != fresh.count { return "fragment count \(mine.count) vs fresh \(fresh.count)" }
-        if all { var bad: [String] = []; for i in 0..<mine.count where !mine[i].same(fresh[i]) { bad.append("#\(i) \(NSStringFromRange(mine[i].chars)) \((ts.string as NSString).substring(with: mine[i].chars).debugDescription) mine \(mine[i].used) fresh \(fresh[i].used)") }; return bad.isEmpty ? nil : "\(bad.count) fragments differ: \(bad.prefix(8))" }
-        for i in 0..<mine.count where !mine[i].same(fresh[i]) {
+        func skip(_ i: Int) -> Bool { touchesDrawnTable(mine[i].chars, ts) || touchesDrawnTable(fresh[i].chars, copy) }     // (see visibleLayoutMismatch)
+        if all { var bad: [String] = []; for i in 0..<mine.count where !mine[i].same(fresh[i]) && !skip(i) { bad.append("#\(i) \(NSStringFromRange(mine[i].chars)) \((ts.string as NSString).substring(with: mine[i].chars).debugDescription) mine \(mine[i].used) fresh \(fresh[i].used)") }; return bad.isEmpty ? nil : "\(bad.count) fragments differ: \(bad.prefix(8))" }
+        for i in 0..<mine.count where !mine[i].same(fresh[i]) && !skip(i) {
             let s = (ts.string as NSString)
             let sample = s.substring(with: NSIntersectionRange(mine[i].chars, NSRange(location: 0, length: min(30, mine[i].chars.length)) )).debugDescription
             return "fragment \(i) \(sample): \(mine[i]) vs fresh \(fresh[i])"
@@ -268,7 +276,7 @@ enum AuditEd {
         }
         let copy = NSTextStorage(attributedString: NSAttributedString(attributedString: ts))
         copy.fixAttributes(in: NSRange(location: 0, length: copy.length))      // eager: the lazy pass can lose a race with glyph generation
-        let flm = NSLayoutManager()
+        let flm = LuftigLayoutManager()
         copy.addLayoutManager(flm)
         let fc = NSTextContainer(size: tc.size)
         fc.lineFragmentPadding = tc.lineFragmentPadding
@@ -277,9 +285,17 @@ enum AuditEd {
         var fresh: [Int: Fragment] = [:]
         for f in fragments(flm) { fresh[f.chars.location] = f }
         func eq(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 0.05 }
+        // Lines that hold characters of a table drawn as a grid are not compared: its hidden (`.null`) glyphs at the start of a row belong to the line
+        // fragment above in one layout and to the row's own in another (AppKit's choice depends on the layout's history), with the same lines at the
+        // same heights. The rows' heights are checked by table-render.
         var bad: [String] = []
         for m in mine {
-            guard let f = fresh[m.chars.location] else { bad.append("no fresh fragment at \(m.chars.location)"); continue }
+            if touchesDrawnTable(m.chars, ts) || (fresh[m.chars.location].map { touchesDrawnTable($0.chars, copy) } ?? false) { continue }
+            guard let f = fresh[m.chars.location] else {
+                let near = fresh.values.filter { abs($0.chars.location - m.chars.location) < 60 }.sorted { $0.chars.location < $1.chars.location }
+                bad.append("no fresh fragment at \(m.chars.location) (mine \(NSStringFromRange(m.chars)) \(m.rect) used \(m.used); fresh nearby \(near.map { "\(NSStringFromRange($0.chars)) \($0.rect) used \($0.used)" }))")
+                continue
+            }
             // The WIDTH of a line with emoji is not compared: the fresh layout of a COPY generates no glyph (id 0, zero width) for many emoji
             // where the real editor has the colour glyph (measured: 21 pt per emoji), so the oracle is wrong there, not the editor.
             // Missing glyphs of the real layout are checked on their own (`missingGlyphs`); everything else (CJK, Arabic, Hebrew, accents)
@@ -339,6 +355,7 @@ enum AuditEd {
             let c = text.character(at: seq.location)
             k = max(k + 1, NSMaxRange(seq))
             guard c > 0x7F, lm.isValidGlyphIndex(lm.glyphIndexForCharacter(at: seq.location)) else { continue }
+            if ts.attribute(.luftigTableRow, at: seq.location, effectiveRange: nil) != nil { continue }      // (a table drawn as a grid: hidden on purpose)
             let scalar = Unicode.Scalar(c) ?? Unicode.Scalar(0x2423)!
             let cat = scalar.properties.generalCategory
             if c >= 0xD800 && c <= 0xDBFF { /* surrogate pair: a real code point, check below */ }

@@ -13,10 +13,14 @@ final class LuftigEditorTextView: NSTextView {
     weak var lazyStyler: LazyStyler?
     /// ⌘-click: the character under the mouse (nil: not over text). Returns true when the click was taken (a link was followed); false lets NSTextView have it.
     var onCommandClick: ((Int) -> Bool)?
+    /// A plain click: true when it was taken (a click into a table drawn as a grid puts the caret into the clicked cell: TableRender.swift).
+    var onPlainClick: ((NSPoint) -> Bool)?
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift), let handler = onCommandClick,
            let index = characterIndex(under: convert(event.locationInWindow, from: nil)), handler(index) { return }
+        if event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty, event.clickCount == 1, let handler = onPlainClick,
+           handler(convert(event.locationInWindow, from: nil)) { return }
         super.mouseDown(with: event)
     }
 
