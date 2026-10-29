@@ -103,6 +103,7 @@ final class EditorViewController: NSViewController, TextViewEditorHost, NSTextVi
         provider.attach(to: styler)
         stack.textView.lazyStyler = styler
         column = ReadableColumnController(scrollView: stack.scrollView, textView: stack.textView, maxColumnWidth: EditorPreferences.columnWidth)
+        column.roomBelow = true
         column.isEnabled = EditorPreferences.readableWidth
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
         #if LUFTIG_SELFTEST

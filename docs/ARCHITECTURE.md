@@ -144,6 +144,8 @@ Sources/luftig/
                                         web with "this Mac": no download), paths, the caret and a click, the switch, dropped files, == a fresh restyle
     SelfTestTableRender.swift           table-render: tables drawn as grids (hidden glyphs, row heights, wrapping, the Markdown when the caret enters by
                                         selection / click / Select All, a narrower window, the switch, == a fresh restyle with the same selection)
+    SelfTestRoomBelow.swift             room-below: the end scrolls up to the middle (60 % room below the last line), the first line at the top, clicks
+                                        and the caret on the glyphs, Typewriter Mode unchanged
     SelfTestFixTyping.swift             fix-typing-after-save: letters typed after an autosave survive a coordinated write, NSDocument's revert and an
                                         external change, also when the change count missed them (pitfall 40)
     SelfTestAuditShell.swift            the audit-shell-* scenarios: menu matrix, Info.plist / icon / claimed file extensions, preferences, the runner itself.
@@ -492,6 +494,12 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     would otherwise be restyled after every look at the selection, and again, forever. A block on the last line of the text, without a line break, is
     not drawn: a paragraph of hidden glyphs alone gets no line fragment of its own. Web images: only with "this Mac and the web" (the default makes no
     network connection: the privacy policy says so), an ephemeral URLSession, at most 40 MB, kept in memory.
+43. **The room below the last line moves the text container's ORIGIN, not the inset** (ReadableColumnController.roomBelow,
+    LuftigEditorTextView.insetOnlyBelow). NSTextView sizes itself to the text plus the vertical inset above AND below it, and has no inset for one side
+    only; so outside Typewriter Mode the inset is half the room and `textContainerOrigin` is moved up by it: the first line stays at the top, the whole
+    room is below. AppKit asks the property (glyphs, hit testing, the caret), and luftig's own drawing does too, so everything agrees (`room-below`
+    checks a click; the decorations are drawn from the same origin). A clip view content inset was the other way: the space below the text view would
+    not take clicks (a click under the last line puts the caret at the end), and it fights AppKit's own insets (the find bar).
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

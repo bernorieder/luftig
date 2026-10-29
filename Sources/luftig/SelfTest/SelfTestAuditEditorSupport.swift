@@ -214,7 +214,9 @@ enum AuditEd {
     /// A line fragment that holds characters of a table drawn as a grid (see `visibleLayoutMismatch`: such lines are not compared).
     static func touchesDrawnTable(_ r: NSRange, _ s: NSTextStorage) -> Bool {
         var hit = false
-        s.enumerateAttribute(.luftigTableRow, in: NSIntersectionRange(r, NSRange(location: 0, length: s.length)), options: []) { v, _, stop in if v != nil { hit = true; stop.pointee = true } }
+        for key in [NSAttributedString.Key.luftigTableRow, .luftigImage] where !hit {
+            s.enumerateAttribute(key, in: NSIntersectionRange(r, NSRange(location: 0, length: s.length)), options: []) { v, _, stop in if v != nil { hit = true; stop.pointee = true } }
+        }
         return hit
     }
 

@@ -61,7 +61,11 @@ extension SelfTestScenarios {
                         /// every line fragment of the whole text: character range -> rect
                         func lineRects() -> [NSRange: NSRect] {
                             var m: [NSRange: NSRect] = [:]
-                            lm.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: lm.numberOfGlyphs)) { r, _, _, gr, _ in m[lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil)] = r }
+                            lm.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: lm.numberOfGlyphs)) { r, _, _, gr, _ in
+                                let chars = lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil)
+                                if let s = lm.textStorage, AuditEd.touchesDrawnTable(chars, s) { return }      // (drawn tables / images: see AuditEd.visibleLayoutMismatch)
+                                m[chars] = r
+                            }
                             return m
                         }
                         if let a = pixels(win) {

@@ -24,7 +24,7 @@ luftig runs as a single instance: a second copy that is launched hands its files
 ```sh
 swift run -c release mdkit-checks                                                   # the Markdown lexer: about 1,900 checks
 Scripts/build-app.sh --selftest                                                     # the self-test variant of the app
-build.noindex/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest all     # 120 scenarios, about 4,540 checks, ~16 minutes
+build.noindex/luftig-SelfTest.app/Contents/MacOS/luftig-SelfTest --selftest all     # 121 scenarios, about 4,550 checks, ~16 minutes
 ```
 
 The self-test drives the real app without a screen: the file handling, the editor through real key events, the pixels it draws, the colour contrast of every scheme, memory and speed. `--selftest list` names every scenario, and a comma-separated list runs a few. Two scenarios measure a window that is half a point wider after an appearance change on some machines; [ARCHITECTURE.md](ARCHITECTURE.md) explains the known environmental failures.

@@ -180,6 +180,17 @@ final class LuftigEditorTextView: NSTextView {
     private var frameChangeDepth = 0
     private var deferredScrollRange: NSRange?
 
+    // MARK: room below the last line (ReadableColumnController.roomBelow)
+
+    /// The vertical inset goes below the text only: the first line stays at the top, and the end of the text can be scrolled up to the middle of the
+    /// window. NSTextView sizes itself to the text plus the inset above AND below; moving the container's origin up by the inset puts both below.
+    var insetOnlyBelow = false { didSet { if insetOnlyBelow != oldValue { invalidateTextContainerOrigin(); needsDisplay = true } } }
+
+    override var textContainerOrigin: NSPoint {
+        let o = super.textContainerOrigin
+        return insetOnlyBelow ? NSPoint(x: o.x, y: o.y - textContainerInset.height) : o
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         frameChangeDepth += 1
         super.setFrameSize(newSize)

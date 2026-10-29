@@ -391,13 +391,13 @@ extension SelfTestScenarios {
             t.check(abs(caretLineMid() - clip.bounds.height / 2) < 2, String(format: "the last line can be in the middle too (%.1f of %.1f)", caretLineMid(), clip.bounds.height))
             assertMatchesFreshLex(t, host, "Typewriter Mode: the styled text still equals a fresh lex")
             host.luftigToggleTypewriterMode(nil)
-            t.check(!EditorPreferences.typewriterMode && tv.textContainerInset.height == 0, "off again: no inset")
+            t.check(!EditorPreferences.typewriterMode && tv.textContainerOrigin.y == 0, "off again: no room above the first line (only the room below the last, room-below)")
             // a second window follows the switch
             let (doc2, host2, _) = try await openEditor(t, text: "a\n\nb\n", name: "typewriter2.md")
             host.luftigToggleTypewriterMode(nil)
             t.check(host2.textView.textContainerInset.height > 0, "a second window follows the switch")
             host.luftigToggleTypewriterMode(nil)
-            t.check(host2.textView.textContainerInset.height == 0, "... and back")
+            t.check(host2.textView.textContainerOrigin.y == 0, "... and back")
             t.close(doc2)
         }
     }

@@ -264,7 +264,7 @@ extension SelfTestScenarios {
             t.equal(inRoot(host.syntaxBar).minX, textFrame.minX, "the syntax bar lies under the text column, not under the outline")
             t.equal(inRoot(host.syntaxBar).width, textFrame.width, "... as wide as the text column (its symbols centred in it)")
             t.equal(inRoot(host.outline).minY, host.padding.windowVertical + host.padding.textInsetVertical, "the outline runs on past the bar, to its margin above the window's bottom edge")
-            t.equal(tv.textContainerInset.height, 0, "the text container has no vertical inset of its own: the air is the viewport's margin")
+            t.equal(tv.textContainerOrigin.y, 0, "no air above the first line in the text view: the air is the viewport's margin (the inset is the room below the last line, room-below)")
             // a small document: the data is there at open (no wait); a big one computes after the first screen (below)
             t.check(!host.chromeRefreshPending && host.outline.entries.count == 3, "a small document's outline and count are computed at open, synchronously")
             var waited = 0.0
