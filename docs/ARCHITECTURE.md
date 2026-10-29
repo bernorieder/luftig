@@ -144,7 +144,7 @@ Sources/luftig/
                                         web with "this Mac": no download), paths, the caret and a click, the switch, dropped files, == a fresh restyle
     SelfTestTableRender.swift           table-render: tables drawn as grids (hidden glyphs, row heights, wrapping, the Markdown when the caret enters by
                                         selection / click / Select All, a narrower window, the switch, == a fresh restyle with the same selection)
-    SelfTestRoomBelow.swift             room-below: the end scrolls up to the middle (60 % room below the last line), the first line at the top, clicks
+    SelfTestRoomBelow.swift             room-below: the end scrolls up to the middle (70 % room below the last line), the first line at the top, clicks
                                         and the caret on the glyphs, Typewriter Mode unchanged
     SelfTestFixTyping.swift             fix-typing-after-save: letters typed after an autosave survive a coordinated write, NSDocument's revert and an
                                         external change, also when the change count missed them (pitfall 40)

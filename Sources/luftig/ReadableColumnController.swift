@@ -4,7 +4,7 @@ import AppKit
 /// container's width is set by hand (`widthTracksTextView` is off; NSTextView draws the container at the inset's origin and never centres a narrower
 /// one - measured, pitfall 34 - so the width is spelled out). The vertical inset is 0 (the editor's vertical padding is a margin of its viewport), except
 /// in Typewriter Mode, where it is half the viewport so that the first and the last line can sit in the middle, and with `roomBelow` (the editor, outside
-/// Typewriter Mode): 60 % of the viewport below the last line only, so that the end of the text can be scrolled up to the middle of the window to write
+/// Typewriter Mode): 70 % of the viewport below the last line only, so that the end of the text can be scrolled up to the middle of the window to write
 /// there (LuftigEditorTextView.insetOnlyBelow puts the whole inset below the text).
 ///
 ///   inset = max(minInset, (clipWidth - maxColumnWidth) / 2);  container width = clipWidth - 2 * inset
@@ -24,7 +24,7 @@ final class ReadableColumnController {
     /// Room below the last line outside Typewriter Mode (the editor; not the Settings preview).
     var roomBelow = false { didSet { if roomBelow != oldValue { update() } } }
     /// The share of the viewport's height that can be scrolled past the end of the text.
-    static let roomBelowShare: CGFloat = 0.6
+    static let roomBelowShare: CGFloat = 0.7
     /// Called with the text container's new width whenever it changes (tables are aligned only while they fit: TableAlignment.swift).
     var onContainerWidthChange: ((CGFloat) -> Void)?
     private weak var scrollView: NSScrollView?

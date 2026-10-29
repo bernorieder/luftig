@@ -1,5 +1,5 @@
 #if LUFTIG_SELFTEST
-// SelfTestRoomBelow.swift - room-below: outside Typewriter Mode the text can be scrolled past its end, by 60 % of the window's height, so that the
+// SelfTestRoomBelow.swift - room-below: outside Typewriter Mode the text can be scrolled past its end, by 70 % of the window's height, so that the
 // last line can sit in the middle of the window while one writes (ReadableColumnController.roomBelow, LuftigEditorTextView.insetOnlyBelow). The first
 // line stays at the top; clicks, the caret and the decorations use the same origin as the glyphs; Typewriter Mode keeps its own (symmetric) insets.
 
@@ -7,7 +7,7 @@ import AppKit
 
 extension SelfTestScenarios {
     static let roomBelowScenarios: [SelfTest.Scenario] = [
-        .init(name: "room-below", summary: "the end of the text scrolls up to the middle of the window (60 % room below the last line), the first line stays at the top, clicks and the caret agree, Typewriter Mode unchanged", run: { t in try await roomBelow(t) }),
+        .init(name: "room-below", summary: "the end of the text scrolls up to the middle of the window (70 % room below the last line), the first line stays at the top, clicks and the caret agree, Typewriter Mode unchanged", run: { t in try await roomBelow(t) }),
     ]
 
     @MainActor static func roomBelow(_ t: SelfTest.T) async throws {
@@ -24,7 +24,7 @@ extension SelfTestScenarios {
         let used = lm.usedRect(for: tc).height
         let room = tv.frame.height - used
         t.equal(tv.textContainerOrigin.y, 0, "the first line is at the top (no room above it)")
-        t.check(abs(room - clip.bounds.height * ReadableColumnController.roomBelowShare) < 2, "the text view holds 60 % of the window below the text (\(Int(room)) pt for a \(Int(clip.bounds.height)) pt window)")
+        t.check(abs(room - clip.bounds.height * ReadableColumnController.roomBelowShare) < 2, "the text view holds 70 % of the window below the text (\(Int(room)) pt for a \(Int(clip.bounds.height)) pt window)")
         // scrolled to the very end: the last line sits a little above the middle
         clip.scroll(to: NSPoint(x: 0, y: tv.frame.height - clip.bounds.height))
         host.scrollView.reflectScrolledClipView(clip)
@@ -33,7 +33,7 @@ extension SelfTestScenarios {
         lm.ensureLayout(forCharacterRange: NSRange(location: last, length: 1))
         let lineRect = lm.lineFragmentRect(forGlyphAt: lm.glyphIndexForCharacter(at: last), effectiveRange: nil)
         let lineY = lineRect.minY + tv.textContainerOrigin.y - clip.bounds.minY
-        t.check(lineY > clip.bounds.height * 0.3 && lineY < clip.bounds.height * 0.5, "scrolled to the end: the last line is just above the middle of the window (\(Int(lineY)) of \(Int(clip.bounds.height)) pt)")
+        t.check(lineY > clip.bounds.height * 0.15 && lineY < clip.bounds.height * 0.4, "scrolled to the end: the last line is in the upper half of the window (\(Int(lineY)) of \(Int(clip.bounds.height)) pt)")
         // the glyphs, a click and the caret use the same origin
         let glyph = lm.glyphIndexForCharacter(at: last + 4)
         let gr = lm.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: tc)
