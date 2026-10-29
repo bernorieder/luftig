@@ -131,11 +131,7 @@ nav a:hover { color: var(--text); }
 .copy svg {
   width: 16px;
   height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  fill: currentColor;
 }
 .copy .check, .copy.copied .clipboard { display: none; }
 .copy.copied .check { display: block; }
