@@ -134,6 +134,8 @@ Sources/luftig/
     SelfTestTables.swift                table-align (pipes line up in the laid-out text, file unchanged, aligned / tab tables left alone, a too wide one hangs),
                                         table-align-edit (a keystroke re-aligns the whole table, a long table styled from its middle, the size bound,
                                         narrower / wider window, == a fresh restyle), table-format (Align Table: the source, the caret, undo, the menu item)
+    SelfTestFixTyping.swift             fix-typing-after-save: letters typed after an autosave survive a coordinated write, NSDocument's revert and an
+                                        external change, also when the change count missed them (pitfall 40)
     SelfTestAuditShell.swift            the audit-shell-* scenarios: menu matrix, Info.plist / icon / claimed file extensions, preferences, the runner itself.
                                         SelfTestHooks.swift also holds LaunchProbe and CommandPump (drive a Launch Services launch from a script)
 
@@ -445,6 +447,17 @@ Settings > General > When the file changes on disk -> EditorPreferences.reloadBe
     `CTLineGetOffsetForStringIndex`. The kern goes on the whole composed character before the pipe (an emoji with a skin tone is one glyph from four
     units, which takes its attributes from its first unit); a decomposed `e` + U+0301 was checked to come out right. Rows with a tab are not aligned (a tab's
     width depends on where it starts, and the kern before it would move the tab stop).
+40. **Never replace text that is not on disk because NSDocument's change count says "saved".** The change count lags behind the text: it moves at
+    the end of an event cycle, and NSTextView coalesces typing into ONE undo action, so typing that goes on after a save registered nothing new
+    and the document said "not edited" (luftig 1.0.5, in a OneDrive folder: the File Provider writes the file after every upload with a coordinated
+    write, NSDocument reverts by itself - relinquish, reacquire, `revert(toContentsOf:)` - and the revert of a "clean" document applied the saved
+    text: the last letters vanished and the caret jumped back). Two guards: every save of the document's own file breaks the coalescing first
+    (`EditorHost.documentWillSave`, as TextEdit does), and every path that would apply disk text silently (the automatic reload, the save gate,
+    NSDocument's revert, `read(from:)` with an editor) first asks `editorHasUnsavedText()`: the editor text encoded with the file's format must
+    be the bytes of `lastDisk`; if it is not, the document is marked edited and the change is merged (or the banner asks). The self-tests' key
+    presses break the coalescing after every key, so they never saw it; `fix-typing-after-save` sets the change count wrong by hand. The shipping
+    app logs every save / reload / merge / conflict decision to the system log (subsystem `com.bernorieder.luftig`, category `file`; counts and
+    reasons, never the text or a file name).
 
 ## 5. Measured against the DESIGN.md budget (release build, Apple M5 Pro, merged tree with Settings, colour schemes and hanging indent)
 

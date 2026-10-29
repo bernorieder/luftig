@@ -46,6 +46,8 @@ protocol EditorHost: AnyObject {
     /// Non-modal notification strip above the text (conflict / deleted / merged). Replaces a previous banner.
     func showBanner(_ banner: EditorBanner)
     func hideBanner()
+    /// The document is about to write its file: what the user types next must be a change of its own (see MarkdownDocument.performSave).
+    func documentWillSave()
 }
 
 /// Convenience for NSTextView based editors: implement `textView`, `showBanner`, `hideBanner` and get the rest.
@@ -60,6 +62,11 @@ extension TextViewEditorHost {
     // Default implementations. An editor that needs to do more (luftig's does: restyle, reset the lexer) implements the protocol
     // methods itself and calls the `default...` variants (Swift has no `super` for protocol extensions).
     func loadInitialText(_ text: NSString) { defaultLoadInitialText(text) }
+
+    /// NSTextView coalesces typing into ONE undo action. Typing that goes on after a save would be added to the action from before the save:
+    /// nothing new is registered, NSDocument's change count does not move, and the document says "not edited" while the editor holds text that
+    /// is not on disk (TextEdit breaks the coalescing on every save for the same reason). Undo then takes back the typing since the last save.
+    func documentWillSave() { textView.breakUndoCoalescing() }
 
     @discardableResult
     func applyExternalText(_ new: NSString, mode: ExternalApplyMode) -> ExternalApplyReport { defaultApplyExternalText(new, mode: mode) }

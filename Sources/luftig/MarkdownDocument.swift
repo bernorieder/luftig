@@ -11,6 +11,7 @@
 
 import AppKit
 import MarkdownKit
+import OSLog
 import UniformTypeIdentifiers
 
 final class MarkdownDocument: NSDocument {
@@ -78,7 +79,10 @@ final class MarkdownDocument: NSDocument {
     #if LUFTIG_SELFTEST
     func trace(_ s: @autoclosure () -> String) { MarkdownDocument.trace?(self, s()) }
     #else
-    @inline(__always) func trace(_ s: @autoclosure () -> String) {}
+    /// The shipping app writes the same lines to the system log (Console, `log show --predicate 'subsystem == "com.bernorieder.luftig"'`): every
+    /// save, reload, merge and conflict, with counts and reasons, never the text or a file name. It stays on the Mac like the rest of the system log.
+    private static let log = Logger(subsystem: "com.bernorieder.luftig", category: "file")
+    func trace(_ s: @autoclosure () -> String) { let m = s(); MarkdownDocument.log.notice("\(m, privacy: .public)") }
     #endif
 
     // MARK: lifecycle
@@ -142,7 +146,7 @@ final class MarkdownDocument: NSDocument {
         lastDisk = state
         baseSnapshot = nil; baseFormat = nil
         if let host {      // not the initial read (NSDocument-initiated re-read): go through the live path
-            host.applyExternalText(decoded.text, mode: isDocumentEdited ? .undoable : .silent)
+            host.applyExternalText(decoded.text, mode: isDocumentEdited || editorHasUnsavedText() ? .undoable : .silent)
         } else {
             pendingText = decoded.text
         }
@@ -261,9 +265,10 @@ final class MarkdownDocument: NSDocument {
         // Only these operations write the document's own file. autosaveElsewhere (drafts, autosavesInPlace == false) and
         // saveTo (a copy) write somewhere else and must not touch our idea of what is on disk.
         let writesOwnFile = saveOperation == .saveOperation || saveOperation == .saveAsOperation || saveOperation == .autosaveInPlaceOperation
-        trace("save(to: \(url.lastPathComponent), op=\(saveOperation.rawValue)) begins")
+        if writesOwnFile { host?.documentWillSave() }
+        trace("save(to: \(writesOwnFile ? "its file" : "another file"), op=\(saveOperation.rawValue)) begins")
         super.save(to: url, ofType: typeName, for: saveOperation) { error in
-            self.trace("save(to: \(url.lastPathComponent), op=\(saveOperation.rawValue)) finished: \(error.map { "\($0)" } ?? "ok")")
+            self.trace("save(to: \(writesOwnFile ? "its file" : "another file"), op=\(saveOperation.rawValue)) finished: \(error == nil ? "ok" : "error \((error! as NSError).domain) \((error! as NSError).code)")")
             self.isSaving = false
             if error == nil, writesOwnFile { self.didSaveToOwnFile() }
             completionHandler(error)

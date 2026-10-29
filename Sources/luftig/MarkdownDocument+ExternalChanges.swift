@@ -12,6 +12,8 @@
 //     signature unchanged                     -> nothing (one stat(2))
 //     signature changed, hash unchanged       -> touch/chmod/identical rewrite: refresh signature, NO reload
 //     content changed, document clean         -> silent reload: minimal diff, selection+scroll kept, undo cleared
+//                                                ("clean" = NSDocument's change count says so AND the editor holds the text of the disk version
+//                                                we last synced with: the change count can lag behind the text, see editorHasUnsavedText)
 //     content changed, document dirty         -> 3-way line merge (base = last synced text); success: applied as ONE undoable
 //                                                edit; overlap: keep the typed text, show a non-modal banner
 //                                                [Reload from Disk] [Keep My Version]; autosave is held back meanwhile
@@ -162,7 +164,7 @@ extension MarkdownDocument {
     private func externalChangeArrived(_ decoded: DecodedText, _ disk: DiskState) {
         switch EditorPreferences.reloadBehavior {
         case .automatic:
-            if !hasRealEdits { silentReload(decoded, disk) } else { resolveDirtyChange(decoded, disk) }
+            if !hasRealEdits && !editorHasUnsavedText() { silentReload(decoded, disk) } else { resolveDirtyChange(decoded, disk) }
         case .ask:
             enterConflict(decoded, disk, banner: true)
             trace("external change: asking (Settings)")
@@ -176,6 +178,22 @@ extension MarkdownDocument {
 
     /// `true` when there is user-typed work that is not on disk.
     var hasRealEdits: Bool { isDocumentEdited && !(deletedMarkedDirty && undoManager?.canUndo != true) }
+
+    /// The editor holds other text than the disk version we last synced with, whatever NSDocument's change count says. The change count can lag
+    /// behind the text: it moves at the end of an event cycle, and typing that NSTextView coalesced into an undo action from before the last save
+    /// registers nothing (luftig 1.0.5 lost letters that way: a File Provider's coordinated write made NSDocument revert a "clean" document). Text
+    /// that is not on disk is never replaced silently: the caller merges or asks instead, and the document is marked edited so that the autosave
+    /// writes it. One encode of the text (10 MB: ~8 ms), only when the disk changed or NSDocument wants to revert.
+    func editorHasUnsavedText() -> Bool {
+        guard let host, let last = lastDisk else { return false }
+        guard let data = try? TextCodec.encode(host.currentText, format: textFormat) else { return true }
+        let unsaved = data.count != last.byteCount || data.withUnsafeBytes { FastHash.hash64($0) } != last.hash
+        if unsaved && !isDocumentEdited {
+            trace("the editor holds text that is not on disk, but the document counted as saved: marked edited")
+            updateChangeCount(.changeDone)
+        }
+        return unsaved
+    }
 
     private func silentReload(_ decoded: DecodedText, _ disk: DiskState) {
         applyExternal(decoded, disk, mode: .silent)
@@ -193,6 +211,7 @@ extension MarkdownDocument {
         textFormat = decoded.format
         if let host {
             stats.lastApply = host.applyExternalText(decoded.text, mode: mode)
+            trace("disk text applied (\(mode == .silent ? "silent" : "undoable")): \(stats.lastApply?.edits ?? 0) edits, \(stats.lastApply?.changedUnits ?? 0) units changed")
         } else {
             pendingText = decoded.text
         }
@@ -319,7 +338,7 @@ extension MarkdownDocument {
         // marked the document clean and dropped the typed text without a word (found by the audit: type, coordinated write -> the typed text
         // is gone). Typed text is never discarded on NSDocument's initiative: the policy (merge / conflict) decides. The explicit
         // "discard my edits" commands (banner, File > Reload from Disk) use `revertNow` directly.
-        if hasRealEdits || (undoManager?.groupingLevel ?? 0) > 0 {            // (a keystroke whose undo group is still open does not count as an edit yet)
+        if hasRealEdits || (undoManager?.groupingLevel ?? 0) > 0 || editorHasUnsavedText() {      // (a keystroke whose undo group is still open does not count as an edit yet; the change count can lag: editorHasUnsavedText)
             trace("revert(toContentsOf:) by NSDocument while the document has unsaved edits: not applied, the external-change policy decides")
             checkForExternalChange("nsdocument-revert")
             return
@@ -415,7 +434,7 @@ extension MarkdownDocument {
                 }
                 let behavior = EditorPreferences.reloadBehavior
                 if behavior == .automatic {
-                    if !isDocumentEdited && (undoManager?.groupingLevel ?? 0) == 0 { silentReload(decoded, st); return .proceed }     // (open undo group: see finishCheck)
+                    if !isDocumentEdited && (undoManager?.groupingLevel ?? 0) == 0 && !editorHasUnsavedText() { silentReload(decoded, st); return .proceed }     // (open undo group: see finishCheck)
                     resolveDirtyChange(decoded, st)
                 } else {
                     enterConflict(decoded, st, banner: behavior == .ask)        // ask / never: nothing is merged or reloaded by itself

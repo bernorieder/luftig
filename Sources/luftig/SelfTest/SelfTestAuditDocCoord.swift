@@ -130,7 +130,10 @@ extension SelfTestScenarios {
             t.check(host.textView.string == paras && !doc.isDocumentEdited, "File > Reload from Disk: the typed text is discarded on request")
             doc.undoManager?.undo()
             t.check(host.textView.string.hasPrefix("MINE\n"), "... and Undo brings it back")
-            // a CLEAN document: revert(toContentsOf:) applies the disk text (that is what NSDocument asks for after a coordinated write)
+            // a CLEAN document: revert(toContentsOf:) applies the disk text (that is what NSDocument asks for after a coordinated write). Clean for real:
+            // Redo puts the reloaded text back, so the editor holds the disk text again (with "MINE" still in the editor, a cleared change count alone
+            // is a document whose unsaved text the revert must keep: pitfall 40, fix-typing-after-save)
+            doc.undoManager?.redo()
             doc.updateChangeCount(.changeCleared)
             doc.undoManager?.removeAllActions()
             try? Data((paras + "extra\n").utf8).write(to: f)
