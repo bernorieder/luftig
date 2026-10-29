@@ -25,6 +25,7 @@
         <h1>A small, fast Markdown editor for the Mac</h1>
         <p class="lead">luftig is a native app for writing and thinking in plain text, alone or with an AI that edits the same file. One text view, no preview: the Markdown source is what you edit, styled in place.</p>
         <a class="button" href="https://github.com/bernorieder/luftig/releases/latest">Download luftig</a>
+        <p class="brew">or with <a href="https://brew.sh">Homebrew</a>: <span class="command"><code>brew install bernorieder/luftig/luftig</code></span></p>
         <p class="small">Free and open source · macOS 14 or later · Mac with Apple silicon</p>
       </div>
 
@@ -71,9 +72,9 @@
           <li>Open it and drag luftig into your Applications folder. The app is signed and notarized, so macOS opens it without a warning.</li>
           <li>Open a Markdown file with luftig, or open luftig and choose <strong>File → New</strong>.</li>
         </ol>
-        <p>With Homebrew:</p>
-        <pre><code>brew install bernorieder/luftig/luftig</code></pre>
-        <p>To make luftig the default app for <code>.md</code> files, select one in the Finder, choose <strong>File → Get Info</strong>, pick luftig under <strong>Open with</strong> and click <strong>Change All</strong>. To update, run <code>brew upgrade</code>, or download the new version and replace the old one.</p>
+        <p>With <a href="https://brew.sh">Homebrew</a>, instead of the first two steps, run this in Terminal:</p>
+        <div class="command block"><code>brew install bernorieder/luftig/luftig</code></div>
+        <p>To make luftig the default app for <code>.md</code> files, select one in the Finder, choose <strong>File → Get Info</strong>, pick luftig under <strong>Open with</strong> and click <strong>Change All</strong>. To update, download the new version and drag it into Applications, replacing the old one, or run <code>brew upgrade luftig</code>. Your settings are kept.</p>
       </section>
     </main>
 
@@ -86,6 +87,36 @@
 
   <dialog id="lightbox" aria-label="Enlarged image"><img alt=""></dialog>
   <script>
+    // Adds a copy button to each command, which shows a check mark for a moment once it has copied.
+    // Without the script, a click on the command still selects all of it.
+    const icons = '<svg class="clipboard" viewBox="0 0 16 16"><path d="M5.5 3H4a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-1.5"/><rect x="5.5" y="1.75" width="5" height="2.5" rx="0.75"/></svg>'
+      + '<svg class="check" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>';
+    for (const command of document.querySelectorAll('.command')) {
+      const code = command.querySelector('code');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'copy';
+      button.title = 'Copy';
+      button.setAttribute('aria-label', 'Copy the command');
+      button.innerHTML = icons;
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(code.textContent);
+        } catch {
+          getSelection().selectAllChildren(code);
+          return;
+        }
+        button.classList.add('copied');
+        button.title = 'Copied';
+        clearTimeout(button.reset);
+        button.reset = setTimeout(() => {
+          button.classList.remove('copied');
+          button.title = 'Copy';
+        }, 1500);
+      });
+      command.append(button);
+    }
+
     (() => {
       const box = document.getElementById("lightbox"), img = box.querySelector("img");
       if (!box.showModal) return;                       // an old browser: the links open the images
